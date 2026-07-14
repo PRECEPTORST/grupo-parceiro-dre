@@ -47,10 +47,10 @@ function AppAutenticado() {
       <header className="sticky top-0 z-10 border-b border-cyan/15 bg-navy/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <button className="flex items-center gap-2.5" onClick={() => setRota('dre')}>
-            <LogoP size={26} />
-            <Wordmark size={16} />
-            <span className="ml-2 hidden text-xs font-medium uppercase tracking-[0.2em] text-slateblue sm:inline">
-              DRE · Grupo Parceiro
+            <LogoP size={30} />
+            <Wordmark size={15} />
+            <span className="ml-1 hidden border-l border-cyan/20 pl-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-cyan sm:inline">
+              DRE
             </span>
           </button>
           <div className="flex items-center gap-3">

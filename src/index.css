@@ -1,21 +1,34 @@
 @import 'tailwindcss';
 
+/*
+  Identidade visual: GRUPO PARCEIRO AGRONEGÓCIOS (www.grupoparceiro.com).
+  UI escura (o logo da marca é branco, feito para fundo escuro), acento
+  verde-limão #bcee23 e dourado #c8912f do emblema.
+
+  Os tokens mantêm os nomes herdados do esqueleto (navy/cyan) para não
+  reescrever todas as classes; os VALORES é que passam a ser da marca:
+    navy*  = tons escuros neutros (fundo/superfícies)
+    cyan   = verde-limão da marca (acento primário)
+    gold   = dourado do emblema (acento secundário)
+*/
 @theme {
-  --color-navy: #0a1a2f;
-  --color-navy-2: #0d2137;
-  --color-navy-3: #12304a;
-  --color-cyan: #35d6e8;
-  --color-slateblue: #9fb3c8;
-  --color-faint: #3a4a5e;
+  --color-navy: #171713;
+  --color-navy-2: #201f1a;
+  --color-navy-3: #2a2a2a;
+  --color-cyan: #bcee23;
+  --color-gold: #c8912f;
+  --color-slateblue: #a9a99e;
+  --color-faint: #57574e;
   --color-danger: #ff5a5a;
   --color-warn: #f5c451;
-  --color-ok: #35d6a0;
+  --color-ok: #8bd450;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Cinzel', 'Times New Roman', Georgia, serif;
 }
 
 html,
 body {
-  background: #0a1a2f;
+  background: #171713;
   color: #ffffff;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100%;

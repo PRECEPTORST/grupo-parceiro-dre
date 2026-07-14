@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Card, Kicker } from '../components/ui'
-import { LogoP } from '../components/Logo'
+import { LogoLockup } from '../components/Logo'
 
 const inputClass =
   'w-full rounded-lg border border-cyan/20 bg-navy-2 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan/60'
@@ -30,8 +30,8 @@ export function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-sm">
-        <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <LogoP size={34} />
+        <div className="mb-5 flex flex-col items-center gap-3 text-center">
+          <LogoLockup width={180} />
           <Kicker>{precisaSetup ? 'Configuração inicial' : 'DRE · Grupo Parceiro'}</Kicker>
           <h1 className="text-2xl font-extrabold">
             {precisaSetup ? (
