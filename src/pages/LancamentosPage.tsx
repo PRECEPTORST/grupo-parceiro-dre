@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
+import { useAuth } from '../context/AuthContext'
+import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { formatBRL } from '../lib/format'
 import { mapaDeClassificacoes } from '../lib/dre'
@@ -7,6 +9,8 @@ import { META_LINHAS, LIMIAR_REVISAO, type LancamentoCanonico } from '../lib/tip
 
 export function LancamentosPage() {
   const { estado, mesclarLancamentos, salvarClassificacoes } = useDre()
+  const { usuario } = useAuth()
+  const admin = podeAdministrar(usuario?.papel)
   const [sincronizando, setSincronizando] = useState(false)
   const [classificando, setClassificando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -84,16 +88,18 @@ export function LancamentosPage() {
             Fonte do <span className="text-cyan">DRE.</span>
           </h1>
         </div>
-        <div className="flex gap-2">
-          <Botao onClick={sincronizar} disabled={sincronizando}>
-            {sincronizando ? 'Sincronizando…' : '↻ Sincronizar Safragold'}
-          </Botao>
-          {contasNaoClassificadas.length > 0 && (
-            <Botao variante="fantasma" onClick={classificar} disabled={classificando}>
-              {classificando ? 'Classificando…' : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
+        {admin && (
+          <div className="flex gap-2">
+            <Botao onClick={sincronizar} disabled={sincronizando}>
+              {sincronizando ? 'Sincronizando…' : '↻ Sincronizar Safragold'}
             </Botao>
-          )}
-        </div>
+            {contasNaoClassificadas.length > 0 && (
+              <Botao variante="fantasma" onClick={classificar} disabled={classificando}>
+                {classificando ? 'Classificando…' : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
+              </Botao>
+            )}
+          </div>
+        )}
       </div>
 
       {erro && (
@@ -110,8 +116,15 @@ export function LancamentosPage() {
       {estado.lancamentos.length === 0 ? (
         <Card>
           <p className="text-slateblue">
-            Nenhum lançamento importado. Clique em <strong className="text-white">Sincronizar
-            Safragold</strong> para puxar os lançamentos conciliados.
+            {admin ? (
+              <>
+                Nenhum lançamento importado. Clique em{' '}
+                <strong className="text-white">Sincronizar Safragold</strong> para puxar os
+                lançamentos conciliados.
+              </>
+            ) : (
+              'Nenhum lançamento importado ainda. Um administrador precisa sincronizar o Safragold.'
+            )}
           </p>
         </Card>
       ) : (

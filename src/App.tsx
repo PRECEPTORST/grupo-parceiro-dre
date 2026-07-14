@@ -7,6 +7,7 @@ import { LancamentosPage } from './pages/LancamentosPage'
 import { Usuarios } from './pages/Usuarios'
 import { Login } from './pages/Login'
 import { LogoP, Wordmark } from './components/Logo'
+import { rotuloPapel } from './lib/permissoes'
 
 type Rota = 'dre' | 'orcamento' | 'lancamentos' | 'usuarios'
 
@@ -77,7 +78,7 @@ function AppAutenticado() {
               <span className="hidden text-right text-xs leading-tight sm:block">
                 <span className="block font-semibold text-white">{usuario?.usuario}</span>
                 <span className="block text-faint">
-                  {usuario?.papel === 'admin' ? 'Administrador' : 'Sócio / leitura'}
+                  {usuario ? rotuloPapel[usuario.papel] : ''}
                 </span>
               </span>
               <button

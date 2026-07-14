@@ -11,6 +11,8 @@ import {
 import { carregarEstado, salvarEstado, type EstadoDre } from '../lib/storage'
 import { carregarNuvem, salvarNuvem } from '../lib/nuvem'
 import type { Classificacao, LancamentoCanonico, Orcamento } from '../lib/tipos'
+import { useAuth } from './AuthContext'
+import { ehSomenteLeitura } from '../lib/permissoes'
 
 export type StatusSync = 'carregando' | 'sincronizado' | 'salvando' | 'erro' | 'offline'
 
@@ -30,14 +32,20 @@ interface DreContextValue {
 const DreContext = createContext<DreContextValue | null>(null)
 
 export function DreProvider({ children }: { children: ReactNode }) {
+  const { usuario } = useAuth()
+  const soLeitura = ehSomenteLeitura(usuario?.papel)
   const [estado, setEstado] = useState<EstadoDre>(() => carregarEstado())
   const [statusSync, setStatusSync] = useState<StatusSync>('carregando')
   const [erroSync, setErroSync] = useState<string | null>(null)
 
   const hidratado = useRef(false)
   const estadoRef = useRef(estado)
+  // Ref sempre atual do "somente leitura", para os efeitos/callbacks não
+  // capturarem um papel velho se ele mudar no meio da sessão.
+  const soLeituraRef = useRef(soLeitura)
   useEffect(() => {
     estadoRef.current = estado
+    soLeituraRef.current = soLeitura
   })
 
   const ressincronizar = useCallback(async () => {
@@ -48,7 +56,8 @@ export function DreProvider({ children }: { children: ReactNode }) {
       if (nuvem) {
         setEstado(nuvem)
         salvarEstado(nuvem)
-      } else {
+      } else if (!soLeituraRef.current) {
+        // Nuvem vazia: semeia — mas só quem pode gravar.
         await salvarNuvem(estadoRef.current)
       }
       setStatusSync('sincronizado')
@@ -67,6 +76,8 @@ export function DreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     salvarEstado(estado)
     if (!hidratado.current) return
+    // Somente consulta: mantém só o cache local, nunca grava na nuvem.
+    if (soLeituraRef.current) return
     setStatusSync((s) => (s === 'offline' ? s : 'salvando'))
     const timer = setTimeout(async () => {
       try {

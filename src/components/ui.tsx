@@ -46,12 +46,14 @@ export function NumInput({
   allowNull = false,
   step,
   min,
+  disabled = false,
 }: {
   value: number | null
   onChange: (v: number | null) => void
   allowNull?: boolean
   step?: number
   min?: number
+  disabled?: boolean
 }) {
   const [texto, setTexto] = useState(value == null ? '' : String(value))
 
@@ -66,10 +68,11 @@ export function NumInput({
   return (
     <input
       type="number"
-      className={inputClass}
+      className={`${inputClass} disabled:opacity-60`}
       value={texto}
       step={step}
       min={min}
+      disabled={disabled}
       onChange={(e) => {
         const t = e.target.value
         setTexto(t)

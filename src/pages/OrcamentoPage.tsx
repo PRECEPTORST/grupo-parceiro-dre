@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
+import { useAuth } from '../context/AuthContext'
+import { podeEditarOrcamento } from '../lib/permissoes'
 import { Botao, Card, Kicker, NumInput } from '../components/ui'
 import { LINHAS_DRE, META_LINHAS, type LinhaDRE, type Orcamento } from '../lib/tipos'
 import { competenciasDisponiveis } from '../lib/dre'
@@ -10,6 +12,8 @@ function competenciaAtual(): string {
 
 export function OrcamentoPage() {
   const { estado, salvarOrcamento } = useDre()
+  const { usuario } = useAuth()
+  const podeEditar = podeEditarOrcamento(usuario?.papel)
 
   // Competências: as que têm lançamento + a atual + as já orçadas.
   const competencias = useMemo(() => {
@@ -109,12 +113,15 @@ export function OrcamentoPage() {
       <Card className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-slateblue">
-            Preencha manualmente ou peça uma sugestão da IA com base no histórico e no mercado de
-            grãos.
+            {podeEditar
+              ? 'Preencha manualmente ou peça uma sugestão da IA com base no histórico e no mercado de grãos.'
+              : 'Você tem acesso somente de consulta — o orçamento é exibido, mas não pode ser alterado.'}
           </p>
-          <Botao variante="fantasma" onClick={sugerir} disabled={sugerindo}>
-            {sugerindo ? 'Sugerindo…' : '✨ Sugerir com IA'}
-          </Botao>
+          {podeEditar && (
+            <Botao variante="fantasma" onClick={sugerir} disabled={sugerindo}>
+              {sugerindo ? 'Sugerindo…' : '✨ Sugerir com IA'}
+            </Botao>
+          )}
         </div>
 
         {erro && <p className="mb-3 text-sm text-danger">{erro}</p>}
@@ -123,13 +130,18 @@ export function OrcamentoPage() {
           {LINHAS_DRE.map((linha) => (
             <div key={linha} className="grid grid-cols-[1fr_180px] items-center gap-3">
               <span className="text-sm text-slateblue">{META_LINHAS[linha].rotulo}</span>
-              <NumInput value={valores[linha] ?? 0} onChange={(v) => setLinha(linha, v)} min={0} />
+              <NumInput
+                value={valores[linha] ?? 0}
+                onChange={(v) => setLinha(linha, v)}
+                min={0}
+                disabled={!podeEditar}
+              />
             </div>
           ))}
         </div>
 
         <div className="mt-4 flex items-center gap-3">
-          <Botao onClick={salvar}>Salvar orçamento</Botao>
+          {podeEditar && <Botao onClick={salvar}>Salvar orçamento</Botao>}
           <span className="text-xs text-faint">
             Origem: {origem}
             {salvo && ` · salvo em ${new Date(salvo.atualizadoEm).toLocaleDateString('pt-BR')}`}

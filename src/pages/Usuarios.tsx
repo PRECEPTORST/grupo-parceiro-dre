@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth, type Papel } from '../context/AuthContext'
 import { Botao, Card, Kicker, Select } from '../components/ui'
+import { rotuloPapel } from '../lib/permissoes'
+
+const OPCOES_PAPEL: { value: Papel; label: string }[] = [
+  { value: 'consulta', label: 'Somente consulta' },
+  { value: 'orcamento', label: 'Consulta + orçamento' },
+  { value: 'admin', label: 'Administrador' },
+]
 
 interface UsuarioAdmin {
   id: string
@@ -11,8 +18,6 @@ interface UsuarioAdmin {
 
 const inputClass =
   'w-full rounded-lg border border-cyan/20 bg-navy-2 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan/60'
-
-const rotuloPapel: Record<Papel, string> = { admin: 'Administrador', comercial: 'Comercial' }
 
 async function lerErro(resp: Response): Promise<string> {
   try {
@@ -30,7 +35,7 @@ export function Usuarios() {
 
   const [novoUsuario, setNovoUsuario] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
-  const [novoPapel, setNovoPapel] = useState<Papel>('comercial')
+  const [novoPapel, setNovoPapel] = useState<Papel>('consulta')
 
   const carregar = useCallback(async () => {
     setCarregando(true)
@@ -72,7 +77,7 @@ export function Usuarios() {
     if (ok) {
       setNovoUsuario('')
       setNovaSenha('')
-      setNovoPapel('comercial')
+      setNovoPapel('consulta')
     }
   }
 
@@ -128,10 +133,7 @@ export function Usuarios() {
             <Select
               value={novoPapel}
               onChange={(v) => setNovoPapel(v as Papel)}
-              options={[
-                { value: 'comercial', label: 'Comercial' },
-                { value: 'admin', label: 'Administrador' },
-              ]}
+              options={OPCOES_PAPEL}
             />
           </label>
           <Botao onClick={criar} disabled={!novoUsuario || novaSenha.length < 6}>
@@ -139,7 +141,9 @@ export function Usuarios() {
           </Botao>
         </div>
         <p className="mt-2 text-[11px] text-faint">
-          Comercial cria e edita propostas, mas não acessa Configurações nem esta tela.
+          <strong>Somente consulta</strong>: só visualiza. <strong>Consulta + orçamento</strong>:
+          vê tudo e edita o orçamento. <strong>Administrador</strong>: faz tudo, inclusive
+          sincronizar/classificar e gerenciar usuários.
         </p>
       </Card>
 
@@ -160,10 +164,7 @@ export function Usuarios() {
                 <Select
                   value={u.papel}
                   onChange={(v) => acao('PUT', { id: u.id, papel: v })}
-                  options={[
-                    { value: 'comercial', label: 'Comercial' },
-                    { value: 'admin', label: 'Administrador' },
-                  ]}
+                  options={OPCOES_PAPEL}
                 />
                 <Botao variante="fantasma" onClick={() => trocarSenha(u)}>
                   Trocar senha

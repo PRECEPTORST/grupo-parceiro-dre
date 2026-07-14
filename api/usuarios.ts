@@ -15,7 +15,7 @@ import {
   type Usuario,
 } from '../lib/auth.js'
 
-const PAPEIS: Papel[] = ['admin', 'comercial']
+const PAPEIS: Papel[] = ['admin', 'orcamento', 'consulta']
 
 export default async function handler(req: any, res: any) {
   if (!authConfigurada()) {

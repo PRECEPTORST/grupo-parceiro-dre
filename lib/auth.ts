@@ -8,7 +8,20 @@ const PREFIXO_USUARIOS = 'usuarios'
 const COOKIE = 'preceptor_sessao'
 const SESSAO_DIAS = 30
 
-export type Papel = 'admin' | 'comercial'
+// Papéis:
+//   admin    — gerencia usuários e faz tudo (sync Safragold, classificar, orçamento).
+//   orcamento — consulta tudo E cria/altera o orçamento.
+//   consulta  — somente leitura.
+export type Papel = 'admin' | 'orcamento' | 'consulta'
+
+/** Pode criar/editar orçamento (grava a linha `orcamentos` do estado). */
+export function podeEditarOrcamento(papel: Papel): boolean {
+  return papel === 'admin' || papel === 'orcamento'
+}
+/** Pode alterar lançamentos/classificações (sync Safragold, classificar) — só admin. */
+export function podeEditarDados(papel: Papel): boolean {
+  return papel === 'admin'
+}
 export interface Usuario {
   id: string
   usuario: string

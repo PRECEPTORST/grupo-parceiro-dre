@@ -1,7 +1,10 @@
 // Função serverless (Vercel): persiste o EstadoDre (lançamentos + classificações
 // + orçamentos) num Vercel Blob PRIVADO, acessível de qualquer dispositivo.
 //   GET  /api/estado          -> { estado: EstadoDre | null }   (qualquer papel)
-//   PUT  /api/estado {estado} -> { ok: true }                   (exige login)
+//   PUT  /api/estado {estado} -> { ok: true }
+//     admin    — grava tudo.
+//     orcamento — grava só `orcamentos`; lançamentos/classificações são preservados.
+//     consulta  — 403 (somente leitura).
 import { authConfigurada, usuarioAtual } from '../lib/auth.js'
 import { lerDocMaisRecente, gravarDoc } from '../lib/blobdoc.js'
 
@@ -38,14 +41,32 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'PUT' || req.method === 'POST') {
+      // Somente leitura: consulta nunca grava.
+      if (atual.papel === 'consulta') {
+        res.status(403).json({ erro: 'Seu perfil é somente consulta.' })
+        return
+      }
+
       const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {})
-      const estado = corpo?.estado
+      let estado = corpo?.estado
       if (!estadoValido(estado)) {
         res
           .status(400)
           .json({ erro: 'Corpo inválido: envie { estado: { lancamentos, classificacoes, orcamentos } }.' })
         return
       }
+
+      // Perfil "orçamento" só altera a linha `orcamentos`: preserva os lançamentos
+      // e as classificações já salvos (só admin muda esses).
+      if (atual.papel === 'orcamento') {
+        const salvo = await lerDocMaisRecente(PREFIXO, token)
+        estado = {
+          ...estado,
+          lancamentos: salvo?.lancamentos ?? [],
+          classificacoes: salvo?.classificacoes ?? [],
+        }
+      }
+
       await gravarDoc(PREFIXO, estado, token)
       res.status(200).json({ ok: true })
       return
