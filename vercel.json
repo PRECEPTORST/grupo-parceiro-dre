@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/classificar.ts": {
+      "maxDuration": 120
+    },
+    "api/sugerir-orcamento.ts": {
+      "maxDuration": 120
+    },
+    "api/safragold-sync.ts": {
+      "maxDuration": 60
+    }
+  }
+}

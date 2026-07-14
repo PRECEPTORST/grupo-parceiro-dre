@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-navy: #0a1a2f;
+  --color-navy-2: #0d2137;
+  --color-navy-3: #12304a;
+  --color-cyan: #35d6e8;
+  --color-slateblue: #9fb3c8;
+  --color-faint: #3a4a5e;
+  --color-danger: #ff5a5a;
+  --color-warn: #f5c451;
+  --color-ok: #35d6a0;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  background: #0a1a2f;
+  color: #ffffff;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100%;
+}
+
+input,
+select,
+textarea {
+  color-scheme: dark;
+}
