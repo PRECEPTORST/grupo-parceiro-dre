@@ -225,14 +225,16 @@ export interface MovimentoCaixa {
 // Configuração da camada de confiabilidade / materialidade.
 // ---------------------------------------------------------------------------
 export interface ConfigConfiabilidade {
-  /** Corte de materialidade em R$ (achado abaixo disso é imaterial). */
+  /** Piso de materialidade em R$ para CUSTOS/DESPESAS/deduções/impostos (piso absoluto). */
   pisoMaterialidade: number
+  /** Corte de materialidade em % para RECEITAS (relativo ao valor da própria conta). */
+  pctReceita: number
   /** IDs de achados que o Controler/sócio marcou como "ignorar". */
   ignorados: string[]
 }
 
 export function configConfiabilidadePadrao(): ConfigConfiabilidade {
-  return { pisoMaterialidade: 1000, ignorados: [] }
+  return { pisoMaterialidade: 1000, pctReceita: 3, ignorados: [] }
 }
 
 // ---------------------------------------------------------------------------

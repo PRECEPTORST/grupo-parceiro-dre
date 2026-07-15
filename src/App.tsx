@@ -9,7 +9,7 @@ import { ConfiabilidadePage } from './pages/ConfiabilidadePage'
 import { LancamentosPage } from './pages/LancamentosPage'
 import { Usuarios } from './pages/Usuarios'
 import { Login } from './pages/Login'
-import { rotuloPapel } from './lib/permissoes'
+import { rotuloPapel, podeAdministrar } from './lib/permissoes'
 import {
   IconInicio,
   IconDre,
@@ -59,7 +59,7 @@ const NAV: { rota: Rota; label: string; Icone: (p: { size?: number }) => ReactNo
 function AppAutenticado() {
   const { usuario, sair } = useAuth()
   const [rota, setRota] = useState<Rota>('dashboard')
-  const ehAdmin = usuario?.papel === 'admin'
+  const ehAdmin = podeAdministrar(usuario?.papel)
   const rotaEfetiva: Rota = !ehAdmin && rota === 'usuarios' ? 'dashboard' : rota
 
   return (

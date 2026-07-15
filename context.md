@@ -111,8 +111,11 @@ as contas já nascem classificadas e dá para **orçar/ler o DRE mesmo sem lanç
   determinístico `src/lib/confiabilidade.ts` (`analisarConfiabilidade`, zero IA) roda 6 regras sobre
   os lançamentos do mês — não classificada, baixa confiança (< `LIMIAR_REVISAO`), variação atípica
   (vs. média histórica, > 60% ou > piso), duplicidade (conta+valor+data), sumiço (conta regular ≥3m
-  que zerou) e data futura. **Materialidade por piso fixo em R$ (default R$ 1.000, editável), com
-  severidade pesada contra o RESULTADO LÍQUIDO** (não a receita — margem fina no agro). Índice de
+  que zerou) e data futura. **Materialidade de DUAS TRILHAS** (decisão do cliente): custos/despesas/
+  deduções/impostos por **piso absoluto em R$ (default 1.000)**; **receitas por % da própria conta
+  (default 3%)** — porque no agro a receita é alta e a margem fina. A variação atípica de receita
+  dispara a 3% da média; a de custo pelo relativo (60%) com piso R$. Severidade pesada contra o
+  RESULTADO líquido. Ambos os cortes editáveis na tela. Índice de
   confiança (0–100%), achados por severidade com ações (reclassificar via Select → classificações;
   ignorar, persistido em `EstadoDre.confiabilidade`), e resumo executivo da IA. É a base do Sprint 3.
 - **Lançamentos** — `LancamentosPage.tsx`: tabela dos lançamentos; botões **Sincronizar Safragold**
@@ -124,7 +127,8 @@ as contas já nascem classificadas e dá para **orçar/ler o DRE mesmo sem lanç
 
 Definidos em `lib/auth.ts` (`Papel = 'socio' | 'admin' | 'orcamento' | 'consulta'`) e espelhados no
 front em `src/lib/permissoes.ts`:
-- **socio** — tudo do admin + **APROVA o planejamento orçamentário** (exclusivo do sócio).
+- **socio** — tudo do admin + **APROVA o planejamento orçamentário** (exclusivo do sócio). Vê a aba
+  Usuários (o gate do menu usa `podeAdministrar` = sócio ou admin).
 - **admin** — faz tudo (usuários, sincronizar, classificar, editar orçamento), menos aprovar.
 - **orcamento** ("Consulta + orçamento") — vê tudo e edita o orçamento (rascunho).
 - **consulta** ("Somente consulta") — só visualiza.

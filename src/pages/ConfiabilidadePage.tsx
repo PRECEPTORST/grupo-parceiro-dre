@@ -43,9 +43,10 @@ export function ConfiabilidadePage() {
     () =>
       analisarConfiabilidade(competencia, estado.lancamentos, estado.classificacoes, mapa, {
         pisoMaterialidade: config.pisoMaterialidade,
+        pctReceita: config.pctReceita,
         hoje: hojeISO(),
       }),
-    [competencia, estado.lancamentos, estado.classificacoes, mapa, config.pisoMaterialidade],
+    [competencia, estado.lancamentos, estado.classificacoes, mapa, config.pisoMaterialidade, config.pctReceita],
   )
 
   const [soMateriais, setSoMateriais] = useState(true)
@@ -55,6 +56,8 @@ export function ConfiabilidadePage() {
 
   const setPiso = (v: number) =>
     salvarConfigConfiabilidade({ ...config, pisoMaterialidade: Math.max(0, v) })
+  const setPctReceita = (v: number) =>
+    salvarConfigConfiabilidade({ ...config, pctReceita: Math.max(0, v) })
   const ignorar = (id: string) =>
     salvarConfigConfiabilidade({ ...config, ignorados: [...new Set([...config.ignorados, id])] })
   const reativar = (id: string) =>
@@ -123,9 +126,14 @@ export function ConfiabilidadePage() {
       {/* Materialidade + resumo IA */}
       <div className="mb-4 grid gap-4 lg:grid-cols-[220px_1fr]">
         <Card className="animate-rise">
-          <Field label="Piso de materialidade (R$)" hint="Achados abaixo disso são imateriais.">
-            <NumInput value={config.pisoMaterialidade} onChange={(v) => setPiso(v ?? 0)} min={0} disabled={!podeAgir} />
-          </Field>
+          <div className="flex flex-col gap-3">
+            <Field label="Materialidade — custos/despesas (R$)" hint="Piso absoluto.">
+              <NumInput value={config.pisoMaterialidade} onChange={(v) => setPiso(v ?? 0)} min={0} disabled={!podeAgir} />
+            </Field>
+            <Field label="Materialidade — receitas (%)" hint="Sobre o valor da própria conta.">
+              <NumInput value={config.pctReceita} onChange={(v) => setPctReceita(v ?? 0)} min={0} step={0.5} disabled={!podeAgir} />
+            </Field>
+          </div>
           <label className="mt-3 flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={soMateriais} onChange={(e) => setSoMateriais(e.target.checked)} />
             Mostrar só materiais

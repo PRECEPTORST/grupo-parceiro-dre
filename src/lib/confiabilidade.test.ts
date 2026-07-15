@@ -110,3 +110,37 @@ describe('materialidade — piso em R$', () => {
     expect(a.material).toBe(false) // 3k < 5k
   })
 })
+
+describe('materialidade de duas trilhas (receita = %, custo = R$)', () => {
+  const mapaR: MapaClassificacao = { '3.1.01': 'receita_bruta' }
+  const hist = [
+    lanc('a', '2026-04-10', '3.1.01', 1_000_000),
+    lanc('b', '2026-05-10', '3.1.01', 1_000_000),
+  ]
+
+  it('receita: variação dispara a partir de 3% da média', () => {
+    const l = [...hist, lanc('c', '2026-06-10', '3.1.01', 1_050_000)] // +5%
+    const rel = analisarConfiabilidade('2026-06', l, [], mapaR, { hoje: '2026-06-30' })
+    const a = rel.achados.find((x) => x.tipo === 'variacao_atipica')
+    expect(a?.valor).toBe(50_000)
+    expect(a?.material).toBe(true)
+  })
+
+  it('receita: variação abaixo de 3% não dispara', () => {
+    const l = [...hist, lanc('c', '2026-06-10', '3.1.01', 1_020_000)] // +2%
+    const rel = analisarConfiabilidade('2026-06', l, [], mapaR, { hoje: '2026-06-30' })
+    expect(rel.achados.find((x) => x.tipo === 'variacao_atipica')).toBeUndefined()
+  })
+
+  it('receita: achado abaixo de 3% da própria conta é imaterial', () => {
+    const l = [
+      lanc('big', '2026-06-05', '3.1.01', 1_000_000),
+      lanc('d1', '2026-06-10', '3.1.01', 10_000),
+      lanc('d2', '2026-06-10', '3.1.01', 10_000), // duplicidade de 20k
+    ]
+    const rel = analisarConfiabilidade('2026-06', l, [], mapaR, { hoje: '2026-06-30' })
+    const dup = rel.achados.find((x) => x.tipo === 'duplicidade')!
+    expect(dup.valor).toBe(20_000)
+    expect(dup.material).toBe(false) // 20k < 3% de 1.020.000 (30.6k)
+  })
+})

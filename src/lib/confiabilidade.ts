@@ -10,6 +10,7 @@
 // Mesma entrada + mesmas opções → mesma saída. A IA (fase 2) só EXPLICA os achados.
 import {
   LIMIAR_REVISAO,
+  META_LINHAS,
   type LinhaDRE,
   type LancamentoCanonico,
   type Classificacao,
@@ -62,11 +63,13 @@ export interface RelatorioConfiabilidade {
 }
 
 export interface OpcoesConfiabilidade {
-  /** Corte de materialidade em R$ (default R$ 1.000). */
+  /** Piso de materialidade em R$ para custos/despesas (default R$ 1.000). */
   pisoMaterialidade?: number
+  /** Corte de materialidade em % para receitas, sobre a própria conta (default 3). */
+  pctReceita?: number
   /** Meses de histórico usados para média/variação (default 6). */
   mesesHistorico?: number
-  /** Variação mínima vs. média histórica para sinalizar (fração; default 0.6 = 60%). */
+  /** Variação mínima vs. média p/ CUSTOS sinalizarem (fração; default 0.6 = 60%). */
   limiarVariacao?: number
   /** "Hoje" em ISO 'YYYY-MM-DD' (para datas futuras). Default: data atual. */
   hoje?: string
@@ -103,6 +106,7 @@ export function analisarConfiabilidade(
   opcoes: OpcoesConfiabilidade = {},
 ): RelatorioConfiabilidade {
   const piso = opcoes.pisoMaterialidade ?? PISO_MATERIALIDADE_PADRAO
+  const pctReceita = opcoes.pctReceita ?? 3
   const mesesHist = Math.max(1, opcoes.mesesHistorico ?? 6)
   const limiarVar = opcoes.limiarVariacao ?? 0.6
   const hoje = opcoes.hoje ?? new Date().toISOString().slice(0, 10)
@@ -134,16 +138,21 @@ export function analisarConfiabilidade(
       .map(([, v]) => v)
   }
 
-  const severidade = (valor: number): Severidade => {
-    if (valor < piso) return 'baixa'
-    if (resultado > 0 && valor / resultado >= 0.1) return 'alta'
-    return 'media'
-  }
+  const ehReceita = (linha?: LinhaDRE) => !!linha && META_LINHAS[linha].sinal === 1
+  // Materialidade de DUAS TRILHAS: receitas por % da própria conta (base),
+  // custos/despesas/deduções/impostos por piso absoluto em R$.
+  const limiarMaterial = (linha?: LinhaDRE, base?: number) =>
+    ehReceita(linha) && base && base > 0 ? (pctReceita / 100) * base : piso
 
   const achados: AchadoConfiabilidade[] = []
-  const push = (a: Omit<AchadoConfiabilidade, 'severidade' | 'material'>) => {
-    const sev = severidade(a.valor)
-    achados.push({ ...a, severidade: sev, material: a.valor >= piso })
+  const push = (a: Omit<AchadoConfiabilidade, 'severidade' | 'material'>, base?: number) => {
+    const material = a.valor >= limiarMaterial(a.linha, base)
+    const severidade: Severidade = !material
+      ? 'baixa'
+      : resultado > 0 && a.valor / resultado >= 0.1
+        ? 'alta'
+        : 'media'
+    achados.push({ ...a, severidade, material })
   }
 
   let valorEmRevisao = 0
@@ -181,7 +190,7 @@ export function analisarConfiabilidade(
       titulo: `Classificação incerta na conta ${conta}`,
       detalhe: `Classificada com confiança ${(conf * 100).toFixed(0)}% (abaixo de ${(LIMIAR_REVISAO * 100).toFixed(0)}%). ${brl(valor)} no mês dependem dessa classificação.`,
       acao: 'Confirmar ou reclassificar a conta.',
-    })
+    }, realComp[conta])
   }
 
   // 3) Variação atípica vs. média histórica (salto/queda de valor).
@@ -192,7 +201,12 @@ export function analisarConfiabilidade(
     if (med <= 0) continue
     const atual = realComp[conta]
     const desvio = atual - med
-    if (Math.abs(desvio) < Math.max(piso, limiarVar * med)) continue
+    // Receita dispara a partir de `pctReceita`% da média; custos/despesas usam
+    // o relativo (limiarVar) com piso absoluto em R$.
+    const limiarVarConta = ehReceita(mapa[conta])
+      ? (pctReceita / 100) * med
+      : Math.max(piso, limiarVar * med)
+    if (Math.abs(desvio) < limiarVarConta) continue
     const pct = (desvio / med) * 100
     push({
       id: `va-${conta}`,
@@ -204,7 +218,7 @@ export function analisarConfiabilidade(
       titulo: `Variação atípica na conta ${conta}`,
       detalhe: `Realizou ${brl(atual)} — ${pct >= 0 ? 'acima' : 'abaixo'} da média dos últimos meses (${brl(med)}), variação de ${pct.toFixed(0)}%.`,
       acao: 'Conferir se o valor do mês está correto.',
-    })
+    }, med)
   }
 
   // 4) Possível duplicidade: mesma conta + valor + data.
@@ -229,7 +243,7 @@ export function analisarConfiabilidade(
       titulo: `Possível duplicidade na conta ${e.conta}`,
       detalhe: `${e.n} lançamentos idênticos de ${brl(e.valor)} em ${dataBR(e.data)} — pode ser dupla contabilização.`,
       acao: 'Verificar se os lançamentos repetidos são legítimos.',
-    })
+    }, realComp[e.conta])
   }
 
   // 5) Sumiço: conta com histórico regular e material, sem movimento no mês.
@@ -248,7 +262,7 @@ export function analisarConfiabilidade(
       titulo: `Conta ${conta} sem movimento este mês`,
       detalhe: `Tinha média de ${brl(med)}/mês no histórico e zerou em ${competencia} — pode faltar lançamento.`,
       acao: 'Confirmar se realmente não houve movimento.',
-    })
+    }, med)
     void m
   }
 
@@ -266,7 +280,7 @@ export function analisarConfiabilidade(
       titulo: `Lançamento com data futura`,
       detalhe: `${brl(l.valor)} na conta ${l.contaSafragold} datado em ${dataBR(l.data)} (após hoje, ${dataBR(hoje)}).`,
       acao: 'Verificar a data do lançamento.',
-    })
+    }, realComp[l.contaSafragold])
   }
 
   const ordemSev: Record<Severidade, number> = { alta: 0, media: 1, baixa: 2 }
