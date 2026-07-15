@@ -135,6 +135,74 @@ export interface Orcamento {
 }
 
 // ---------------------------------------------------------------------------
+// Projeção de fluxo de caixa (Sprint 2).
+//
+// O DRE está em regime de COMPETÊNCIA (quando o fato econômico ocorre). O caixa
+// está em regime de CAIXA (quando o dinheiro entra/sai). A projeção converte um
+// no outro via PRAZOS médios editáveis (recebimento/pagamento) e parte de um
+// saldo de caixa conhecido. Quando a integração com o Enoki trouxer as contas a
+// pagar/receber com vencimento real, elas entram como `MovimentoCaixa` e passam
+// a valer no lugar da estimativa por prazo (ver `projetarCaixa` em lib/caixa.ts).
+// ---------------------------------------------------------------------------
+export type MetodoProjecaoCaixa = 'orcamento_historico' | 'orcamento' | 'historico'
+
+export interface PremissasCaixa {
+  /** Saldo de caixa/banco conhecido no início de `competenciaSaldo`, em reais. */
+  saldoInicial: number
+  /** Competência 'YYYY-MM' a que o saldo inicial se refere (início do mês). */
+  competenciaSaldo: string
+  /** Quantos meses projetar à frente a partir de `competenciaSaldo`. */
+  horizonteMeses: number
+  /** Prazo médio de recebimento das receitas (dias entre competência e caixa). */
+  prazoRecebimentoDias: number
+  /** Prazo médio de pagamento de custos e despesas (dias). */
+  prazoPagamentoDias: number
+  /** Prazo médio de recolhimento de impostos/deduções (dias). */
+  prazoImpostosDias: number
+  /** Como projetar as competências futuras sem realizado. */
+  metodoProjecao: MetodoProjecaoCaixa
+  /** Quantos meses de realizado usar na média ao projetar pelo histórico. */
+  mesesBaseHistorico: number
+  atualizadoEm: string
+}
+
+/** 'YYYY-MM' do mês corrente (base do saldo inicial por padrão). */
+function competenciaCorrente(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+export function premissasCaixaPadrao(): PremissasCaixa {
+  return {
+    saldoInicial: 0,
+    competenciaSaldo: competenciaCorrente(),
+    horizonteMeses: 6,
+    prazoRecebimentoDias: 30,
+    prazoPagamentoDias: 30,
+    prazoImpostosDias: 30,
+    metodoProjecao: 'orcamento_historico',
+    mesesBaseHistorico: 3,
+    atualizadoEm: new Date().toISOString(),
+  }
+}
+
+/**
+ * Movimento de caixa REAL (data em que o dinheiro efetivamente entra/sai).
+ * Hoje não há produtor: é o contrato de ingestão das contas a pagar/receber do
+ * Enoki (com vencimento). Quando existir, `projetarCaixa` usa estes movimentos
+ * no lugar da estimativa por prazo nos meses que eles cobrem. Ver `safragold-sync.ts`.
+ */
+export interface MovimentoCaixa {
+  id: string
+  /** Data do movimento de caixa (ISO 'YYYY-MM-DD') — vencimento/liquidação. */
+  data: string
+  tipo: 'entrada' | 'saida'
+  /** Valor em reais, positivo. */
+  valor: number
+  descricao?: string
+}
+
+// ---------------------------------------------------------------------------
 // Estado persistido do app (Blob + cache local).
 // ---------------------------------------------------------------------------
 export interface EstadoDre {
@@ -144,6 +212,8 @@ export interface EstadoDre {
   classificacoes: Classificacao[]
   /** Orçamentos por competência. */
   orcamentos: Orcamento[]
+  /** Premissas da projeção de caixa (opcional; usa o padrão quando ausente). */
+  premissasCaixa?: PremissasCaixa
 }
 
 export function estadoDreVazio(): EstadoDre {

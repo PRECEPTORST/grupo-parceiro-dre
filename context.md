@@ -79,6 +79,19 @@ Um sócio jamais pode receber um número que "mudou porque o modelo achou".
   (realizado × orçado × desvio, cores por sinal), com subtotais. Botão recolher/expandir tudo.
 - **Orçamento** — `OrcamentoPage.tsx`: todas as contas agrupadas por linha do DRE, valor por conta;
   botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados.
+- **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção de caixa mês a mês. Motor determinístico
+  `src/lib/caixa.ts` (`projetarCaixa`, zero IA) converte o DRE (competência) em caixa por PRAZOS
+  editáveis (recebimento/pagamento/impostos), projeta os meses futuros por orçamento+histórico e
+  roda o saldo a partir de um saldo inicial. Hero do saldo projetado, alerta de liquidez (1º mês
+  negativo — semente do Sprint 3), premissas editáveis (admin/orçamento), gráfico entradas/saídas +
+  saldo e tabela mês a mês. **Detalhe DIÁRIO** (`projetarCaixaDiario`): seletor de mês do horizonte,
+  curva dia a dia + **calendário do mês** (dias negativos em vermelho, menor saldo destacado) — mostra
+  furos de caixa dentro do mês mesmo que ele feche positivo. O mensal e o diário são _rollups_ da
+  MESMA base de eventos de caixa (data exata), então sempre fecham. Realizado usa a data real do
+  lançamento + prazo; meses futuros replicam o ritmo diário do histórico. Depreciação é não-caixa
+  (fica de fora). Seam do Enoki: `projetarCaixa`/`projetarCaixaDiario` aceitam `MovimentoCaixa[]`
+  (contas a pagar/receber com vencimento) que substituem a estimativa por prazo quando existirem.
+  Testado (`src/lib/caixa.test.ts`, 12 testes, incl. consistência mensal↔diário).
 - **Lançamentos** — `LancamentosPage.tsx`: tabela dos lançamentos; botões **Sincronizar Safragold**
   e **Classificar** (admin). Mostra a linha do DRE de cada conta e marca as de baixa confiança.
 - **Usuários** — `Usuarios.tsx`: gestão de usuários (só admin).
@@ -172,9 +185,10 @@ Quando o acesso existir: implementar `buscarDoSafragold()` e `normalizar()` em `
 | Orçamento por conta (+ sugestão IA) | ✅ |
 | Papéis de acesso (3 níveis, enforced) | ✅ |
 | Insights da IA sobre desvios | ✅ |
+| Projeção de fluxo de caixa (Sprint 2) | ✅ Código + testes (pendente deploy) |
 | Dados | 🟡 Simulados (semeados para avaliação) |
 | **Integração Enoki (dados reais)** | ⏳ Aguardando Enoki |
-| Sprint 2 (projeção de caixa, materialidade) | ⬜ Não iniciado |
+| Sprint 2 (materialidade/confiabilidade) | ⬜ Próximo |
 | Sprint 3 (alertas WhatsApp) | ⬜ Não iniciado |
 
 **Git:** branch `main`, último commit `5706597`. Layout alternativo "relatório no topo" (descartado

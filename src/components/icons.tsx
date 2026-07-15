@@ -37,6 +37,14 @@ export function IconOrcamento({ size = 20 }: P) {
     </svg>
   )
 }
+export function IconCaixa({ size = 20 }: P) {
+  return (
+    <svg {...base(size)}>
+      <path d="M3 17.5 9 11l4 4 8-8.5" />
+      <path d="M15 6.5h6v6" />
+    </svg>
+  )
+}
 export function IconLancamentos({ size = 20 }: P) {
   return (
     <svg {...base(size)}>
