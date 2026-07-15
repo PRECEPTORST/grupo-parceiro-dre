@@ -17,7 +17,7 @@ interface UsuarioAdmin {
 }
 
 const inputClass =
-  'w-full rounded-lg border border-cyan/20 bg-navy-2 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan/60'
+  'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-green focus:ring-2 focus:ring-green/20'
 
 async function lerErro(resp: Response): Promise<string> {
   try {
@@ -96,7 +96,7 @@ export function Usuarios() {
       <div className="mb-6">
         <Kicker>Usuários</Kicker>
         <h1 className="mt-1 text-3xl font-extrabold">
-          Controle de <span className="text-cyan">acessos.</span>
+          Controle de <span className="text-green">acessos.</span>
         </h1>
       </div>
 
@@ -107,10 +107,10 @@ export function Usuarios() {
       )}
 
       <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold text-white">Adicionar usuário</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink">Adicionar usuário</h2>
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_180px_auto] sm:items-end">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slateblue">Usuário</span>
+            <span className="mb-1 block text-xs font-medium text-muted">Usuário</span>
             <input
               className={inputClass}
               value={novoUsuario}
@@ -119,7 +119,7 @@ export function Usuarios() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slateblue">Senha</span>
+            <span className="mb-1 block text-xs font-medium text-muted">Senha</span>
             <input
               type="password"
               className={inputClass}
@@ -129,7 +129,7 @@ export function Usuarios() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slateblue">Papel</span>
+            <span className="mb-1 block text-xs font-medium text-muted">Papel</span>
             <Select
               value={novoPapel}
               onChange={(v) => setNovoPapel(v as Papel)}
@@ -148,17 +148,17 @@ export function Usuarios() {
       </Card>
 
       {carregando ? (
-        <p className="text-slateblue">Carregando…</p>
+        <p className="text-muted">Carregando…</p>
       ) : (
         <div className="grid gap-3">
           {usuarios.map((u) => (
             <Card key={u.id} className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-base font-bold text-white">
+                <div className="text-base font-bold text-ink">
                   {u.usuario}
                   {u.id === eu?.id && <span className="ml-2 text-xs text-faint">(você)</span>}
                 </div>
-                <div className="text-xs text-slateblue">{rotuloPapel[u.papel]}</div>
+                <div className="text-xs text-muted">{rotuloPapel[u.papel]}</div>
               </div>
               <div className="flex items-center gap-2">
                 <Select

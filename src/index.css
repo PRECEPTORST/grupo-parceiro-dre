@@ -1,41 +1,75 @@
 @import 'tailwindcss';
 
 /*
-  Identidade visual: GRUPO PARCEIRO AGRONEGÓCIOS (www.grupoparceiro.com).
-  UI escura (o logo da marca é branco, feito para fundo escuro), acento
-  verde-limão #bcee23 e dourado #c8912f do emblema.
-
-  Os tokens mantêm os nomes herdados do esqueleto (navy/cyan) para não
-  reescrever todas as classes; os VALORES é que passam a ser da marca:
-    navy*  = tons escuros neutros (fundo/superfícies)
-    cyan   = verde-limão da marca (acento primário)
-    gold   = dourado do emblema (acento secundário)
+  Identidade visual oficial — GRUPO PARCEIRO AGRONEGÓCIOS (manual de marca).
+  Paleta: dourado #CD8D05, verde-escuro #0F7A49, verde-limão #B0D243,
+  creme #FFF0DA, preto/branco. Fontes: Oswald (títulos) + Sora (texto).
+  Tema CLARO/creme premium.
 */
 @theme {
-  --color-navy: #171713;
-  --color-navy-2: #201f1a;
-  --color-navy-3: #2a2a2a;
-  --color-cyan: #bcee23;
-  --color-gold: #c8912f;
-  --color-slateblue: #a9a99e;
-  --color-faint: #57574e;
-  --color-danger: #ff5a5a;
-  --color-warn: #f5c451;
-  --color-ok: #8bd450;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Cinzel', 'Times New Roman', Georgia, serif;
+  --color-cream: #fbf4e4;
+  --color-cream-2: #fff8ea;
+  --color-surface: #ffffff;
+  --color-line: #ece1c8;
+  --color-ink: #23281f;
+  --color-muted: #6e6a5c;
+  --color-faint: #a99f88;
+  --color-green: #0f7a49;
+  --color-green-deep: #0b5a36;
+  --color-lime: #b0d243;
+  --color-lime-deep: #7c971a;
+  --color-gold: #cd8d05;
+  --color-gold-deep: #a87308;
+  --color-danger: #c4342f;
+  --color-warn: #cd8d05;
+  --color-ok: #0f7a49;
+
+  --font-sans: 'Sora', system-ui, -apple-system, sans-serif;
+  --font-head: 'Oswald', 'Sora', sans-serif;
+
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade: fade 0.4s ease both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 html,
 body {
-  background: #171713;
-  color: #ffffff;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #fbf4e4;
+  color: #23281f;
+  font-family: 'Sora', system-ui, -apple-system, sans-serif;
   min-height: 100%;
 }
 
-input,
-select,
-textarea {
-  color-scheme: dark;
+/* Títulos usam Oswald (condensada, da marca) */
+h1,
+h2,
+.font-head {
+  font-family: 'Oswald', 'Sora', sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

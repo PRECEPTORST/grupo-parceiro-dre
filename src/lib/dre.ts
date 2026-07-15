@@ -1,9 +1,9 @@
 // Motor do DRE — DETERMINÍSTICO. Zero IA.
 //
-// Recebe lançamentos canônicos + o mapa de classificação (conta → linha) e
-// produz o DRE de uma competência: agrega por linha e calcula os subtotais.
-// A mesma entrada produz sempre a mesma saída — é o que garante que um sócio
-// nunca receba um DRE cujo número "mudou porque o modelo achou".
+// Constrói o DRE ANALÍTICO de uma competência: cada linha do DRE é detalhada
+// nas CONTAS que a compõem (realizado e orçado por conta), e os subtotais
+// (receita líquida, lucro bruto, EBITDA, resultado líquido) são calculados
+// pela mesma fórmula sobre os totais das linhas. Mesma entrada → mesma saída.
 import {
   LINHAS_DRE,
   META_LINHAS,
@@ -14,7 +14,6 @@ import {
   type Orcamento,
 } from './tipos'
 
-/** Arredonda para centavos, evitando drift de ponto flutuante nas somas. */
 function arredondar(v: number): number {
   return Math.round(v * 100) / 100
 }
@@ -24,131 +23,185 @@ export function competenciaDe(dataIso: string): string {
   return dataIso.slice(0, 7)
 }
 
-/** Materializa o mapa conta → linha a partir das classificações salvas. */
 export function mapaDeClassificacoes(classificacoes: Classificacao[]): MapaClassificacao {
   const mapa: MapaClassificacao = {}
   for (const c of classificacoes) mapa[c.contaSafragold] = c.linha
   return mapa
 }
 
-export interface ResultadoLinha {
+/** Uma conta dentro de uma linha do DRE, com realizado e orçado. */
+export interface ContaValor {
+  conta: string
+  descricao: string
+  realizado: number
+  orcado: number
+}
+
+/** Uma linha do DRE, detalhada nas contas que a compõem. */
+export interface LinhaResultado {
   linha: LinhaDRE
   rotulo: string
   sinal: 1 | -1
-  /** Magnitude somada na linha, em reais. */
-  valor: number
+  contas: ContaValor[]
+  realizado: number
+  orcado: number
 }
 
-export interface DreMensal {
-  competencia: string
-  /** Uma entrada por linha do DRE (na ordem de LINHAS_DRE). */
-  linhas: ResultadoLinha[]
+export interface Subtotais {
   receitaLiquida: number
   lucroBruto: number
-  /** Resultado operacional (EBIT). */
   resultadoOperacional: number
   ebitda: number
   resultadoAntesIr: number
   resultadoLiquido: number
-  /** Total de lançamentos da competência sem conta classificada (em reais). */
-  naoClassificado: number
-  /** Contas distintas ainda sem classificação (alimenta a tela de Lançamentos). */
-  contasNaoClassificadas: string[]
 }
 
-/**
- * Monta o DRE de uma competência a partir dos lançamentos e do mapa de contas.
- * Lançamentos de contas ainda não classificadas entram em `naoClassificado`
- * (nunca são silenciosamente somados numa linha errada).
- */
-export function montarDre(
-  competencia: string,
-  lancamentos: LancamentoCanonico[],
-  mapa: MapaClassificacao,
-): DreMensal {
-  const soma: Record<LinhaDRE, number> = Object.fromEntries(
-    LINHAS_DRE.map((l) => [l, 0]),
-  ) as Record<LinhaDRE, number>
+export interface DreMensal {
+  competencia: string
+  linhas: LinhaResultado[]
+  realizado: Subtotais
+  orcado: Subtotais
+  /** Contas com movimento mas sem classificação (não entram no DRE). */
+  naoClassificadas: ContaValor[]
+  naoClassificado: number
+}
 
-  let naoClassificado = 0
-  const contasNaoClassificadas = new Set<string>()
-
-  for (const lanc of lancamentos) {
-    if (competenciaDe(lanc.data) !== competencia) continue
-    const linha = mapa[lanc.contaSafragold]
-    if (!linha) {
-      naoClassificado += lanc.valor
-      contasNaoClassificadas.add(lanc.contaSafragold)
-      continue
-    }
-    soma[linha] += lanc.valor
-  }
-
-  const v = (l: LinhaDRE) => arredondar(soma[l])
-
-  const receitaLiquida = arredondar(v('receita_bruta') - v('deducoes'))
-  const lucroBruto = arredondar(receitaLiquida - v('custo_produto'))
+/** Subtotais a partir do total de cada linha (fórmula única, reutilizada). */
+function calcularSubtotais(v: Record<LinhaDRE, number>): Subtotais {
+  const receitaLiquida = arredondar(v.receita_bruta - v.deducoes)
+  const lucroBruto = arredondar(receitaLiquida - v.custo_produto)
   const resultadoOperacional = arredondar(
     lucroBruto -
-      v('despesas_comerciais') -
-      v('despesas_administrativas') +
-      v('outras_receitas_operacionais') -
-      v('depreciacao_amortizacao'),
+      v.despesas_comerciais -
+      v.despesas_administrativas +
+      v.outras_receitas_operacionais -
+      v.depreciacao_amortizacao,
   )
-  const ebitda = arredondar(resultadoOperacional + v('depreciacao_amortizacao'))
-  const resultadoFinanceiro = arredondar(v('receita_financeira') - v('despesa_financeira'))
+  const ebitda = arredondar(resultadoOperacional + v.depreciacao_amortizacao)
+  const resultadoFinanceiro = v.receita_financeira - v.despesa_financeira
   const resultadoAntesIr = arredondar(resultadoOperacional + resultadoFinanceiro)
-  const resultadoLiquido = arredondar(resultadoAntesIr - v('impostos_lucro'))
-
-  const linhas: ResultadoLinha[] = LINHAS_DRE.map((linha) => ({
-    linha,
-    rotulo: META_LINHAS[linha].rotulo,
-    sinal: META_LINHAS[linha].sinal,
-    valor: v(linha),
-  }))
-
+  const resultadoLiquido = arredondar(resultadoAntesIr - v.impostos_lucro)
   return {
-    competencia,
-    linhas,
     receitaLiquida,
     lucroBruto,
     resultadoOperacional,
     ebitda,
     resultadoAntesIr,
     resultadoLiquido,
-    naoClassificado: arredondar(naoClassificado),
-    contasNaoClassificadas: [...contasNaoClassificadas].sort(),
   }
 }
 
-// ---------------------------------------------------------------------------
-// Comparação realizado × orçado → desvios (o "apontando desvios" do Sprint 1).
-// ---------------------------------------------------------------------------
-export interface DesvioLinha {
-  linha: LinhaDRE
-  rotulo: string
-  realizado: number
-  orcado: number
-  /** realizado - orçado, na magnitude da linha. */
-  desvio: number
-  /** desvio / orçado, em % (null quando não há orçado). */
-  desvioPct: number | null
+function zeros(): Record<LinhaDRE, number> {
+  return Object.fromEntries(LINHAS_DRE.map((l) => [l, 0])) as Record<LinhaDRE, number>
 }
 
-export function compararComOrcamento(dre: DreMensal, orcamento: Orcamento | null): DesvioLinha[] {
-  return dre.linhas.map((l) => {
-    const orcado = orcamento?.valores[l.linha] ?? 0
-    const desvio = arredondar(l.valor - orcado)
-    const desvioPct = orcado !== 0 ? arredondar((desvio / orcado) * 100) : null
-    return {
-      linha: l.linha,
-      rotulo: l.rotulo,
-      realizado: l.valor,
-      orcado,
-      desvio,
-      desvioPct,
+/**
+ * Monta o DRE analítico da competência. Cada linha lista as contas que a
+ * compõem — as com movimento no mês E as que têm valor orçado (para aparecer
+ * um orçado sem realizado). Contas sem classificação ficam de fora, isoladas.
+ */
+export function montarDre(
+  competencia: string,
+  lancamentos: LancamentoCanonico[],
+  mapa: MapaClassificacao,
+  orcamento?: Orcamento | null,
+): DreMensal {
+  // 1) Agrega realizado por conta + histórico representativo.
+  const realizadoConta: Record<string, number> = {}
+  const descricaoConta: Record<string, string> = {}
+  for (const l of lancamentos) {
+    if (competenciaDe(l.data) !== competencia) continue
+    const c = l.contaSafragold
+    realizadoConta[c] = (realizadoConta[c] ?? 0) + l.valor
+    if (!descricaoConta[c] && l.historico) descricaoConta[c] = l.historico
+  }
+
+  const orcadoConta = orcamento?.valores ?? {}
+
+  // 2) Conjunto de contas a exibir: com realizado OU com orçado.
+  const contas = new Set<string>([...Object.keys(realizadoConta), ...Object.keys(orcadoConta)])
+
+  // 3) Distribui por linha; sem classificação → naoClassificadas.
+  const porLinha: Record<LinhaDRE, ContaValor[]> = Object.fromEntries(
+    LINHAS_DRE.map((l) => [l, [] as ContaValor[]]),
+  ) as Record<LinhaDRE, ContaValor[]>
+  const naoClassificadas: ContaValor[] = []
+
+  for (const conta of contas) {
+    const item: ContaValor = {
+      conta,
+      descricao: descricaoConta[conta] ?? '',
+      realizado: arredondar(realizadoConta[conta] ?? 0),
+      orcado: arredondar(orcadoConta[conta] ?? 0),
     }
+    const linha = mapa[conta]
+    if (!linha) naoClassificadas.push(item)
+    else porLinha[linha].push(item)
+  }
+
+  const ordena = (a: ContaValor, b: ContaValor) =>
+    b.realizado - a.realizado || b.orcado - a.orcado || a.conta.localeCompare(b.conta)
+
+  const totRealizado = zeros()
+  const totOrcado = zeros()
+  const linhas: LinhaResultado[] = LINHAS_DRE.map((linha) => {
+    const lista = porLinha[linha].sort(ordena)
+    const realizado = arredondar(lista.reduce((s, c) => s + c.realizado, 0))
+    const orcado = arredondar(lista.reduce((s, c) => s + c.orcado, 0))
+    totRealizado[linha] = realizado
+    totOrcado[linha] = orcado
+    return { linha, rotulo: META_LINHAS[linha].rotulo, sinal: META_LINHAS[linha].sinal, contas: lista, realizado, orcado }
   })
+
+  naoClassificadas.sort(ordena)
+
+  return {
+    competencia,
+    linhas,
+    realizado: calcularSubtotais(totRealizado),
+    orcado: calcularSubtotais(totOrcado),
+    naoClassificadas,
+    naoClassificado: arredondar(naoClassificadas.reduce((s, c) => s + c.realizado, 0)),
+  }
+}
+
+/** Contas conhecidas (vistas nos lançamentos) agrupadas por linha do DRE —
+ *  base para montar o orçamento por conta. */
+export interface GrupoContas {
+  linha: LinhaDRE
+  rotulo: string
+  contas: { conta: string; descricao: string }[]
+}
+
+export function contasPorLinha(
+  lancamentos: LancamentoCanonico[],
+  mapa: MapaClassificacao,
+): { grupos: GrupoContas[]; naoClassificadas: { conta: string; descricao: string }[] } {
+  const desc: Record<string, string> = {}
+  const porLinha: Record<LinhaDRE, Set<string>> = Object.fromEntries(
+    LINHAS_DRE.map((l) => [l, new Set<string>()]),
+  ) as Record<LinhaDRE, Set<string>>
+  const naoCls = new Set<string>()
+
+  for (const l of lancamentos) {
+    const c = l.contaSafragold
+    if (!desc[c] && l.historico) desc[c] = l.historico
+    const linha = mapa[c]
+    if (linha) porLinha[linha].add(c)
+    else naoCls.add(c)
+  }
+
+  const toList = (s: Set<string>) =>
+    [...s].sort().map((conta) => ({ conta, descricao: desc[conta] ?? '' }))
+
+  return {
+    grupos: LINHAS_DRE.map((linha) => ({
+      linha,
+      rotulo: META_LINHAS[linha].rotulo,
+      contas: toList(porLinha[linha]),
+    })),
+    naoClassificadas: toList(naoCls),
+  }
 }
 
 /** Lista as competências presentes nos lançamentos, mais recente primeiro. */

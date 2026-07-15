@@ -4,7 +4,7 @@ import { Card, Kicker } from '../components/ui'
 import { LogoLockup } from '../components/Logo'
 
 const inputClass =
-  'w-full rounded-lg border border-cyan/20 bg-navy-2 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan/60'
+  'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-green focus:ring-2 focus:ring-green/20'
 
 export function Login() {
   const { precisaSetup, entrar, configurarAdmin } = useAuth()
@@ -29,23 +29,25 @@ export function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      <Card className="w-full max-w-sm">
-        <div className="mb-5 flex flex-col items-center gap-3 text-center">
-          <LogoLockup width={180} />
-          <Kicker>{precisaSetup ? 'Configuração inicial' : 'DRE · Grupo Parceiro'}</Kicker>
-          <h1 className="text-2xl font-extrabold">
-            {precisaSetup ? (
-              <>
-                Crie o <span className="text-cyan">administrador</span>
-              </>
-            ) : (
-              <>
-                Entrar no <span className="text-cyan">app</span>
-              </>
-            )}
-          </h1>
+      <Card className="w-full max-w-sm animate-rise">
+        <div className="mb-6 flex flex-col items-center gap-4 text-center">
+          <LogoLockup width={200} />
+          <div>
+            <Kicker>{precisaSetup ? 'Configuração inicial' : 'DRE · Grupo Parceiro'}</Kicker>
+            <h1 className="mt-1 font-head text-2xl font-bold text-ink">
+              {precisaSetup ? (
+                <>
+                  Crie o <span className="text-green">administrador</span>
+                </>
+              ) : (
+                <>
+                  Entrar no <span className="text-green">app</span>
+                </>
+              )}
+            </h1>
+          </div>
           {precisaSetup && (
-            <p className="text-xs text-slateblue">
+            <p className="text-xs text-muted">
               Nenhum usuário existe ainda. Esta primeira conta será o administrador.
             </p>
           )}
@@ -53,7 +55,7 @@ export function Login() {
 
         <form onSubmit={enviar} className="flex flex-col gap-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slateblue">Usuário</span>
+            <span className="mb-1 block text-xs font-medium text-muted">Usuário</span>
             <input
               className={inputClass}
               value={usuario}
@@ -63,7 +65,7 @@ export function Login() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slateblue">Senha</span>
+            <span className="mb-1 block text-xs font-medium text-muted">Senha</span>
             <input
               type="password"
               className={inputClass}
@@ -81,7 +83,7 @@ export function Login() {
           <button
             type="submit"
             disabled={enviando || !usuario || !senha}
-            className="mt-1 rounded-lg bg-cyan px-4 py-2 text-sm font-semibold text-navy transition hover:brightness-110 disabled:opacity-50"
+            className="mt-1 rounded-lg bg-green px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-deep hover:shadow-md active:scale-[0.98] disabled:opacity-50"
           >
             {enviando ? 'Enviando…' : precisaSetup ? 'Criar administrador' : 'Entrar'}
           </button>

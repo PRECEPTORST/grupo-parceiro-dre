@@ -124,8 +124,12 @@ export type OrigemOrcamento = 'manual' | 'planilha' | 'historico' | 'sugerido'
 export interface Orcamento {
   /** Competência 'YYYY-MM'. */
   competencia: string
-  /** Valor orçado por linha, em reais (magnitude, mesmo sinal do realizado). */
-  valores: Partial<Record<LinhaDRE, number>>
+  /**
+   * Valor orçado POR CONTA (chave = contaSafragold), em reais, magnitude
+   * positiva (mesmo sinal do realizado). Os totais de linha e os subtotais do
+   * DRE são derivados somando as contas de cada linha via classificação.
+   */
+  valores: Record<string, number>
   origem: OrigemOrcamento
   atualizadoEm: string
 }

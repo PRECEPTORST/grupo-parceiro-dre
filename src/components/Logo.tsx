@@ -1,41 +1,22 @@
-// Marca do GRUPO PARCEIRO AGRONEGÓCIOS.
-// Assets em /public: escudo (parceiro-mark) e lockup completo (parceiro-lockup),
-// ambos brancos, para fundo escuro.
+// Marca oficial GRUPO PARCEIRO AGRONEGÓCIOS (versão colorida/dourada,
+// para fundo claro). Assets em /public.
 
-/** Emblema (escudo + aperto de mãos em trigo) — usado no cabeçalho. */
-export function LogoP({ size = 32 }: { size?: number }) {
+/** Logo horizontal (escudo + letreiro) — cabeçalho. */
+export function LogoHorizontal({ height = 34 }: { height?: number }) {
   return (
     <img
-      src="/parceiro-mark.png"
-      alt="Grupo Parceiro"
-      style={{ height: size, width: 'auto', display: 'block' }}
+      src="/gp-logo-horizontal.png"
+      alt="Grupo Parceiro Agronegócios"
+      style={{ height, width: 'auto', display: 'block' }}
     />
   )
 }
 
-/** Letreiro "GRUPO PARCEIRO" em serifada, na linha do logotipo da marca. */
-export function Wordmark({ size = 18, color = '#FFFFFF' }: { size?: number; color?: string }) {
-  return (
-    <span
-      style={{
-        fontFamily: "'Cinzel', 'Times New Roman', serif",
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        fontSize: size,
-        color,
-        lineHeight: 1,
-      }}
-    >
-      GRUPO PARCEIRO
-    </span>
-  )
-}
-
-/** Lockup completo (escudo + letreiro empilhados) — usado na tela de login. */
-export function LogoLockup({ width = 220 }: { width?: number }) {
+/** Lockup empilhado (escudo sobre letreiro) — tela de login. */
+export function LogoLockup({ width = 240 }: { width?: number }) {
   return (
     <img
-      src="/parceiro-lockup.png"
+      src="/gp-logo.png"
       alt="Grupo Parceiro Agronegócios"
       style={{ width, maxWidth: '100%', height: 'auto', display: 'block' }}
     />

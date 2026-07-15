@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-2xl border border-cyan/25 bg-white/[0.03] p-5 shadow-[0_0_24px_rgba(188,238,35,0.05)] ${className}`}
+      className={`rounded-2xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(35,40,31,0.04),0_8px_24px_-12px_rgba(35,40,31,0.12)] ${className}`}
     >
       {children}
     </div>
@@ -12,7 +12,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function Kicker({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-cyan">
+    <div className="font-head text-[12px] font-semibold uppercase tracking-[0.22em] text-green">
       {children}
     </div>
   )
@@ -29,7 +29,7 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slateblue">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-[11px] text-faint">{hint}</span>}
     </label>
@@ -37,9 +37,8 @@ export function Field({
 }
 
 const inputClass =
-  'w-full rounded-lg border border-cyan/20 bg-navy-2 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan/60'
+  'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-green focus:ring-2 focus:ring-green/20'
 
-/** Input numérico controlado (em reais). Vazio → 0, ou null quando permitido. */
 export function NumInput({
   value,
   onChange,
@@ -68,7 +67,7 @@ export function NumInput({
   return (
     <input
       type="number"
-      className={`${inputClass} disabled:opacity-60`}
+      className={`${inputClass} text-right tabular-nums disabled:cursor-not-allowed disabled:bg-cream disabled:text-muted`}
       value={texto}
       step={step}
       min={min}
@@ -119,7 +118,7 @@ export function Select({
   return (
     <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
       {options.map((o) => (
-        <option key={o.value} value={o.value} className="bg-navy-2 text-white">
+        <option key={o.value} value={o.value}>
           {o.label}
         </option>
       ))}
@@ -138,10 +137,12 @@ export function Botao({
   variante?: 'primario' | 'fantasma' | 'perigo'
   disabled?: boolean
 }) {
-  const base = 'rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50'
+  const base =
+    'rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100'
   const estilos = {
-    primario: 'bg-cyan text-navy hover:brightness-110',
-    fantasma: 'border border-cyan/30 text-cyan hover:bg-cyan/10',
+    primario:
+      'bg-green text-white shadow-sm hover:bg-green-deep hover:shadow-md hover:-translate-y-px',
+    fantasma: 'border border-green/40 text-green hover:bg-green/10',
     perigo: 'border border-danger/40 text-danger hover:bg-danger/10',
   }
   return (

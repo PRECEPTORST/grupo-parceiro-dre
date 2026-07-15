@@ -22,7 +22,6 @@ export function LancamentosPage() {
     [estado.classificacoes],
   )
 
-  // Contas distintas presentes nos lançamentos e ainda sem classificação.
   const contasNaoClassificadas = useMemo(() => {
     const set = new Set<string>()
     for (const l of estado.lancamentos) if (!mapa[l.contaSafragold]) set.add(l.contaSafragold)
@@ -40,7 +39,7 @@ export function LancamentosPage() {
       const lancamentos = (d.lancamentos ?? []) as LancamentoCanonico[]
       mesclarLancamentos(lancamentos)
       setAviso(
-        `${lancamentos.length} lançamento(s) importados.${d.simulado ? ' (dados SIMULADOS — Safragold ainda não configurado)' : ''}`,
+        `${lancamentos.length} lançamento(s) importados.${d.simulado ? ' (dados SIMULADOS — Safragold ainda não conectado)' : ''}`,
       )
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e))
@@ -55,7 +54,6 @@ export function LancamentosPage() {
     setErro(null)
     setAviso(null)
     try {
-      // Envia só amostras de histórico por conta, para o modelo entender o contexto.
       const amostras = contasNaoClassificadas.map((conta) => ({
         contaSafragold: conta,
         exemplos: estado.lancamentos
@@ -81,11 +79,11 @@ export function LancamentosPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 animate-rise">
         <div>
           <Kicker>Lançamentos conciliados</Kicker>
-          <h1 className="mt-1 text-3xl font-extrabold">
-            Fonte do <span className="text-cyan">DRE.</span>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">
+            Fonte do <span className="text-green">DRE</span>
           </h1>
         </div>
         {admin && (
@@ -95,7 +93,9 @@ export function LancamentosPage() {
             </Botao>
             {contasNaoClassificadas.length > 0 && (
               <Botao variante="fantasma" onClick={classificar} disabled={classificando}>
-                {classificando ? 'Classificando…' : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
+                {classificando
+                  ? 'Classificando…'
+                  : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
               </Botao>
             )}
           </div>
@@ -103,23 +103,23 @@ export function LancamentosPage() {
       </div>
 
       {erro && (
-        <Card className="mb-4 border-danger/40">
+        <Card className="mb-4 animate-rise border-danger/40 bg-danger/5">
           <p className="text-sm text-danger">{erro}</p>
         </Card>
       )}
       {aviso && (
-        <Card className="mb-4 border-cyan/40">
-          <p className="text-sm text-cyan">{aviso}</p>
+        <Card className="mb-4 animate-rise border-green/40 bg-green/5">
+          <p className="text-sm text-green-deep">{aviso}</p>
         </Card>
       )}
 
       {estado.lancamentos.length === 0 ? (
-        <Card>
-          <p className="text-slateblue">
+        <Card className="animate-rise">
+          <p className="text-muted">
             {admin ? (
               <>
                 Nenhum lançamento importado. Clique em{' '}
-                <strong className="text-white">Sincronizar Safragold</strong> para puxar os
+                <strong className="text-ink">Sincronizar Safragold</strong> para puxar os
                 lançamentos conciliados.
               </>
             ) : (
@@ -128,51 +128,55 @@ export function LancamentosPage() {
           </p>
         </Card>
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-cyan/15 text-left text-xs uppercase tracking-wider text-slateblue">
-                <th className="py-2 pr-4 font-semibold">Data</th>
-                <th className="py-2 px-4 font-semibold">Conta</th>
-                <th className="py-2 px-4 font-semibold">Histórico</th>
-                <th className="py-2 px-4 text-right font-semibold">Valor</th>
-                <th className="py-2 pl-4 font-semibold">Linha do DRE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estado.lancamentos
-                .slice()
-                .sort((a, b) => b.data.localeCompare(a.data))
-                .map((l) => {
-                  const c = classificacaoPorConta[l.contaSafragold]
-                  return (
-                    <tr key={l.id} className="border-b border-white/5">
-                      <td className="py-2 pr-4 tabular-nums text-slateblue">{l.data}</td>
-                      <td className="py-2 px-4 font-mono text-xs text-white">{l.contaSafragold}</td>
-                      <td className="py-2 px-4 text-slateblue">{l.historico}</td>
-                      <td className="py-2 px-4 text-right tabular-nums text-white">
-                        {formatBRL(l.valor)}
-                      </td>
-                      <td className="py-2 pl-4">
-                        {c ? (
-                          <span
-                            className={
-                              c.confianca < LIMIAR_REVISAO ? 'text-warn' : 'text-slateblue'
-                            }
-                            title={c.justificativa}
-                          >
-                            {META_LINHAS[c.linha].rotulo}
-                            {c.confianca < LIMIAR_REVISAO && ' ⚠ revisar'}
-                          </span>
-                        ) : (
-                          <span className="text-faint">não classificada</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-            </tbody>
-          </table>
+        <Card className="animate-rise overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+                  <th className="py-2.5 pl-5 pr-4 font-semibold">Data</th>
+                  <th className="py-2.5 px-4 font-semibold">Conta</th>
+                  <th className="py-2.5 px-4 font-semibold">Histórico</th>
+                  <th className="py-2.5 px-4 text-right font-semibold">Valor</th>
+                  <th className="py-2.5 pr-5 pl-4 font-semibold">Linha do DRE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {estado.lancamentos
+                  .slice()
+                  .sort((a, b) => b.data.localeCompare(a.data))
+                  .map((l) => {
+                    const c = classificacaoPorConta[l.contaSafragold]
+                    return (
+                      <tr key={l.id} className="border-b border-line/50 hover:bg-cream/50">
+                        <td className="py-2 pl-5 pr-4 tabular-nums text-muted">{l.data}</td>
+                        <td className="py-2 px-4 font-mono text-xs text-ink">{l.contaSafragold}</td>
+                        <td className="py-2 px-4 text-muted">{l.historico}</td>
+                        <td className="py-2 px-4 text-right tabular-nums text-ink">
+                          {formatBRL(l.valor)}
+                        </td>
+                        <td className="py-2 pr-5 pl-4">
+                          {c ? (
+                            <span
+                              className={
+                                c.confianca < LIMIAR_REVISAO
+                                  ? 'font-medium text-gold-deep'
+                                  : 'text-muted'
+                              }
+                              title={c.justificativa}
+                            >
+                              {META_LINHAS[c.linha].rotulo}
+                              {c.confianca < LIMIAR_REVISAO && ' ⚠ revisar'}
+                            </span>
+                          ) : (
+                            <span className="text-faint">não classificada</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>
