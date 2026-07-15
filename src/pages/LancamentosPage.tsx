@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { formatBRL } from '../lib/format'
-import { mapaEfetivo } from '../lib/planoContas'
+import { mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { META_LINHAS, LIMIAR_REVISAO, type LancamentoCanonico } from '../lib/tipos'
 
 export function LancamentosPage() {
@@ -146,26 +146,28 @@ export function LancamentosPage() {
                   .sort((a, b) => b.data.localeCompare(a.data))
                   .map((l) => {
                     const c = classificacaoPorConta[l.contaSafragold]
+                    const linha = mapa[l.contaSafragold]
+                    const baixa = c && c.confianca < LIMIAR_REVISAO
+                    const nome = nomeConta(l.contaSafragold)
                     return (
                       <tr key={l.id} className="border-b border-line/50 hover:bg-cream/50">
                         <td className="py-2 pl-5 pr-4 tabular-nums text-muted">{l.data}</td>
-                        <td className="py-2 px-4 font-mono text-xs text-ink">{l.contaSafragold}</td>
+                        <td className="py-2 px-4">
+                          <div className="font-mono text-xs text-ink">{l.contaSafragold}</div>
+                          {nome && <div className="text-[11px] text-faint">{nome}</div>}
+                        </td>
                         <td className="py-2 px-4 text-muted">{l.historico}</td>
                         <td className="py-2 px-4 text-right tabular-nums text-ink">
                           {formatBRL(l.valor)}
                         </td>
                         <td className="py-2 pr-5 pl-4">
-                          {c ? (
+                          {linha ? (
                             <span
-                              className={
-                                c.confianca < LIMIAR_REVISAO
-                                  ? 'font-medium text-gold-deep'
-                                  : 'text-muted'
-                              }
-                              title={c.justificativa}
+                              className={baixa ? 'font-medium text-gold-deep' : 'text-muted'}
+                              title={c?.justificativa}
                             >
-                              {META_LINHAS[c.linha].rotulo}
-                              {c.confianca < LIMIAR_REVISAO && ' ⚠ revisar'}
+                              {META_LINHAS[linha].rotulo}
+                              {baixa && ' ⚠ revisar'}
                             </span>
                           ) : (
                             <span className="text-faint">não classificada</span>

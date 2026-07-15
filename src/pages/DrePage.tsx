@@ -8,7 +8,7 @@ import {
   type LinhaResultado,
   type Subtotais,
 } from '../lib/dre'
-import { mapaEfetivo } from '../lib/planoContas'
+import { mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { orcamentoAprovado, type LinhaDRE } from '../lib/tipos'
 
 function hojeISO(): string {
@@ -303,7 +303,9 @@ function LinhaGrupo({
             <tr key={c.conta} className="animate-fade border-b border-line/40 bg-cream/30">
               <td className="py-1.5 pl-11 pr-4">
                 <span className="font-mono text-xs text-muted">{c.conta}</span>
-                {c.descricao && <span className="ml-2 text-xs text-faint">{c.descricao}</span>}
+                {nomeConta(c.conta, c.descricao) && (
+                  <span className="ml-2 text-xs text-faint">{nomeConta(c.conta, c.descricao)}</span>
+                )}
               </td>
               <td className="py-1.5 px-4 text-right text-xs tabular-nums text-muted">
                 {formatBRL(c.realizado)}

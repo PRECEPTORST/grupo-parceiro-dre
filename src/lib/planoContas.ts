@@ -137,6 +137,11 @@ export const DESCRICAO_PLANO: Record<string, string> = Object.fromEntries(
   PLANO_CONTAS.map((c) => [c.conta, c.descricao]),
 )
 
+/** Nome da conta no plano; cai no `fallback` (ex.: histórico) se não estiver no plano. */
+export function nomeConta(conta: string, fallback = ''): string {
+  return DESCRICAO_PLANO[conta] || fallback
+}
+
 /**
  * Mapa efetivo conta → linha: o plano padrão como BASE, sobreposto pelas
  * classificações do usuário (que sempre vencem). Assim toda conta do plano já
