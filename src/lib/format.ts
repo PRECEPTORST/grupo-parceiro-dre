@@ -17,6 +17,19 @@ export function formatPct(valor: number): string {
   return pct.format(valor / 100)
 }
 
+const brlCompacto = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
+/** Moeda compacta para eixos de gráfico (ex.: 1200000 → "R$ 1,2 mi"). */
+export function formatBRLCompact(valor: number): string {
+  if (!Number.isFinite(valor)) return '—'
+  return brlCompacto.format(valor)
+}
+
 const num = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
 
 export function formatNum(valor: number): string {

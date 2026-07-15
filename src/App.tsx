@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DreProvider, useDre } from './context/DreContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { DashboardPage } from './pages/DashboardPage'
 import { DrePage } from './pages/DrePage'
 import { OrcamentoPage } from './pages/OrcamentoPage'
 import { LancamentosPage } from './pages/LancamentosPage'
@@ -9,7 +10,7 @@ import { Login } from './pages/Login'
 import { LogoHorizontal } from './components/Logo'
 import { rotuloPapel } from './lib/permissoes'
 
-type Rota = 'dre' | 'orcamento' | 'lancamentos' | 'usuarios'
+type Rota = 'dashboard' | 'dre' | 'orcamento' | 'lancamentos' | 'usuarios'
 
 export default function App() {
   return (
@@ -36,15 +37,15 @@ function Portao() {
 
 function AppAutenticado() {
   const { usuario, sair } = useAuth()
-  const [rota, setRota] = useState<Rota>('dre')
+  const [rota, setRota] = useState<Rota>('dashboard')
   const ehAdmin = usuario?.papel === 'admin'
-  const rotaEfetiva: Rota = !ehAdmin && rota === 'usuarios' ? 'dre' : rota
+  const rotaEfetiva: Rota = !ehAdmin && rota === 'usuarios' ? 'dashboard' : rota
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-line bg-cream-2/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-          <button className="flex items-center" onClick={() => setRota('dre')}>
+          <button className="flex items-center" onClick={() => setRota('dashboard')}>
             <LogoHorizontal height={34} />
             <span className="ml-3 hidden border-l border-line pl-3 font-head text-xs font-semibold uppercase tracking-[0.22em] text-green sm:inline">
               DRE
@@ -53,6 +54,9 @@ function AppAutenticado() {
           <div className="flex items-center gap-3">
             <IndicadorSync />
             <nav className="flex gap-1">
+              <BotaoNav ativo={rotaEfetiva === 'dashboard'} onClick={() => setRota('dashboard')}>
+                Início
+              </BotaoNav>
               <BotaoNav ativo={rotaEfetiva === 'dre'} onClick={() => setRota('dre')}>
                 DRE
               </BotaoNav>
@@ -85,6 +89,7 @@ function AppAutenticado() {
       </header>
 
       <main key={rotaEfetiva} className="animate-fade">
+        {rotaEfetiva === 'dashboard' && <DashboardPage />}
         {rotaEfetiva === 'dre' && <DrePage />}
         {rotaEfetiva === 'orcamento' && <OrcamentoPage />}
         {rotaEfetiva === 'lancamentos' && <LancamentosPage />}
