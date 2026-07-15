@@ -85,8 +85,11 @@ Um sócio jamais pode receber um número que "mudou porque o modelo achou".
   roda o saldo a partir de um saldo inicial. Hero do saldo projetado, alerta de liquidez (1º mês
   negativo — semente do Sprint 3), premissas editáveis (admin/orçamento), gráfico entradas/saídas +
   saldo e tabela mês a mês. **Detalhe DIÁRIO** (`projetarCaixaDiario`): seletor de mês do horizonte,
-  curva dia a dia + **calendário do mês** (dias negativos em vermelho, menor saldo destacado) — mostra
-  furos de caixa dentro do mês mesmo que ele feche positivo. O mensal e o diário são _rollups_ da
+  curva dia a dia + **calendário do mês** (cada dia mostra **a receber**/**a pagar** e saldo; dias
+  negativos em vermelho, menor saldo destacado) — mostra furos de caixa dentro do mês mesmo que ele
+  feche positivo. **Clicar num dia abre um modal com TODOS os lançamentos** que compõem aquele caixa
+  (conta, histórico, linha do DRE, data de origem; itens de mês projetado marcados como "projeção").
+  O mensal e o diário são _rollups_ da
   MESMA base de eventos de caixa (data exata), então sempre fecham. Realizado usa a data real do
   lançamento + prazo; meses futuros replicam o ritmo diário do histórico. Depreciação é não-caixa
   (fica de fora). Seam do Enoki: `projetarCaixa`/`projetarCaixaDiario` aceitam `MovimentoCaixa[]`

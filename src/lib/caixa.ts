@@ -15,6 +15,7 @@
 // Depreciação/amortização é NÃO-CAIXA e nunca vira evento.
 import {
   LINHAS_DRE,
+  META_LINHAS,
   type LinhaDRE,
   type LancamentoCanonico,
   type MapaClassificacao,
@@ -74,11 +75,28 @@ export function diasNoMes(mes: string): number {
   return new Date(y, m, 0).getDate()
 }
 
+/** De onde veio um evento de caixa — para abrir o dia e ver os lançamentos. */
+export interface OrigemEvento {
+  /** Linha do DRE (ausente em movimento real do Enoki). */
+  linha?: LinhaDRE
+  /** Rótulo exibível (linha do DRE, ou descrição do título real). */
+  rotulo: string
+  /** Conta do Safragold (só no realizado). */
+  conta?: string
+  /** Histórico do lançamento (realizado) ou descrição do título (real). */
+  descricao?: string
+  /** Data de competência de origem ('YYYY-MM-DD'). */
+  dataOrigem: string
+  /** true quando é estimativa (mês projetado), false quando é lançamento/título real. */
+  projetado: boolean
+}
+
 /** Um movimento de caixa datado (unidade da base). */
 export interface EventoCaixa {
   data: string
   tipo: 'entrada' | 'saida'
   valor: number
+  origem: OrigemEvento
 }
 
 const prazoDe = (t: TrataCaixa['prazo'], p: PremissasCaixa) =>
@@ -143,7 +161,19 @@ function construirEventos(
     rec[linha] += l.valor
     const t = TRATAMENTO_CAIXA[linha]
     if (t.fluxo === 'ignorar') continue
-    eventos.push({ data: addDiasISO(l.data, prazoDe(t.prazo, premissas)), tipo: t.fluxo, valor: l.valor })
+    eventos.push({
+      data: addDiasISO(l.data, prazoDe(t.prazo, premissas)),
+      tipo: t.fluxo,
+      valor: l.valor,
+      origem: {
+        linha,
+        rotulo: META_LINHAS[linha].rotulo,
+        conta: l.contaSafragold,
+        descricao: l.historico,
+        dataOrigem: l.data,
+        projetado: false,
+      },
+    })
   }
 
   // 2) Base para projetar os meses futuros.
@@ -197,8 +227,13 @@ function construirEventos(
       if (!total) continue
       const prazo = prazoDe(t.prazo, premissas)
       for (const { dia, peso } of pesos[linha]) {
-        const origem = `${comp}-${pad2(dia)}`
-        eventos.push({ data: addDiasISO(origem, prazo), tipo: t.fluxo, valor: total * peso })
+        const dataOrigem = `${comp}-${pad2(dia)}`
+        eventos.push({
+          data: addDiasISO(dataOrigem, prazo),
+          tipo: t.fluxo,
+          valor: total * peso,
+          origem: { linha, rotulo: META_LINHAS[linha].rotulo, dataOrigem, projetado: true },
+        })
       }
     }
   }
@@ -296,12 +331,16 @@ export function projetarCaixa(
 export interface DiaFluxo {
   data: string
   dia: number
+  /** Total a receber no dia. */
   entradas: number
+  /** Total a pagar no dia. */
   saidas: number
   liquido: number
   saldoInicial: number
   saldoFinal: number
   negativo: boolean
+  /** Lançamentos/títulos que compõem o dia (para abrir o detalhe). */
+  eventos: EventoCaixa[]
 }
 
 export interface ProjecaoDiaria {
@@ -333,34 +372,42 @@ export function projetarCaixaDiario(
   const info = mensal.meses.find((m) => m.competencia === mes)
   const saldoAbertura = info ? info.saldoInicial : premissas.saldoInicial
 
-  const eventos = construirEventos(lancamentos, mapa, orcamentos, premissas)
-  const entradasDia = new Map<string, number>()
-  const saidasDia = new Map<string, number>()
-  for (const e of eventos) {
-    if (e.data.slice(0, 7) !== mes) continue
-    const alvo = e.tipo === 'entrada' ? entradasDia : saidasDia
-    alvo.set(e.data, (alvo.get(e.data) ?? 0) + e.valor)
+  // Eventos do mês. Enoki: real substitui a estimativa, por tipo, no mês.
+  let eventosMes = construirEventos(lancamentos, mapa, orcamentos, premissas).filter(
+    (e) => e.data.slice(0, 7) === mes,
+  )
+  if (movimentosReais && movimentosReais.length) {
+    const reaisMes = movimentosReais.filter((m) => competenciaDe(m.data) === mes)
+    if (reaisMes.length) {
+      const tiposCobertos = new Set(reaisMes.map((m) => m.tipo))
+      eventosMes = eventosMes.filter((e) => !tiposCobertos.has(e.tipo))
+      for (const m of reaisMes) {
+        const data = m.data.slice(0, 10)
+        eventosMes.push({
+          data,
+          tipo: m.tipo,
+          valor: Math.abs(m.valor),
+          origem: {
+            rotulo: m.descricao ?? (m.tipo === 'entrada' ? 'Recebimento' : 'Pagamento'),
+            descricao: m.descricao,
+            dataOrigem: data,
+            projetado: false,
+          },
+        })
+      }
+    }
   }
 
-  // Enoki: real substitui a estimativa, por tipo, dentro do mês.
-  if (movimentosReais && movimentosReais.length) {
-    const realEnt = new Map<string, number>()
-    const realSai = new Map<string, number>()
-    for (const m of movimentosReais) {
-      if (competenciaDe(m.data) !== mes) continue
-      const alvo = m.tipo === 'entrada' ? realEnt : realSai
-      const dia = m.data.slice(0, 10)
-      alvo.set(dia, (alvo.get(dia) ?? 0) + Math.abs(m.valor))
-    }
-    if (realEnt.size) {
-      entradasDia.clear()
-      for (const [d, v] of realEnt) entradasDia.set(d, v)
-    }
-    if (realSai.size) {
-      saidasDia.clear()
-      for (const [d, v] of realSai) saidasDia.set(d, v)
-    }
+  // Agrupa os eventos por dia.
+  const porDia = new Map<string, EventoCaixa[]>()
+  for (const e of eventosMes) {
+    const arr = porDia.get(e.data)
+    if (arr) arr.push(e)
+    else porDia.set(e.data, [e])
   }
+
+  const ordenarEventos = (a: EventoCaixa, b: EventoCaixa) =>
+    a.tipo === b.tipo ? b.valor - a.valor : a.tipo === 'entrada' ? -1 : 1
 
   const nd = diasNoMes(mes)
   const dias: DiaFluxo[] = []
@@ -370,8 +417,11 @@ export function projetarCaixaDiario(
 
   for (let d = 1; d <= nd; d++) {
     const data = `${mes}-${pad2(d)}`
-    const entradas = arred(entradasDia.get(data) ?? 0)
-    const saidas = arred(saidasDia.get(data) ?? 0)
+    const eventosDia = (porDia.get(data) ?? [])
+      .map((e) => ({ ...e, valor: arred(e.valor) }))
+      .sort(ordenarEventos)
+    const entradas = arred(eventosDia.reduce((s, e) => s + (e.tipo === 'entrada' ? e.valor : 0), 0))
+    const saidas = arred(eventosDia.reduce((s, e) => s + (e.tipo === 'saida' ? e.valor : 0), 0))
     const liquido = arred(entradas - saidas)
     const saldoInicial = arred(saldo)
     saldo += liquido
@@ -379,7 +429,7 @@ export function projetarCaixaDiario(
     const negativo = saldoFinal < 0
     if (negativo) diasNegativos++
     if (!menorSaldo || saldoFinal < menorSaldo.saldo) menorSaldo = { data, saldo: saldoFinal }
-    dias.push({ data, dia: d, entradas, saidas, liquido, saldoInicial, saldoFinal, negativo })
+    dias.push({ data, dia: d, entradas, saidas, liquido, saldoInicial, saldoFinal, negativo, eventos: eventosDia })
   }
 
   return {

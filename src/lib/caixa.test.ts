@@ -17,8 +17,8 @@ const classificacoes: Classificacao[] = [
 ]
 const mapa = mapaDeClassificacoes(classificacoes)
 
-function lanc(id: string, data: string, conta: string, valor: number): LancamentoCanonico {
-  return { id, data, contaSafragold: conta, historico: '', valor }
+function lanc(id: string, data: string, conta: string, valor: number, hist = ''): LancamentoCanonico {
+  return { id, data, contaSafragold: conta, historico: hist, valor }
 }
 
 function premissas(over: Partial<PremissasCaixa> = {}): PremissasCaixa {
@@ -162,6 +162,23 @@ describe('projetarCaixaDiario — dia a dia dentro do mês', () => {
     const entradasDiarias = d.dias.reduce((s, x) => s + x.entradas, 0)
     expect(entradasDiarias).toBe(jul.entradas)
     expect(d.saldoFechamento).toBe(jul.saldoFinal)
+  })
+
+  it('abre o dia com os lançamentos que o compõem (a receber / a pagar)', () => {
+    const doDia = [
+      lanc('r', '2026-06-10', '3.1.01', 500_000, 'Venda soja'),
+      lanc('c', '2026-06-10', '4.1.01', 200_000, 'Compra grãos'),
+    ]
+    const p = premissas({ metodoProjecao: 'orcamento' })
+    const d = projetarCaixaDiario('2026-07', doDia, mapa, [], p)
+    const d10 = d.dias.find((x) => x.data === '2026-07-10')!
+    expect(d10.entradas).toBe(500_000) // a receber
+    expect(d10.saidas).toBe(200_000) // a pagar
+    expect(d10.eventos).toHaveLength(2)
+    const receber = d10.eventos.find((e) => e.tipo === 'entrada')!
+    expect(receber.origem).toMatchObject({ conta: '3.1.01', descricao: 'Venda soja', dataOrigem: '2026-06-10', projetado: false })
+    // Entrada listada antes da saída.
+    expect(d10.eventos[0].tipo).toBe('entrada')
   })
 
   it('marca dias negativos e o menor saldo do mês', () => {

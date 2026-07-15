@@ -21,6 +21,7 @@ import {
   projetarCaixaDiario,
   addMeses,
   type DiaFluxo,
+  type EventoCaixa,
   type ProjecaoDiaria,
 } from '../lib/caixa'
 import { premissasCaixaPadrao, type PremissasCaixa, type MetodoProjecaoCaixa } from '../lib/tipos'
@@ -368,6 +369,7 @@ function DetalheDiario({
   mesAtivo: string
   onSelecionar: (mes: string) => void
 }) {
+  const [diaAberto, setDiaAberto] = useState<DiaFluxo | null>(null)
   const dadosDia = diario.dias.map((d) => ({
     rotulo: String(d.dia),
     entradas: d.entradas,
@@ -384,10 +386,14 @@ function DetalheDiario({
   ]
 
   return (
+    <>
     <Card className="mt-4 animate-rise">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
           Detalhe diário — {rotuloCompetencia(diario.mes)}
+          <span className="ml-2 text-[11px] font-normal normal-case tracking-normal text-faint">
+            clique num dia para ver os lançamentos
+          </span>
         </h2>
         <div className="flex flex-wrap gap-1.5">
           {meses.map((m) => (
@@ -456,33 +462,57 @@ function DetalheDiario({
             c === null ? (
               <div key={`v${i}`} />
             ) : (
-              <CelulaDia key={c.data} dia={c} menor={diario.menorSaldo?.data === c.data} />
+              <CelulaDia
+                key={c.data}
+                dia={c}
+                menor={diario.menorSaldo?.data === c.data}
+                onAbrir={setDiaAberto}
+              />
             ),
           )}
         </div>
       </div>
+
     </Card>
+    {diaAberto && <ModalDia dia={diaAberto} onFechar={() => setDiaAberto(null)} />}
+    </>
   )
 }
 
-function CelulaDia({ dia, menor }: { dia: DiaFluxo; menor: boolean }) {
+function CelulaDia({
+  dia,
+  menor,
+  onAbrir,
+}: {
+  dia: DiaFluxo
+  menor: boolean
+  onAbrir: (d: DiaFluxo) => void
+}) {
   const temMov = dia.entradas !== 0 || dia.saidas !== 0
   return (
-    <div
-      title={`Entradas ${formatBRL(dia.entradas)} · Saídas ${formatBRL(dia.saidas)} · Saldo ${formatBRL(dia.saldoFinal)}`}
-      className={`flex min-h-[62px] flex-col rounded-lg border p-1.5 ${
+    <button
+      type="button"
+      onClick={() => temMov && onAbrir(dia)}
+      title={temMov ? 'Ver lançamentos do dia' : 'Sem movimento'}
+      className={`flex min-h-[68px] flex-col rounded-lg border p-1.5 text-left transition-shadow ${
         dia.negativo
           ? 'border-danger/40 bg-danger/5'
           : temMov
             ? 'border-line bg-cream/40'
             : 'border-line/60'
-      } ${menor ? 'ring-2 ring-gold' : ''}`}
+      } ${menor ? 'ring-2 ring-gold' : ''} ${
+        temMov ? 'cursor-pointer hover:shadow-[0_6px_16px_-10px_rgba(35,40,31,0.5)]' : 'cursor-default'
+      }`}
     >
       <span className="text-[10px] font-semibold text-faint">{dia.dia}</span>
       {temMov && (
         <span className="mt-0.5 flex flex-col gap-px text-[9px] leading-tight tabular-nums">
-          {dia.entradas > 0 && <span className="text-green">+{formatBRLCompact(dia.entradas)}</span>}
-          {dia.saidas > 0 && <span className="text-danger">−{formatBRLCompact(dia.saidas)}</span>}
+          {dia.entradas > 0 && (
+            <span className="text-green" title="A receber">▲ {formatBRLCompact(dia.entradas)}</span>
+          )}
+          {dia.saidas > 0 && (
+            <span className="text-danger" title="A pagar">▼ {formatBRLCompact(dia.saidas)}</span>
+          )}
         </span>
       )}
       <span
@@ -492,6 +522,115 @@ function CelulaDia({ dia, menor }: { dia: DiaFluxo; menor: boolean }) {
       >
         {formatBRLCompact(dia.saldoFinal)}
       </span>
+    </button>
+  )
+}
+
+const DATA_LONGA = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+function rotuloDataLonga(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return DATA_LONGA.format(new Date(y, m - 1, d))
+}
+function rotuloDataCurta(iso: string): string {
+  const [, m, d] = iso.split('-')
+  return `${d}/${m}`
+}
+
+function ModalDia({ dia, onFechar }: { dia: DiaFluxo; onFechar: () => void }) {
+  const receber = dia.eventos.filter((e) => e.tipo === 'entrada')
+  const pagar = dia.eventos.filter((e) => e.tipo === 'saida')
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 animate-fade"
+      onClick={onFechar}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-2xl animate-rise"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="font-head text-xs font-semibold uppercase tracking-[0.2em] text-green">
+              Lançamentos do dia
+            </div>
+            <h3 className="mt-0.5 text-lg font-bold text-ink">{rotuloDataLonga(dia.data)}</h3>
+          </div>
+          <button
+            onClick={onFechar}
+            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-cream hover:text-ink"
+            title="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg border border-line bg-cream/40 p-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">A receber</div>
+            <div className="font-head text-sm font-semibold tabular-nums text-green">{formatBRL(dia.entradas)}</div>
+          </div>
+          <div className="rounded-lg border border-line bg-cream/40 p-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">A pagar</div>
+            <div className="font-head text-sm font-semibold tabular-nums text-danger">{formatBRL(dia.saidas)}</div>
+          </div>
+          <div className={`rounded-lg border p-2 ${dia.negativo ? 'border-danger/40 bg-danger/5' : 'border-line bg-cream/40'}`}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">Saldo no fim</div>
+            <div className={`font-head text-sm font-semibold tabular-nums ${dia.negativo ? 'text-danger' : 'text-ink'}`}>
+              {formatBRL(dia.saldoFinal)}
+            </div>
+          </div>
+        </div>
+
+        {dia.eventos.length === 0 ? (
+          <p className="py-6 text-center text-sm text-faint">Sem movimento neste dia.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <ListaEventos titulo="A receber" cor="text-green" itens={receber} />
+            <ListaEventos titulo="A pagar" cor="text-danger" itens={pagar} />
+          </div>
+        )}
+
+        <p className="mt-4 text-[11px] text-faint">
+          Itens marcados como <em>projeção</em> vêm da estimativa por prazo/histórico. Quando a
+          integração com o Enoki trouxer os títulos reais, aparecem aqui com o vencimento efetivo.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ListaEventos({ titulo, cor, itens }: { titulo: string; cor: string; itens: EventoCaixa[] }) {
+  if (itens.length === 0) return null
+  return (
+    <div>
+      <div className={`mb-1.5 flex items-center justify-between border-b border-line pb-1 text-xs font-semibold uppercase tracking-wider ${cor}`}>
+        <span>{titulo}</span>
+        <span className="tabular-nums">{formatBRL(itens.reduce((s, e) => s + e.valor, 0))}</span>
+      </div>
+      <div className="flex flex-col">
+        {itens.map((e, i) => (
+          <div key={i} className="flex items-start justify-between gap-3 border-b border-line/50 py-2 last:border-0">
+            <div className="min-w-0">
+              <div className="truncate text-sm text-ink">
+                {e.origem.conta && <span className="font-mono text-xs text-faint">{e.origem.conta} · </span>}
+                {e.origem.descricao || e.origem.rotulo}
+              </div>
+              <div className="text-[11px] text-muted">
+                {e.origem.rotulo}
+                {' · '}
+                {e.origem.projetado ? (
+                  <span className="text-gold-deep">projeção (ref. {rotuloDataCurta(e.origem.dataOrigem)})</span>
+                ) : (
+                  <>ref. {rotuloDataCurta(e.origem.dataOrigem)}</>
+                )}
+              </div>
+            </div>
+            <div className={`shrink-0 font-head text-sm font-semibold tabular-nums ${cor}`}>
+              {formatBRL(e.valor)}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
