@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { formatBRL } from '../lib/format'
-import { mapaDeClassificacoes } from '../lib/dre'
+import { mapaEfetivo } from '../lib/planoContas'
 import { META_LINHAS, LIMIAR_REVISAO, type LancamentoCanonico } from '../lib/tipos'
 
 export function LancamentosPage() {
@@ -16,7 +16,7 @@ export function LancamentosPage() {
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
-  const mapa = useMemo(() => mapaDeClassificacoes(estado.classificacoes), [estado.classificacoes])
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const classificacaoPorConta = useMemo(
     () => Object.fromEntries(estado.classificacoes.map((c) => [c.contaSafragold, c])),
     [estado.classificacoes],

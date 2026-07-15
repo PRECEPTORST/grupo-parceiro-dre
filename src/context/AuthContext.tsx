@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { EVENTO_SESSAO_EXPIRADA } from '../lib/nuvem'
 
-export type Papel = 'admin' | 'orcamento' | 'consulta'
+export type Papel = 'socio' | 'admin' | 'orcamento' | 'consulta'
 export interface UsuarioLogado {
   id: string
   usuario: string

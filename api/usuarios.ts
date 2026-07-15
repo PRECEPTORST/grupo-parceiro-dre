@@ -11,11 +11,14 @@ import {
   hashSenha,
   usuarioPublico,
   parseBody,
+  podeAdministrar,
   type Papel,
   type Usuario,
 } from '../lib/auth.js'
 
-const PAPEIS: Papel[] = ['admin', 'orcamento', 'consulta']
+const PAPEIS: Papel[] = ['socio', 'admin', 'orcamento', 'consulta']
+/** Papéis com poder de administração (precisa sobrar ao menos um). */
+const ehAdminLevel = (p: Papel) => p === 'socio' || p === 'admin'
 
 export default async function handler(req: any, res: any) {
   if (!authConfigurada()) {
@@ -28,8 +31,8 @@ export default async function handler(req: any, res: any) {
     res.status(401).json({ erro: 'Não autenticado.' })
     return
   }
-  if (atual.papel !== 'admin') {
-    res.status(403).json({ erro: 'Apenas administradores podem gerenciar usuários.' })
+  if (!podeAdministrar(atual.papel)) {
+    res.status(403).json({ erro: 'Apenas sócios e administradores podem gerenciar usuários.' })
     return
   }
 
@@ -83,8 +86,8 @@ export default async function handler(req: any, res: any) {
         alvo.salt = salt
         alvo.senhaHash = senhaHash
       }
-      if (!usuarios.some((u) => u.papel === 'admin')) {
-        res.status(400).json({ erro: 'É preciso manter ao menos um administrador.' })
+      if (!usuarios.some((u) => ehAdminLevel(u.papel))) {
+        res.status(400).json({ erro: 'É preciso manter ao menos um sócio ou administrador.' })
         return
       }
       await salvarUsuarios(usuarios)
@@ -103,8 +106,8 @@ export default async function handler(req: any, res: any) {
         res.status(404).json({ erro: 'Usuário não encontrado.' })
         return
       }
-      if (!restantes.some((u) => u.papel === 'admin')) {
-        res.status(400).json({ erro: 'É preciso manter ao menos um administrador.' })
+      if (!restantes.some((u) => ehAdminLevel(u.papel))) {
+        res.status(400).json({ erro: 'É preciso manter ao menos um sócio ou administrador.' })
         return
       }
       await salvarUsuarios(restantes)

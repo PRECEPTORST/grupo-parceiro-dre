@@ -121,6 +121,14 @@ export type MapaClassificacao = Record<string, LinhaDRE>
 // ---------------------------------------------------------------------------
 export type OrigemOrcamento = 'manual' | 'planilha' | 'historico' | 'sugerido' | 'documento'
 
+/**
+ * Situação de aprovação do planejamento orçamentário:
+ * - `rascunho`: em elaboração / pendente de aprovação do sócio.
+ * - `aprovado`: aprovado por um sócio (só então é o plano "oficial").
+ * Qualquer edição nos valores derruba de volta para `rascunho` (re-aprovação).
+ */
+export type StatusOrcamento = 'rascunho' | 'aprovado'
+
 export interface Orcamento {
   /** Competência 'YYYY-MM'. */
   competencia: string
@@ -132,6 +140,17 @@ export interface Orcamento {
   valores: Record<string, number>
   origem: OrigemOrcamento
   atualizadoEm: string
+  /** Aprovação do sócio. Ausente = trata-se como `rascunho`. */
+  status?: StatusOrcamento
+  /** Usuário sócio que aprovou (quando `aprovado`). */
+  aprovadoPor?: string
+  /** Quando foi aprovado (ISO). */
+  aprovadoEm?: string
+}
+
+/** true quando o orçamento está aprovado por um sócio. */
+export function orcamentoAprovado(o?: Orcamento | null): boolean {
+  return !!o && o.status === 'aprovado'
 }
 
 // ---------------------------------------------------------------------------

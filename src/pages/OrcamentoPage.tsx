@@ -1,11 +1,18 @@
 import { useMemo, useState, type ChangeEvent } from 'react'
 import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
-import { podeEditarOrcamento } from '../lib/permissoes'
+import { podeEditarOrcamento, podeAprovarOrcamento } from '../lib/permissoes'
 import { Botao, Card, Kicker, NumInput } from '../components/ui'
 import { formatBRL } from '../lib/format'
-import { META_LINHAS, type Orcamento, type OrigemOrcamento } from '../lib/tipos'
-import { contasPorLinha, mapaDeClassificacoes, competenciasDisponiveis } from '../lib/dre'
+import {
+  META_LINHAS,
+  orcamentoAprovado,
+  type Orcamento,
+  type OrigemOrcamento,
+  type StatusOrcamento,
+} from '../lib/tipos'
+import { competenciasDisponiveis } from '../lib/dre'
+import { catalogoPorLinha, mapaEfetivo } from '../lib/planoContas'
 import { parsePlanilha, type ContaConhecida, type ResultadoImport } from '../lib/importar'
 
 function competenciaAtual(): string {
@@ -16,6 +23,7 @@ export function OrcamentoPage() {
   const { estado, salvarOrcamento } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeEditarOrcamento(usuario?.papel)
+  const podeAprovar = podeAprovarOrcamento(usuario?.papel)
 
   const competencias = useMemo(() => {
     const set = new Set<string>([
@@ -52,9 +60,9 @@ export function OrcamentoPage() {
     setOrigem(s?.origem ?? 'manual')
   }
 
-  const mapa = useMemo(() => mapaDeClassificacoes(estado.classificacoes), [estado.classificacoes])
-  const { grupos } = useMemo(
-    () => contasPorLinha(estado.lancamentos, mapa),
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
+  const grupos = useMemo(
+    () => catalogoPorLinha(estado.lancamentos, mapa),
     [estado.lancamentos, mapa],
   )
   const gruposComContas = grupos.filter((g) => g.contas.length > 0)
@@ -74,15 +82,26 @@ export function OrcamentoPage() {
     setImportarAberto(false)
   }
 
-  const salvar = () => {
+  // Enquanto não salvo, "sujo" = valores divergem do que está gravado.
+  const alterado = JSON.stringify(valores) !== JSON.stringify(salvo?.valores ?? {})
+  const aprovado = orcamentoAprovado(salvo) && !alterado
+
+  const persistir = (status: StatusOrcamento) => {
+    const agora = new Date().toISOString()
     const orcamento: Orcamento = {
       competencia: comp,
       valores,
       origem,
-      atualizadoEm: new Date().toISOString(),
+      atualizadoEm: agora,
+      status,
+      ...(status === 'aprovado'
+        ? { aprovadoPor: usuario?.usuario, aprovadoEm: agora }
+        : { aprovadoPor: undefined, aprovadoEm: undefined }),
     }
     salvarOrcamento(orcamento)
   }
+  const salvar = () => persistir('rascunho')
+  const aprovar = () => persistir('aprovado')
 
   const sugerir = async () => {
     setSugerindo(true)
@@ -117,10 +136,13 @@ export function OrcamentoPage() {
     <div className="mx-auto max-w-3xl px-6 py-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 animate-rise">
         <div>
-          <Kicker>Orçamento aprovado</Kicker>
+          <Kicker>Planejamento orçamentário</Kicker>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">
             Orçamento por <span className="text-green">conta</span>
           </h1>
+          <div className="mt-2">
+            <BadgeStatus orcamento={salvo} alterado={alterado} />
+          </div>
         </div>
         <div className="w-44">
           <span className="mb-1 block text-xs font-medium text-muted">Competência</span>
@@ -204,13 +226,25 @@ export function OrcamentoPage() {
         )}
 
         {podeEditar && !semContas && (
-          <div className="mt-5 flex items-center gap-3 border-t border-line pt-4">
-            <Botao onClick={salvar}>Salvar orçamento</Botao>
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+            <Botao onClick={salvar} disabled={!alterado && !!salvo}>
+              Salvar rascunho
+            </Botao>
+            {podeAprovar && (
+              <Botao variante="fantasma" onClick={aprovar} disabled={aprovado}>
+                {aprovado ? '✓ Aprovado' : '✓ Aprovar orçamento'}
+              </Botao>
+            )}
             <span className="text-xs text-faint">
               Origem: {origem}
               {salvo && ` · salvo em ${new Date(salvo.atualizadoEm).toLocaleDateString('pt-BR')}`}
             </span>
           </div>
+        )}
+        {podeEditar && !podeAprovar && !semContas && (
+          <p className="mt-2 text-[11px] text-faint">
+            O planejamento só passa a valer como oficial após a aprovação de um <strong>sócio</strong>.
+          </p>
         )}
       </Card>
 
@@ -228,6 +262,22 @@ export function OrcamentoPage() {
       )}
     </div>
   )
+}
+
+function BadgeStatus({ orcamento, alterado }: { orcamento?: Orcamento; alterado: boolean }) {
+  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold'
+  if (!orcamento)
+    return <span className={`${base} bg-cream text-faint`}>Sem orçamento para o mês</span>
+  if (alterado)
+    return <span className={`${base} bg-warn/10 text-gold-deep`}>● Rascunho com alterações não salvas</span>
+  if (orcamentoAprovado(orcamento))
+    return (
+      <span className={`${base} bg-green/10 text-green`}>
+        ✓ Aprovado{orcamento.aprovadoPor ? ` por ${orcamento.aprovadoPor}` : ''}
+        {orcamento.aprovadoEm ? ` · ${new Date(orcamento.aprovadoEm).toLocaleDateString('pt-BR')}` : ''}
+      </span>
+    )
+  return <span className={`${base} bg-warn/10 text-gold-deep`}>⏳ Pendente de aprovação do sócio</span>
 }
 
 function ModalImportar({

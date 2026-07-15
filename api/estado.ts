@@ -10,6 +10,31 @@ import { lerDocMaisRecente, gravarDoc } from '../lib/blobdoc.js'
 
 const PREFIXO = 'estado'
 
+/**
+ * Reconcilia a aprovação dos orçamentos. Regra de governança: só o SÓCIO aprova.
+ * - Sócio: pode marcar `aprovado` (carimba aprovadoPor/aprovadoEm); senão rascunho.
+ * - Demais: nunca aprovam. Se reenviarem um orçamento aprovado SEM alterar os
+ *   valores, a aprovação é preservada; qualquer alteração o devolve a rascunho.
+ */
+function conciliarOrcamentos(salvos: any[], enviados: any[], ehSocio: boolean, usuario: string): any[] {
+  const porComp = new Map((salvos ?? []).map((o: any) => [o.competencia, o]))
+  const agora = new Date().toISOString()
+  return (enviados ?? []).map((o: any) => {
+    const salvo = porComp.get(o.competencia)
+    if (ehSocio) {
+      if (o.status === 'aprovado') {
+        return { ...o, status: 'aprovado', aprovadoPor: o.aprovadoPor || usuario, aprovadoEm: o.aprovadoEm || agora }
+      }
+      return { ...o, status: 'rascunho', aprovadoPor: undefined, aprovadoEm: undefined }
+    }
+    const valoresIguais = salvo && JSON.stringify(salvo.valores) === JSON.stringify(o.valores)
+    if (salvo?.status === 'aprovado' && valoresIguais) {
+      return { ...o, status: 'aprovado', aprovadoPor: salvo.aprovadoPor, aprovadoEm: salvo.aprovadoEm }
+    }
+    return { ...o, status: 'rascunho', aprovadoPor: undefined, aprovadoEm: undefined }
+  })
+}
+
 function estadoValido(estado: any): boolean {
   return (
     !!estado &&
@@ -56,16 +81,27 @@ export default async function handler(req: any, res: any) {
         return
       }
 
+      // Estado salvo (para preservar dados de quem não pode alterá-los e para
+      // reconciliar a aprovação do orçamento contra o que já estava gravado).
+      const salvo = await lerDocMaisRecente(PREFIXO, token)
+
       // Perfil "orçamento" só altera a linha `orcamentos`: preserva os lançamentos
-      // e as classificações já salvos (só admin muda esses).
+      // e as classificações já salvos (só admin/sócio mudam esses).
       if (atual.papel === 'orcamento') {
-        const salvo = await lerDocMaisRecente(PREFIXO, token)
         estado = {
           ...estado,
           lancamentos: salvo?.lancamentos ?? [],
           classificacoes: salvo?.classificacoes ?? [],
         }
       }
+
+      // Governança da aprovação: só o sócio aprova o planejamento orçamentário.
+      estado.orcamentos = conciliarOrcamentos(
+        salvo?.orcamentos ?? [],
+        estado.orcamentos,
+        atual.papel === 'socio',
+        atual.usuario,
+      )
 
       await gravarDoc(PREFIXO, estado, token)
       res.status(200).json({ ok: true })

@@ -105,12 +105,15 @@ export function montarDre(
   lancamentos: LancamentoCanonico[],
   mapa: MapaClassificacao,
   orcamento?: Orcamento | null,
+  /** Se informado ('YYYY-MM-DD'), conta o realizado só até esta data (DRE parcial até hoje). */
+  ateData?: string,
 ): DreMensal {
   // 1) Agrega realizado por conta + histórico representativo.
   const realizadoConta: Record<string, number> = {}
   const descricaoConta: Record<string, string> = {}
   for (const l of lancamentos) {
     if (competenciaDe(l.data) !== competencia) continue
+    if (ateData && l.data > ateData) continue
     const c = l.contaSafragold
     realizadoConta[c] = (realizadoConta[c] ?? 0) + l.valor
     if (!descricaoConta[c] && l.historico) descricaoConta[c] = l.historico
@@ -202,6 +205,55 @@ export function contasPorLinha(
     })),
     naoClassificadas: toList(naoCls),
   }
+}
+
+/** Projeção de fechamento de uma linha (run-rate linear até o fim do mês). */
+export interface FechamentoLinha {
+  linha: LinhaDRE
+  rotulo: string
+  sinal: 1 | -1
+  realizado: number
+  orcado: number
+  /** Projeção linear para o fim do mês = realizado / fração do mês decorrida. */
+  projecao: number
+  /** projecao / orçado * 100 (null se sem orçamento). */
+  atingePct: number | null
+  /** 'abaixo' = receita deve ficar abaixo do orçado; 'acima' = custo deve estourar; 'ok' caso contrário. */
+  risco: 'ok' | 'abaixo' | 'acima' | null
+}
+
+/**
+ * Projeta o fechamento do mês por linha, a partir do realizado ATÉ HOJE e da
+ * fração do mês já decorrida (diaAtual/diasNoMes). Determinístico — a IA só
+ * comenta em cima disto. Só sinaliza risco quando há orçamento na linha.
+ */
+export function projecaoFechamento(
+  dre: DreMensal,
+  diaAtual: number,
+  diasNoMes: number,
+): FechamentoLinha[] {
+  const fracao = Math.min(1, Math.max(diaAtual, 1) / Math.max(diasNoMes, 1))
+  return dre.linhas
+    .filter((l) => l.realizado !== 0 || l.orcado !== 0)
+    .map((l) => {
+      const projecao = arredondar(fracao > 0 ? l.realizado / fracao : l.realizado)
+      const atingePct = l.orcado !== 0 ? (projecao / l.orcado) * 100 : null
+      let risco: FechamentoLinha['risco'] = l.orcado !== 0 ? 'ok' : null
+      if (l.orcado !== 0) {
+        if (l.sinal === 1 && projecao < l.orcado * 0.98) risco = 'abaixo'
+        else if (l.sinal === -1 && projecao > l.orcado * 1.02) risco = 'acima'
+      }
+      return {
+        linha: l.linha,
+        rotulo: l.rotulo,
+        sinal: l.sinal,
+        realizado: l.realizado,
+        orcado: l.orcado,
+        projecao,
+        atingePct,
+        risco,
+      }
+    })
 }
 
 /** Lista as competências presentes nos lançamentos, mais recente primeiro. */

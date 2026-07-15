@@ -14,8 +14,23 @@ import {
 } from 'recharts'
 import { useDre } from '../context/DreContext'
 import { Card, Kicker, Select } from '../components/ui'
-import { formatBRL, formatBRLCompact, formatPct } from '../lib/format'
-import { montarDre, mapaDeClassificacoes, competenciasDisponiveis, type DreMensal } from '../lib/dre'
+import { formatBRL, formatBRLCompact, formatPct, formatDataBR } from '../lib/format'
+import {
+  montarDre,
+  competenciasDisponiveis,
+  projecaoFechamento,
+  type DreMensal,
+} from '../lib/dre'
+import { mapaEfetivo } from '../lib/planoContas'
+import { orcamentoAprovado } from '../lib/tipos'
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+function diasNoMesComp(comp: string): number {
+  const [y, m] = comp.split('-').map(Number)
+  return new Date(y, m, 0).getDate()
+}
 
 const CORES = { verde: '#0f7a49', verdeClaro: '#3fa06e', dourado: '#cd8d05', tinta: '#23281f' }
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -44,13 +59,19 @@ export function DashboardPage() {
   const [comp, setComp] = useState<string>(() => competencias[0] ?? new Date().toISOString().slice(0, 7))
   const competencia = competencias.includes(comp) ? comp : (competencias[0] ?? comp)
 
-  const mapa = useMemo(() => mapaDeClassificacoes(estado.classificacoes), [estado.classificacoes])
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const orcamentoAtual = estado.orcamentos.find((o) => o.competencia === competencia) ?? null
   const temOrcamento = !!orcamentoAtual
+  const orcPendente = !!orcamentoAtual && !orcamentoAprovado(orcamentoAtual)
+
+  // DRE parcial até hoje quando o mês selecionado é o corrente.
+  const hoje = hojeISO()
+  const ehMesCorrente = competencia === hoje.slice(0, 7)
+  const ateData = ehMesCorrente ? hoje : undefined
 
   const dre = useMemo(
-    () => montarDre(competencia, estado.lancamentos, mapa, orcamentoAtual),
-    [competencia, estado.lancamentos, mapa, orcamentoAtual],
+    () => montarDre(competencia, estado.lancamentos, mapa, orcamentoAtual, ateData),
+    [competencia, estado.lancamentos, mapa, orcamentoAtual, ateData],
   )
 
   const serie = useMemo(
@@ -118,6 +139,11 @@ export function DashboardPage() {
           <div>
             <div className="font-head text-xs font-semibold uppercase tracking-[0.22em] text-green">
               Resultado líquido · {rotuloCompetencia(competencia)}
+              {ehMesCorrente && (
+                <span className="ml-2 normal-case tracking-normal text-faint">
+                  (até {formatDataBR(hoje)})
+                </span>
+              )}
             </div>
             <div className="mt-1 font-head text-5xl font-bold tracking-tight text-green">
               {formatBRL(rl)}
@@ -176,7 +202,24 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {temOrcamento && <InsightsIA dre={dre} competencia={competencia} />}
+      {orcPendente && (
+        <Card className="mb-4 animate-rise border-warn/40 bg-warn/5">
+          <p className="text-sm text-gold-deep">
+            ⏳ O orçamento de <strong>{rotuloCompetencia(competencia)}</strong> está{' '}
+            <strong>pendente de aprovação do sócio</strong> — exibido como prévia até ser aprovado.
+          </p>
+        </Card>
+      )}
+
+      {temOrcamento && (
+        <InsightsIA
+          dre={dre}
+          competencia={competencia}
+          diaAtual={ehMesCorrente ? Number(hoje.slice(8, 10)) : diasNoMesComp(competencia)}
+          diasNoMes={diasNoMesComp(competencia)}
+          ehMesCorrente={ehMesCorrente}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="animate-rise">
@@ -278,10 +321,16 @@ interface Ponto {
   titulo: string
   detalhe: string
 }
+interface AlertaFechamento {
+  rotulo: string
+  situacao: 'abaixo' | 'acima' | 'no_alvo'
+  detalhe: string
+}
 interface Analise {
   resumo: string
   pontos: Ponto[]
   recomendacoes: string[]
+  projecaoFechamento?: AlertaFechamento[]
 }
 const ESTILO_PONTO: Record<Ponto['tipo'], { rotulo: string; cls: string; dot: string }> = {
   positivo: { rotulo: 'Positivo', cls: 'text-green', dot: 'bg-green' },
@@ -289,7 +338,19 @@ const ESTILO_PONTO: Record<Ponto['tipo'], { rotulo: string; cls: string; dot: st
   risco: { rotulo: 'Risco', cls: 'text-danger', dot: 'bg-danger' },
 }
 
-function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string }) {
+function InsightsIA({
+  dre,
+  competencia,
+  diaAtual,
+  diasNoMes,
+  ehMesCorrente,
+}: {
+  dre: DreMensal
+  competencia: string
+  diaAtual: number
+  diasNoMes: number
+  ehMesCorrente: boolean
+}) {
   const [analise, setAnalise] = useState<Analise | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -304,6 +365,8 @@ function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string 
     setCarregando(true)
     setErro(null)
     try {
+      const fech = ehMesCorrente ? projecaoFechamento(dre, diaAtual, diasNoMes) : []
+      const projPorLinha = new Map(fech.map((f) => [f.rotulo, f]))
       const linhas = dre.linhas
         .filter((l) => l.realizado !== 0 || l.orcado !== 0)
         .map((l) => ({
@@ -312,6 +375,7 @@ function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string 
           orcado: l.orcado,
           desvio: l.realizado - l.orcado,
           desvioPct: l.orcado !== 0 ? ((l.realizado - l.orcado) / l.orcado) * 100 : null,
+          projecaoFimMes: projPorLinha.get(l.rotulo)?.projecao ?? null,
         }))
       const subtotais = {
         'Receita líquida': { realizado: dre.realizado.receitaLiquida, orcado: dre.orcado.receitaLiquida },
@@ -322,11 +386,23 @@ function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string 
       const resp = await fetch('/api/insights', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ competencia, linhas, subtotais }),
+        body: JSON.stringify({
+          competencia,
+          linhas,
+          subtotais,
+          mesCorrente: ehMesCorrente,
+          diaAtual,
+          diasNoMes,
+        }),
       })
       const d = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(d?.erro || `Erro ${resp.status}`)
-      setAnalise({ resumo: d.resumo ?? '', pontos: d.pontos ?? [], recomendacoes: d.recomendacoes ?? [] })
+      setAnalise({
+        resumo: d.resumo ?? '',
+        pontos: d.pontos ?? [],
+        recomendacoes: d.recomendacoes ?? [],
+        projecaoFechamento: d.projecaoFechamento ?? [],
+      })
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e))
     } finally {
@@ -383,6 +459,26 @@ function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string 
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {analise.projecaoFechamento && analise.projecaoFechamento.length > 0 && (
+            <div className="rounded-lg border border-warn/40 bg-warn/5 p-3.5">
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gold-deep">
+                Projeção de fechamento do mês
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {analise.projecaoFechamento.map((a, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-ink">
+                    <span className={a.situacao === 'abaixo' || a.situacao === 'acima' ? 'text-danger' : 'text-green'}>
+                      {a.situacao === 'abaixo' ? '↓' : a.situacao === 'acima' ? '↑' : '✓'}
+                    </span>
+                    <span>
+                      <strong>{a.rotulo}</strong> — {a.detalhe}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

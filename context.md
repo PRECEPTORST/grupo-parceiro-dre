@@ -56,6 +56,15 @@ Safragold/Enoki  →  Ingestão  →  Classificação (IA)  →  Motor do DRE (c
 **classifica contas**, **sugere orçamento** e **gera insights** — nunca calcula o resultado.
 Um sócio jamais pode receber um número que "mudou porque o modelo achou".
 
+## 4.1. Plano de contas padrão (`src/lib/planoContas.ts`)
+
+Catálogo canônico de ~75 contas para **comércio de grãos** (venda de soja/milho/café/…, deduções,
+CPV com frete/armazenagem/quebra/hedge, despesas comerciais/administrativas, financeiras, IRPJ/CSLL),
+já **classificado por linha do DRE**. `mapaEfetivo(classificacoes)` = plano como BASE + as
+classificações do usuário por cima (usuário sempre vence). Todas as telas usam `mapaEfetivo`, então
+as contas já nascem classificadas e dá para **orçar/ler o DRE mesmo sem lançamentos**.
+`catalogoPorLinha()` alimenta a tela de Orçamento com todas as contas do plano + extras dos lançamentos.
+
 ## 5. Modelo de dados (`src/lib/tipos.ts`)
 
 - **`LancamentoCanonico`**: `{ id, data (ISO), contaSafragold, historico, valor (reais, positivo), centroCusto? }`.
@@ -103,16 +112,24 @@ Um sócio jamais pode receber um número que "mudou porque o modelo achou".
 - **Usuários** — `Usuarios.tsx`: gestão de usuários (só admin).
 - **Login** — `Login.tsx`: senha; 1º acesso cria o admin.
 
-## 7. Papéis de acesso (3 níveis)
+## 7. Papéis de acesso (4 níveis) + aprovação do orçamento
 
-Definidos em `lib/auth.ts` (`Papel = 'admin' | 'orcamento' | 'consulta'`) e espelhados no front
-em `src/lib/permissoes.ts`:
-- **admin** — faz tudo (usuários, sincronizar, classificar, orçamento).
-- **orcamento** ("Consulta + orçamento") — vê tudo e edita o orçamento.
+Definidos em `lib/auth.ts` (`Papel = 'socio' | 'admin' | 'orcamento' | 'consulta'`) e espelhados no
+front em `src/lib/permissoes.ts`:
+- **socio** — tudo do admin + **APROVA o planejamento orçamentário** (exclusivo do sócio).
+- **admin** — faz tudo (usuários, sincronizar, classificar, editar orçamento), menos aprovar.
+- **orcamento** ("Consulta + orçamento") — vê tudo e edita o orçamento (rascunho).
 - **consulta** ("Somente consulta") — só visualiza.
 
+**Aprovação (pedido do cliente):** o `Orcamento` tem `status: 'rascunho' | 'aprovado'` +
+`aprovadoPor`/`aprovadoEm`. Só o **sócio** aprova; qualquer edição nos valores derruba de volta para
+`rascunho` (re-aprovação). Decisão do cliente: orçamento **não aprovado ainda é usado** nas telas,
+mas com badge **"pendente de aprovação"** (Dashboard, DRE e Orçamento) — prévia até virar oficial.
+
 **Enforcement REAL no servidor** (`api/estado.ts`): `consulta` recebe 403 no PUT; `orcamento` só
-grava a linha `orcamentos` (lançamentos/classificações são preservados). A UI só esconde botões.
+grava a linha `orcamentos`; `conciliarOrcamentos()` garante que **só o sócio** carimba `aprovado`
+(não-sócio que reenvia orçamento aprovado sem alterar valores preserva a aprovação; qualquer
+alteração vira rascunho). `api/usuarios.ts`: sócio e admin gerenciam usuários; mantém ≥1 admin-level.
 O papel é revalidado a cada request (revogação/mudança imediata).
 
 ## 8. Agentes de IA (endpoints, todos com Claude Opus 4.8)
@@ -123,7 +140,17 @@ O papel é revalidado a cada request (revogação/mudança imediata).
   para contas conhecidas; não inventa conta). Complementa o parse determinístico de planilha.
 - `api/insights.ts` — análise executiva do DRE (realizado × orçado): resumo + pontos
   (positivo/atenção/risco) + recomendações. `max_tokens: 2800` e prompt conciso (senão trunca
-  as recomendações). Card no Dashboard, sob demanda (controla custo de token).
+  as recomendações). Card no Dashboard, sob demanda (controla custo de token). **No mês corrente**
+  recebe `diaAtual`/`diasNoMes` + projeção de fim de mês por linha e devolve `projecaoFechamento`:
+  contas que devem NÃO atingir (receita) ou ESTOURAR (custo) o orçado até o fechamento.
+- `api/importar-orcamento.ts` — extrai orçamento por conta do TEXTO de um documento.
+
+**DRE até a data (pedido do cliente):** `montarDre(comp, lanc, mapa, orc?, ateData?)` conta o
+realizado só até `ateData`. Dashboard/DRE passam `ateData = hoje` quando a competência é o mês
+corrente (DRE parcial "até hoje"; nota "realizado até DD/MM"). Run-rate determinístico em
+`projecaoFechamento(dre, diaAtual, diasNoMes)` (extrapolação linear) alimenta os insights.
+⚠️ Datas: formatar ISO com `formatDataBR` (split de string) — `new Date('YYYY-MM-DD')` é UTC e
+desloca 1 dia em fuso negativo (BRT).
 
 ## 9. Identidade visual
 

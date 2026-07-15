@@ -8,19 +8,28 @@ const PREFIXO_USUARIOS = 'usuarios'
 const COOKIE = 'preceptor_sessao'
 const SESSAO_DIAS = 30
 
-// Papéis:
-//   admin    — gerencia usuários e faz tudo (sync Safragold, classificar, orçamento).
-//   orcamento — consulta tudo E cria/altera o orçamento.
+// Papéis (do mais forte ao mais fraco):
+//   socio    — tudo do admin + APROVA o planejamento orçamentário (só o sócio aprova).
+//   admin    — gerencia usuários e faz tudo (sync, classificar, editar orçamento) menos aprovar.
+//   orcamento — consulta tudo E cria/altera o orçamento (rascunho).
 //   consulta  — somente leitura.
-export type Papel = 'admin' | 'orcamento' | 'consulta'
+export type Papel = 'socio' | 'admin' | 'orcamento' | 'consulta'
 
 /** Pode criar/editar orçamento (grava a linha `orcamentos` do estado). */
 export function podeEditarOrcamento(papel: Papel): boolean {
-  return papel === 'admin' || papel === 'orcamento'
+  return papel === 'socio' || papel === 'admin' || papel === 'orcamento'
 }
-/** Pode alterar lançamentos/classificações (sync Safragold, classificar) — só admin. */
+/** Pode alterar lançamentos/classificações (sync Safragold, classificar). */
 export function podeEditarDados(papel: Papel): boolean {
-  return papel === 'admin'
+  return papel === 'socio' || papel === 'admin'
+}
+/** Poderes de administração (usuários + dados). Sócio e admin. */
+export function podeAdministrar(papel: Papel): boolean {
+  return papel === 'socio' || papel === 'admin'
+}
+/** APROVA o planejamento orçamentário — exclusivo do sócio. */
+export function podeAprovarOrcamento(papel: Papel): boolean {
+  return papel === 'socio'
 }
 export interface Usuario {
   id: string

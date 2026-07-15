@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { montarDre, mapaDeClassificacoes, contasPorLinha, competenciasDisponiveis } from './dre'
+import {
+  montarDre,
+  mapaDeClassificacoes,
+  contasPorLinha,
+  competenciasDisponiveis,
+  projecaoFechamento,
+} from './dre'
 import type { LancamentoCanonico, Classificacao, Orcamento } from './tipos'
 
 const classificacoes: Classificacao[] = [
@@ -91,5 +97,33 @@ describe('contasPorLinha', () => {
 describe('competenciasDisponiveis', () => {
   it('lista competências únicas, recente primeiro', () => {
     expect(competenciasDisponiveis(lancamentos)).toEqual(['2026-06', '2026-05'])
+  })
+})
+
+describe('montarDre — parcial até a data (ateData)', () => {
+  it('conta o realizado só até a data informada', () => {
+    const dre = montarDre('2026-06', lancamentos, mapa, null, '2026-06-10')
+    const receita = dre.linhas.find((l) => l.linha === 'receita_bruta')!
+    expect(receita.realizado).toBe(1_000_000) // dias 5 e 6
+    const custo = dre.linhas.find((l) => l.linha === 'custo_produto')!
+    expect(custo.realizado).toBe(0) // custo é dia 12 (> 10)
+  })
+})
+
+describe('projecaoFechamento — run-rate linear', () => {
+  const orc: Orcamento = {
+    competencia: '2026-06',
+    valores: { '3.1.01': 4_000_000 },
+    origem: 'manual',
+    atualizadoEm: '',
+  }
+
+  it('sinaliza receita que deve ficar ABAIXO do orçado no fim do mês', () => {
+    const dre = montarDre('2026-06', lancamentos, mapa, orc, '2026-06-10') // receita 1M até dia 10
+    const fech = projecaoFechamento(dre, 10, 30) // fração 1/3 → projeção 3M
+    const receita = fech.find((f) => f.linha === 'receita_bruta')!
+    expect(receita.projecao).toBe(3_000_000)
+    expect(receita.risco).toBe('abaixo') // 3M < 4M orçado
+    expect(Math.round(receita.atingePct!)).toBe(75)
   })
 })

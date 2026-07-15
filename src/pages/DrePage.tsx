@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
 import { Card, Kicker, Select } from '../components/ui'
-import { formatBRL, formatPct } from '../lib/format'
+import { formatBRL, formatPct, formatDataBR } from '../lib/format'
 import {
   montarDre,
-  mapaDeClassificacoes,
   competenciasDisponiveis,
   type LinhaResultado,
   type Subtotais,
 } from '../lib/dre'
-import type { LinhaDRE } from '../lib/tipos'
+import { mapaEfetivo } from '../lib/planoContas'
+import { orcamentoAprovado, type LinhaDRE } from '../lib/tipos'
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 function rotuloCompetencia(comp: string): string {
@@ -45,13 +49,20 @@ export function DrePage() {
   const [comp, setComp] = useState<string>(() => competencias[0] ?? new Date().toISOString().slice(0, 7))
   const competencia = competencias.includes(comp) ? comp : (competencias[0] ?? comp)
 
-  const mapa = useMemo(() => mapaDeClassificacoes(estado.classificacoes), [estado.classificacoes])
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const orcamento = estado.orcamentos.find((o) => o.competencia === competencia) ?? null
+
+  // DRE até a data de hoje quando o mês selecionado é o mês corrente (parcial).
+  const hoje = hojeISO()
+  const ehMesCorrente = competencia === hoje.slice(0, 7)
+  const ateData = ehMesCorrente ? hoje : undefined
+
   const dre = useMemo(
-    () => montarDre(competencia, estado.lancamentos, mapa, orcamento),
-    [competencia, estado.lancamentos, mapa, orcamento],
+    () => montarDre(competencia, estado.lancamentos, mapa, orcamento, ateData),
+    [competencia, estado.lancamentos, mapa, orcamento, ateData],
   )
   const temOrcamento = !!orcamento
+  const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
 
   const [recolhidas, setRecolhidas] = useState<Set<LinhaDRE>>(new Set())
   const toggle = (l: LinhaDRE) =>
@@ -120,10 +131,25 @@ export function DrePage() {
             </Card>
           )}
 
+          {orcPendente && (
+            <Card className="mb-4 animate-rise border-warn/40 bg-warn/5">
+              <p className="text-sm text-gold-deep">
+                ⏳ O orçamento de <strong>{rotuloCompetencia(competencia)}</strong> está{' '}
+                <strong>pendente de aprovação do sócio</strong>. Os desvios abaixo usam esse
+                orçamento como prévia, mas ele ainda não é o plano oficial.
+              </p>
+            </Card>
+          )}
+
           <Card className="animate-rise overflow-hidden p-0" >
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
               <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
                 {rotuloCompetencia(competencia)}
+                {ehMesCorrente && (
+                  <span className="ml-2 normal-case tracking-normal text-[11px] font-normal text-faint">
+                    realizado até {formatDataBR(hoje)}
+                  </span>
+                )}
               </span>
               <button
                 onClick={alternarTodas}

@@ -7,6 +7,7 @@ const OPCOES_PAPEL: { value: Papel; label: string }[] = [
   { value: 'consulta', label: 'Somente consulta' },
   { value: 'orcamento', label: 'Consulta + orçamento' },
   { value: 'admin', label: 'Administrador' },
+  { value: 'socio', label: 'Sócio' },
 ]
 
 interface UsuarioAdmin {
@@ -143,7 +144,8 @@ export function Usuarios() {
         <p className="mt-2 text-[11px] text-faint">
           <strong>Somente consulta</strong>: só visualiza. <strong>Consulta + orçamento</strong>:
           vê tudo e edita o orçamento. <strong>Administrador</strong>: faz tudo, inclusive
-          sincronizar/classificar e gerenciar usuários.
+          sincronizar/classificar e gerenciar usuários. <strong>Sócio</strong>: tudo do admin e é o
+          único que <strong>aprova</strong> o planejamento orçamentário.
         </p>
       </Card>
 

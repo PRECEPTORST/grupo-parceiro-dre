@@ -30,6 +30,13 @@ export function formatBRLCompact(valor: number): string {
   return brlCompacto.format(valor)
 }
 
+/** 'YYYY-MM-DD' → 'DD/MM/YYYY' sem passar por Date (evita deslocamento de fuso). */
+export function formatDataBR(iso: string): string {
+  const [ano, mes, dia] = iso.split('-')
+  if (!ano || !mes || !dia) return iso
+  return `${dia}/${mes}/${ano}`
+}
+
 const num = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
 
 export function formatNum(valor: number): string {

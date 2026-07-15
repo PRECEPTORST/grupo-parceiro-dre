@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext'
 import { podeEditarOrcamento } from '../lib/permissoes'
 import { Botao, Card, Kicker, NumInput, Select, Field } from '../components/ui'
 import { formatBRL, formatBRLCompact } from '../lib/format'
-import { mapaDeClassificacoes } from '../lib/dre'
+import { mapaEfetivo } from '../lib/planoContas'
 import {
   projetarCaixa,
   projetarCaixaDiario,
@@ -68,7 +68,7 @@ export function CaixaPage() {
   const salvas = estado.premissasCaixa
   const [premissas, setPremissas] = useState<PremissasCaixa>(() => salvas ?? premissasCaixaPadrao())
 
-  const mapa = useMemo(() => mapaDeClassificacoes(estado.classificacoes), [estado.classificacoes])
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const projecao = useMemo(
     () => projetarCaixa(estado.lancamentos, mapa, estado.orcamentos, premissas),
     [estado.lancamentos, mapa, estado.orcamentos, premissas],
