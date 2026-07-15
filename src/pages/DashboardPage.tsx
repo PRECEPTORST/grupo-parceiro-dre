@@ -338,7 +338,7 @@ function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string 
     <Card className="mb-4 animate-rise border-green/20 bg-gradient-to-br from-green/[0.05] to-surface">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-head text-sm font-semibold uppercase tracking-wider text-green">
-          <span>✦</span> Análise da IA
+          <span>✦</span> Insights
         </h2>
         <button
           onClick={gerar}
