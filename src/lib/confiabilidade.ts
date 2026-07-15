@@ -17,6 +17,7 @@ import {
   type MapaClassificacao,
 } from './tipos'
 import { competenciaDe, montarDre } from './dre'
+import { DESCRICAO_PLANO } from './planoContas'
 
 export const PISO_MATERIALIDADE_PADRAO = 1000
 
@@ -138,6 +139,13 @@ export function analisarConfiabilidade(
       .map(([, v]) => v)
   }
 
+  // Nome da conta: do plano de contas, ou do histórico do lançamento.
+  const nomeConta = (conta: string) => DESCRICAO_PLANO[conta] || descComp[conta] || ''
+  const rotuloConta = (conta: string) => {
+    const n = nomeConta(conta)
+    return n ? `${conta} · ${n}` : conta
+  }
+
   const ehReceita = (linha?: LinhaDRE) => !!linha && META_LINHAS[linha].sinal === 1
   // Materialidade de DUAS TRILHAS: receitas por % da própria conta (base),
   // custos/despesas/deduções/impostos por piso absoluto em R$.
@@ -166,9 +174,9 @@ export function analisarConfiabilidade(
       id: `nc-${conta}`,
       tipo: 'nao_classificada',
       conta,
-      descricaoConta: descComp[conta],
+      descricaoConta: nomeConta(conta),
       valor,
-      titulo: `Conta ${conta} sem classificação`,
+      titulo: `Conta sem classificação — ${rotuloConta(conta)}`,
       detalhe: `Movimentou ${brl(valor)} no mês mas não está em nenhuma linha do DRE — fora do resultado.`,
       acao: 'Classificar a conta em Lançamentos.',
     })
@@ -184,10 +192,10 @@ export function analisarConfiabilidade(
       id: `bc-${conta}`,
       tipo: 'baixa_confianca',
       conta,
-      descricaoConta: descComp[conta],
+      descricaoConta: nomeConta(conta),
       linha: mapa[conta],
       valor,
-      titulo: `Classificação incerta na conta ${conta}`,
+      titulo: `Classificação incerta — ${rotuloConta(conta)}`,
       detalhe: `Classificada com confiança ${(conf * 100).toFixed(0)}% (abaixo de ${(LIMIAR_REVISAO * 100).toFixed(0)}%). ${brl(valor)} no mês dependem dessa classificação.`,
       acao: 'Confirmar ou reclassificar a conta.',
     }, realComp[conta])
@@ -212,10 +220,10 @@ export function analisarConfiabilidade(
       id: `va-${conta}`,
       tipo: 'variacao_atipica',
       conta,
-      descricaoConta: descComp[conta],
+      descricaoConta: nomeConta(conta),
       linha: mapa[conta],
       valor: arred(Math.abs(desvio)),
-      titulo: `Variação atípica na conta ${conta}`,
+      titulo: `Variação atípica — ${rotuloConta(conta)}`,
       detalhe: `Realizou ${brl(atual)} — ${pct >= 0 ? 'acima' : 'abaixo'} da média dos últimos meses (${brl(med)}), variação de ${pct.toFixed(0)}%.`,
       acao: 'Conferir se o valor do mês está correto.',
     }, med)
@@ -237,10 +245,10 @@ export function analisarConfiabilidade(
       id: `dup-${e.conta}-${e.data}-${e.valor}`,
       tipo: 'duplicidade',
       conta: e.conta,
-      descricaoConta: descComp[e.conta],
+      descricaoConta: nomeConta(e.conta),
       linha: mapa[e.conta],
       valor,
-      titulo: `Possível duplicidade na conta ${e.conta}`,
+      titulo: `Possível duplicidade — ${rotuloConta(e.conta)}`,
       detalhe: `${e.n} lançamentos idênticos de ${brl(e.valor)} em ${dataBR(e.data)} — pode ser dupla contabilização.`,
       acao: 'Verificar se os lançamentos repetidos são legítimos.',
     }, realComp[e.conta])
@@ -257,9 +265,10 @@ export function analisarConfiabilidade(
       id: `sm-${conta}`,
       tipo: 'sem_movimento',
       conta,
+      descricaoConta: nomeConta(conta),
       linha: mapa[conta],
       valor: arred(med),
-      titulo: `Conta ${conta} sem movimento este mês`,
+      titulo: `Sem movimento — ${rotuloConta(conta)}`,
       detalhe: `Tinha média de ${brl(med)}/mês no histórico e zerou em ${competencia} — pode faltar lançamento.`,
       acao: 'Confirmar se realmente não houve movimento.',
     }, med)
@@ -274,11 +283,11 @@ export function analisarConfiabilidade(
       id: `df-${l.id}`,
       tipo: 'data_futura',
       conta: l.contaSafragold,
-      descricaoConta: l.historico,
+      descricaoConta: nomeConta(l.contaSafragold),
       linha: mapa[l.contaSafragold],
       valor: arred(l.valor),
-      titulo: `Lançamento com data futura`,
-      detalhe: `${brl(l.valor)} na conta ${l.contaSafragold} datado em ${dataBR(l.data)} (após hoje, ${dataBR(hoje)}).`,
+      titulo: `Lançamento com data futura — ${rotuloConta(l.contaSafragold)}`,
+      detalhe: `${brl(l.valor)} datado em ${dataBR(l.data)} (após hoje, ${dataBR(hoje)}).`,
       acao: 'Verificar a data do lançamento.',
     }, realComp[l.contaSafragold])
   }
