@@ -107,6 +107,14 @@ as contas já nascem classificadas e dá para **orçar/ler o DRE mesmo sem lanç
   (fica de fora). Seam do Enoki: `projetarCaixa`/`projetarCaixaDiario` aceitam `MovimentoCaixa[]`
   (contas a pagar/receber com vencimento) que substituem a estimativa por prazo quando existirem.
   Testado (`src/lib/caixa.test.ts`, 12 testes, incl. consistência mensal↔diário).
+- **Confiabilidade** — `ConfiabilidadePage.tsx` (Sprint 2): sanidade/materialidade dos dados. Motor
+  determinístico `src/lib/confiabilidade.ts` (`analisarConfiabilidade`, zero IA) roda 6 regras sobre
+  os lançamentos do mês — não classificada, baixa confiança (< `LIMIAR_REVISAO`), variação atípica
+  (vs. média histórica, > 60% ou > piso), duplicidade (conta+valor+data), sumiço (conta regular ≥3m
+  que zerou) e data futura. **Materialidade por piso fixo em R$ (default R$ 1.000, editável), com
+  severidade pesada contra o RESULTADO LÍQUIDO** (não a receita — margem fina no agro). Índice de
+  confiança (0–100%), achados por severidade com ações (reclassificar via Select → classificações;
+  ignorar, persistido em `EstadoDre.confiabilidade`), e resumo executivo da IA. É a base do Sprint 3.
 - **Lançamentos** — `LancamentosPage.tsx`: tabela dos lançamentos; botões **Sincronizar Safragold**
   e **Classificar** (admin). Mostra a linha do DRE de cada conta e marca as de baixa confiança.
 - **Usuários** — `Usuarios.tsx`: gestão de usuários (só admin).
@@ -144,6 +152,8 @@ O papel é revalidado a cada request (revogação/mudança imediata).
   recebe `diaAtual`/`diasNoMes` + projeção de fim de mês por linha e devolve `projecaoFechamento`:
   contas que devem NÃO atingir (receita) ou ESTOURAR (custo) o orçado até o fechamento.
 - `api/importar-orcamento.ts` — extrai orçamento por conta do TEXTO de um documento.
+- `api/resumo-confiabilidade.ts` — leitura executiva dos achados de confiabilidade (a IA só narra o
+  que o motor determinístico detectou; nunca detecta).
 
 **DRE até a data (pedido do cliente):** `montarDre(comp, lanc, mapa, orc?, ateData?)` conta o
 realizado só até `ateData`. Dashboard/DRE passam `ateData = hoje` quando a competência é o mês

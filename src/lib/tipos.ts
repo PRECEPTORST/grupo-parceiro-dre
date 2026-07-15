@@ -222,6 +222,20 @@ export interface MovimentoCaixa {
 }
 
 // ---------------------------------------------------------------------------
+// Configuração da camada de confiabilidade / materialidade.
+// ---------------------------------------------------------------------------
+export interface ConfigConfiabilidade {
+  /** Corte de materialidade em R$ (achado abaixo disso é imaterial). */
+  pisoMaterialidade: number
+  /** IDs de achados que o Controler/sócio marcou como "ignorar". */
+  ignorados: string[]
+}
+
+export function configConfiabilidadePadrao(): ConfigConfiabilidade {
+  return { pisoMaterialidade: 1000, ignorados: [] }
+}
+
+// ---------------------------------------------------------------------------
 // Estado persistido do app (Blob + cache local).
 // ---------------------------------------------------------------------------
 export interface EstadoDre {
@@ -233,6 +247,8 @@ export interface EstadoDre {
   orcamentos: Orcamento[]
   /** Premissas da projeção de caixa (opcional; usa o padrão quando ausente). */
   premissasCaixa?: PremissasCaixa
+  /** Configuração da confiabilidade (piso de materialidade + achados ignorados). */
+  confiabilidade?: ConfigConfiabilidade
 }
 
 export function estadoDreVazio(): EstadoDre {

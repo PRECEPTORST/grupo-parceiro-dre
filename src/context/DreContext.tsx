@@ -10,7 +10,13 @@ import {
 } from 'react'
 import { carregarEstado, salvarEstado, type EstadoDre } from '../lib/storage'
 import { carregarNuvem, salvarNuvem } from '../lib/nuvem'
-import type { Classificacao, LancamentoCanonico, Orcamento, PremissasCaixa } from '../lib/tipos'
+import type {
+  Classificacao,
+  LancamentoCanonico,
+  Orcamento,
+  PremissasCaixa,
+  ConfigConfiabilidade,
+} from '../lib/tipos'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura } from '../lib/permissoes'
 
@@ -26,6 +32,8 @@ interface DreContextValue {
   salvarOrcamento: (orcamento: Orcamento) => void
   /** Atualiza as premissas da projeção de caixa. */
   salvarPremissasCaixa: (premissas: PremissasCaixa) => void
+  /** Atualiza a configuração da confiabilidade (piso + ignorados). */
+  salvarConfigConfiabilidade: (config: ConfigConfiabilidade) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -121,12 +129,16 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarPremissasCaixa = (premissas: PremissasCaixa) =>
       setEstado((s) => ({ ...s, premissasCaixa: premissas }))
 
+    const salvarConfigConfiabilidade = (config: ConfigConfiabilidade) =>
+      setEstado((s) => ({ ...s, confiabilidade: config }))
+
     return {
       estado,
       mesclarLancamentos,
       salvarClassificacoes,
       salvarOrcamento,
       salvarPremissasCaixa,
+      salvarConfigConfiabilidade,
       statusSync,
       erroSync,
       ressincronizar,

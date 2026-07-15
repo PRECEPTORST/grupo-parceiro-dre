@@ -45,6 +45,14 @@ export function IconCaixa({ size = 20 }: P) {
     </svg>
   )
 }
+export function IconConfiabilidade({ size = 20 }: P) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 3l7 3v5c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  )
+}
 export function IconLancamentos({ size = 20 }: P) {
   return (
     <svg {...base(size)}>
