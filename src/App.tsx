@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { DashboardPage } from './pages/DashboardPage'
 import { DrePage } from './pages/DrePage'
 import { OrcamentoPage } from './pages/OrcamentoPage'
+import { CaixaPage } from './pages/CaixaPage'
 import { LancamentosPage } from './pages/LancamentosPage'
 import { Usuarios } from './pages/Usuarios'
 import { Login } from './pages/Login'
@@ -12,12 +13,13 @@ import {
   IconInicio,
   IconDre,
   IconOrcamento,
+  IconCaixa,
   IconLancamentos,
   IconUsuarios,
   IconSair,
 } from './components/icons'
 
-type Rota = 'dashboard' | 'dre' | 'orcamento' | 'lancamentos' | 'usuarios'
+type Rota = 'dashboard' | 'dre' | 'orcamento' | 'caixa' | 'lancamentos' | 'usuarios'
 
 export default function App() {
   return (
@@ -46,6 +48,7 @@ const NAV: { rota: Rota; label: string; Icone: (p: { size?: number }) => ReactNo
   { rota: 'dashboard', label: 'Início', Icone: IconInicio },
   { rota: 'dre', label: 'DRE', Icone: IconDre },
   { rota: 'orcamento', label: 'Orçamento', Icone: IconOrcamento },
+  { rota: 'caixa', label: 'Fluxo de caixa', Icone: IconCaixa },
   { rota: 'lancamentos', label: 'Lançamentos', Icone: IconLancamentos },
   { rota: 'usuarios', label: 'Usuários', Icone: IconUsuarios, adminOnly: true },
 ]
@@ -128,6 +131,7 @@ function AppAutenticado() {
           {rotaEfetiva === 'dashboard' && <DashboardPage />}
           {rotaEfetiva === 'dre' && <DrePage />}
           {rotaEfetiva === 'orcamento' && <OrcamentoPage />}
+          {rotaEfetiva === 'caixa' && <CaixaPage />}
           {rotaEfetiva === 'lancamentos' && <LancamentosPage />}
           {rotaEfetiva === 'usuarios' && <Usuarios />}
         </main>

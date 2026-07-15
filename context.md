@@ -78,7 +78,26 @@ Um sócio jamais pode receber um número que "mudou porque o modelo achou".
 - **DRE** — `DrePage.tsx`: DRE **analítico** — cada linha expande nas **contas** que a compõem
   (realizado × orçado × desvio, cores por sinal), com subtotais. Botão recolher/expandir tudo.
 - **Orçamento** — `OrcamentoPage.tsx`: todas as contas agrupadas por linha do DRE, valor por conta;
-  botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados.
+  botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados. **Importar** (modal):
+  três caminhos de entrada — manual (grade), **planilha/colar** (parse determinístico em `src/lib/importar.ts`:
+  colar do Excel/CSV, casa conta por código ou descrição, com prévia) e **documento (IA)** (cola o texto de
+  um doc/e-mail/PDF → `api/importar-orcamento.ts` extrai os valores por conta). Prévia antes de aplicar.
+- **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção de caixa mês a mês. Motor determinístico
+  `src/lib/caixa.ts` (`projetarCaixa`, zero IA) converte o DRE (competência) em caixa por PRAZOS
+  editáveis (recebimento/pagamento/impostos), projeta os meses futuros por orçamento+histórico e
+  roda o saldo a partir de um saldo inicial. Hero do saldo projetado, alerta de liquidez (1º mês
+  negativo — semente do Sprint 3), premissas editáveis (admin/orçamento), gráfico entradas/saídas +
+  saldo e tabela mês a mês. **Detalhe DIÁRIO** (`projetarCaixaDiario`): seletor de mês do horizonte,
+  curva dia a dia + **calendário do mês** (cada dia mostra **a receber**/**a pagar** e saldo; dias
+  negativos em vermelho, menor saldo destacado) — mostra furos de caixa dentro do mês mesmo que ele
+  feche positivo. **Clicar num dia abre um modal com TODOS os lançamentos** que compõem aquele caixa
+  (conta, histórico, linha do DRE, data de origem; itens de mês projetado marcados como "projeção").
+  O mensal e o diário são _rollups_ da
+  MESMA base de eventos de caixa (data exata), então sempre fecham. Realizado usa a data real do
+  lançamento + prazo; meses futuros replicam o ritmo diário do histórico. Depreciação é não-caixa
+  (fica de fora). Seam do Enoki: `projetarCaixa`/`projetarCaixaDiario` aceitam `MovimentoCaixa[]`
+  (contas a pagar/receber com vencimento) que substituem a estimativa por prazo quando existirem.
+  Testado (`src/lib/caixa.test.ts`, 12 testes, incl. consistência mensal↔diário).
 - **Lançamentos** — `LancamentosPage.tsx`: tabela dos lançamentos; botões **Sincronizar Safragold**
   e **Classificar** (admin). Mostra a linha do DRE de cada conta e marca as de baixa confiança.
 - **Usuários** — `Usuarios.tsx`: gestão de usuários (só admin).
@@ -100,6 +119,8 @@ O papel é revalidado a cada request (revogação/mudança imediata).
 
 - `api/classificar.ts` — conta → linha do DRE (tool use, enum forçado, confiança).
 - `api/sugerir-orcamento.ts` — orçamento por conta a partir do histórico + mercado de grãos.
+- `api/importar-orcamento.ts` — extrai orçamento por conta do TEXTO de um documento (só mapeia
+  para contas conhecidas; não inventa conta). Complementa o parse determinístico de planilha.
 - `api/insights.ts` — análise executiva do DRE (realizado × orçado): resumo + pontos
   (positivo/atenção/risco) + recomendações. `max_tokens: 2800` e prompt conciso (senão trunca
   as recomendações). Card no Dashboard, sob demanda (controla custo de token).
@@ -172,9 +193,10 @@ Quando o acesso existir: implementar `buscarDoSafragold()` e `normalizar()` em `
 | Orçamento por conta (+ sugestão IA) | ✅ |
 | Papéis de acesso (3 níveis, enforced) | ✅ |
 | Insights da IA sobre desvios | ✅ |
+| Projeção de fluxo de caixa (Sprint 2) | ✅ Código + testes (pendente deploy) |
 | Dados | 🟡 Simulados (semeados para avaliação) |
 | **Integração Enoki (dados reais)** | ⏳ Aguardando Enoki |
-| Sprint 2 (projeção de caixa, materialidade) | ⬜ Não iniciado |
+| Sprint 2 (materialidade/confiabilidade) | ⬜ Próximo |
 | Sprint 3 (alertas WhatsApp) | ⬜ Não iniciado |
 
 **Git:** branch `main`, último commit `5706597`. Layout alternativo "relatório no topo" (descartado
