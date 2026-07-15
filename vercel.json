@@ -6,6 +6,9 @@
     "api/sugerir-orcamento.ts": {
       "maxDuration": 120
     },
+    "api/insights.ts": {
+      "maxDuration": 120
+    },
     "api/safragold-sync.ts": {
       "maxDuration": 60
     }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -15,7 +15,7 @@ import {
 import { useDre } from '../context/DreContext'
 import { Card, Kicker, Select } from '../components/ui'
 import { formatBRL, formatBRLCompact, formatPct } from '../lib/format'
-import { montarDre, mapaDeClassificacoes, competenciasDisponiveis } from '../lib/dre'
+import { montarDre, mapaDeClassificacoes, competenciasDisponiveis, type DreMensal } from '../lib/dre'
 
 const CORES = { verde: '#0f7a49', verdeClaro: '#3fa06e', dourado: '#cd8d05', tinta: '#23281f' }
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -176,6 +176,8 @@ export function DashboardPage() {
         </Card>
       )}
 
+      {temOrcamento && <InsightsIA dre={dre} competencia={competencia} />}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="animate-rise">
           <h2 className="mb-4 font-head text-sm font-semibold uppercase tracking-wider text-muted">
@@ -268,6 +270,144 @@ export function DashboardPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+interface Ponto {
+  tipo: 'positivo' | 'atencao' | 'risco'
+  titulo: string
+  detalhe: string
+}
+interface Analise {
+  resumo: string
+  pontos: Ponto[]
+  recomendacoes: string[]
+}
+const ESTILO_PONTO: Record<Ponto['tipo'], { rotulo: string; cls: string; dot: string }> = {
+  positivo: { rotulo: 'Positivo', cls: 'text-green', dot: 'bg-green' },
+  atencao: { rotulo: 'Atenção', cls: 'text-gold-deep', dot: 'bg-gold' },
+  risco: { rotulo: 'Risco', cls: 'text-danger', dot: 'bg-danger' },
+}
+
+function InsightsIA({ dre, competencia }: { dre: DreMensal; competencia: string }) {
+  const [analise, setAnalise] = useState<Analise | null>(null)
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  // A análise fica desatualizada ao trocar de competência → zera.
+  useEffect(() => {
+    setAnalise(null)
+    setErro(null)
+  }, [competencia])
+
+  const gerar = async () => {
+    setCarregando(true)
+    setErro(null)
+    try {
+      const linhas = dre.linhas
+        .filter((l) => l.realizado !== 0 || l.orcado !== 0)
+        .map((l) => ({
+          rotulo: l.rotulo,
+          realizado: l.realizado,
+          orcado: l.orcado,
+          desvio: l.realizado - l.orcado,
+          desvioPct: l.orcado !== 0 ? ((l.realizado - l.orcado) / l.orcado) * 100 : null,
+        }))
+      const subtotais = {
+        'Receita líquida': { realizado: dre.realizado.receitaLiquida, orcado: dre.orcado.receitaLiquida },
+        'Lucro bruto': { realizado: dre.realizado.lucroBruto, orcado: dre.orcado.lucroBruto },
+        EBITDA: { realizado: dre.realizado.ebitda, orcado: dre.orcado.ebitda },
+        'Resultado líquido': { realizado: dre.realizado.resultadoLiquido, orcado: dre.orcado.resultadoLiquido },
+      }
+      const resp = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ competencia, linhas, subtotais }),
+      })
+      const d = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(d?.erro || `Erro ${resp.status}`)
+      setAnalise({ resumo: d.resumo ?? '', pontos: d.pontos ?? [], recomendacoes: d.recomendacoes ?? [] })
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  return (
+    <Card className="mb-4 animate-rise border-green/20 bg-gradient-to-br from-green/[0.05] to-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-head text-sm font-semibold uppercase tracking-wider text-green">
+          <span>✦</span> Análise da IA
+        </h2>
+        <button
+          onClick={gerar}
+          disabled={carregando}
+          className="rounded-lg bg-green px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-green-deep hover:shadow-md active:scale-[0.97] disabled:opacity-50"
+        >
+          {carregando ? 'Analisando…' : analise ? 'Atualizar análise' : 'Gerar análise'}
+        </button>
+      </div>
+
+      {erro && <p className="mt-3 text-sm text-danger">{erro}</p>}
+
+      {!analise && !carregando && !erro && (
+        <p className="mt-3 text-sm text-muted">
+          Peça uma leitura executiva dos desvios do mês — o que foi bem, o que estourou o orçamento
+          e o que fazer a respeito.
+        </p>
+      )}
+
+      {carregando && <p className="mt-3 text-sm text-muted">Lendo o DRE e os desvios do mês…</p>}
+
+      {analise && (
+        <div className="mt-4 flex flex-col gap-4">
+          {analise.resumo && <p className="text-sm leading-relaxed text-ink">{analise.resumo}</p>}
+
+          {analise.pontos.length > 0 && (
+            <div className="flex flex-col gap-2.5">
+              {analise.pontos.map((p, i) => {
+                const e = ESTILO_PONTO[p.tipo] ?? ESTILO_PONTO.atencao
+                return (
+                  <div key={i} className="flex gap-2.5">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.dot}`} />
+                    <div>
+                      <div className="text-sm font-semibold text-ink">
+                        {p.titulo}{' '}
+                        <span className={`text-[11px] font-medium uppercase tracking-wide ${e.cls}`}>
+                          · {e.rotulo}
+                        </span>
+                      </div>
+                      <div className="text-sm text-muted">{p.detalhe}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {analise.recomendacoes.length > 0 && (
+            <div className="rounded-lg border border-line bg-cream/50 p-3.5">
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">
+                Recomendações
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {analise.recomendacoes.map((r, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-ink">
+                    <span className="text-gold">→</span>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-[11px] text-faint">
+            Gerada por IA (Claude) a partir do realizado × orçado. Revise antes de decidir.
+          </p>
+        </div>
+      )}
+    </Card>
   )
 }
 

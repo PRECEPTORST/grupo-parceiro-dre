@@ -33,7 +33,7 @@ export function Login() {
         <div className="mb-6 flex flex-col items-center gap-4 text-center">
           <LogoLockup width={200} />
           <div>
-            <Kicker>{precisaSetup ? 'Configuração inicial' : 'DRE · Grupo Parceiro'}</Kicker>
+            <Kicker>{precisaSetup ? 'Configuração inicial' : 'GPResults'}</Kicker>
             <h1 className="mt-1 font-head text-2xl font-bold text-ink">
               {precisaSetup ? (
                 <>

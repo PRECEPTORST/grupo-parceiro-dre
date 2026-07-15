@@ -59,14 +59,17 @@ function AppAutenticado() {
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-20 flex w-16 flex-col bg-sidebar text-white lg:w-60">
-        {/* Logo */}
-        <div className="flex h-20 items-center justify-center border-b border-white/10 px-3">
-          <img src="/gp-mark-white.png" alt="Grupo Parceiro" className="h-9 w-auto lg:hidden" />
+        {/* Logo + nome do produto */}
+        <div className="flex h-24 flex-col items-center justify-center gap-1.5 border-b border-white/10 px-3">
+          <img src="/gp-mark-white.png" alt="Grupo Parceiro" className="h-8 w-auto lg:hidden" />
           <img
             src="/gp-logo-white.png"
             alt="Grupo Parceiro Agronegócios"
-            className="hidden h-14 w-auto lg:block"
+            className="hidden h-12 w-auto lg:block"
           />
+          <span className="hidden font-head text-[11px] font-semibold uppercase tracking-[0.32em] text-gold-soft lg:block">
+            GPResults
+          </span>
         </div>
 
         {/* Navegação */}
