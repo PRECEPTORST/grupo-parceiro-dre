@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { DreProvider, useDre } from './context/DreContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DashboardPage } from './pages/DashboardPage'
@@ -7,8 +7,15 @@ import { OrcamentoPage } from './pages/OrcamentoPage'
 import { LancamentosPage } from './pages/LancamentosPage'
 import { Usuarios } from './pages/Usuarios'
 import { Login } from './pages/Login'
-import { LogoHorizontal } from './components/Logo'
 import { rotuloPapel } from './lib/permissoes'
+import {
+  IconInicio,
+  IconDre,
+  IconOrcamento,
+  IconLancamentos,
+  IconUsuarios,
+  IconSair,
+} from './components/icons'
 
 type Rota = 'dashboard' | 'dre' | 'orcamento' | 'lancamentos' | 'usuarios'
 
@@ -35,6 +42,14 @@ function Portao() {
   )
 }
 
+const NAV: { rota: Rota; label: string; Icone: (p: { size?: number }) => ReactNode; adminOnly?: boolean }[] = [
+  { rota: 'dashboard', label: 'Início', Icone: IconInicio },
+  { rota: 'dre', label: 'DRE', Icone: IconDre },
+  { rota: 'orcamento', label: 'Orçamento', Icone: IconOrcamento },
+  { rota: 'lancamentos', label: 'Lançamentos', Icone: IconLancamentos },
+  { rota: 'usuarios', label: 'Usuários', Icone: IconUsuarios, adminOnly: true },
+]
+
 function AppAutenticado() {
   const { usuario, sair } = useAuth()
   const [rota, setRota] = useState<Rota>('dashboard')
@@ -43,58 +58,77 @@ function AppAutenticado() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-line bg-cream-2/85 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-          <button className="flex items-center" onClick={() => setRota('dashboard')}>
-            <LogoHorizontal height={34} />
-            <span className="ml-3 hidden border-l border-line pl-3 font-head text-xs font-semibold uppercase tracking-[0.22em] text-green sm:inline">
-              DRE
-            </span>
-          </button>
-          <div className="flex items-center gap-3">
-            <IndicadorSync />
-            <nav className="flex gap-1">
-              <BotaoNav ativo={rotaEfetiva === 'dashboard'} onClick={() => setRota('dashboard')}>
-                Início
-              </BotaoNav>
-              <BotaoNav ativo={rotaEfetiva === 'dre'} onClick={() => setRota('dre')}>
-                DRE
-              </BotaoNav>
-              <BotaoNav ativo={rotaEfetiva === 'orcamento'} onClick={() => setRota('orcamento')}>
-                Orçamento
-              </BotaoNav>
-              <BotaoNav ativo={rotaEfetiva === 'lancamentos'} onClick={() => setRota('lancamentos')}>
-                Lançamentos
-              </BotaoNav>
-              {ehAdmin && (
-                <BotaoNav ativo={rotaEfetiva === 'usuarios'} onClick={() => setRota('usuarios')}>
-                  Usuários
-                </BotaoNav>
-              )}
-            </nav>
-            <div className="flex items-center gap-2 border-l border-line pl-3">
-              <span className="hidden text-right text-xs leading-tight sm:block">
-                <span className="block font-semibold text-ink">{usuario?.usuario}</span>
-                <span className="block text-faint">{usuario ? rotuloPapel[usuario.papel] : ''}</span>
-              </span>
+      <aside className="fixed inset-y-0 left-0 z-20 flex w-16 flex-col bg-sidebar text-white lg:w-60">
+        {/* Logo */}
+        <div className="flex h-20 items-center justify-center border-b border-white/10 px-3">
+          <img src="/gp-mark-white.png" alt="Grupo Parceiro" className="h-9 w-auto lg:hidden" />
+          <img
+            src="/gp-logo-white.png"
+            alt="Grupo Parceiro Agronegócios"
+            className="hidden h-14 w-auto lg:block"
+          />
+        </div>
+
+        {/* Navegação */}
+        <nav className="flex flex-1 flex-col gap-1 px-2 py-4">
+          {NAV.filter((n) => !n.adminOnly || ehAdmin).map(({ rota: r, label, Icone }) => {
+            const ativo = rotaEfetiva === r
+            return (
               <button
-                onClick={sair}
-                className="rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-muted transition hover:border-green/40 hover:text-green"
+                key={r}
+                onClick={() => setRota(r)}
+                title={label}
+                className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  ativo ? 'bg-white/10 text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'
+                }`}
               >
-                Sair
+                {ativo && (
+                  <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r bg-gold" />
+                )}
+                <span className={ativo ? 'text-gold-soft' : ''}>
+                  <Icone size={20} />
+                </span>
+                <span className="hidden lg:inline">{label}</span>
               </button>
+            )
+          })}
+        </nav>
+
+        {/* Rodapé: sync + usuário */}
+        <div className="border-t border-white/10 px-2 py-3">
+          <div className="px-1 pb-2">
+            <IndicadorSync />
+          </div>
+          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold/20 font-head text-sm font-semibold text-gold-soft">
+              {usuario?.usuario?.[0]?.toUpperCase() ?? '?'}
             </div>
+            <div className="hidden min-w-0 flex-1 leading-tight lg:block">
+              <div className="truncate text-xs font-semibold text-white">{usuario?.usuario}</div>
+              <div className="truncate text-[11px] text-white/45">
+                {usuario ? rotuloPapel[usuario.papel] : ''}
+              </div>
+            </div>
+            <button
+              onClick={sair}
+              title="Sair"
+              className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <IconSair size={18} />
+            </button>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main key={rotaEfetiva} className="animate-fade">
-        {rotaEfetiva === 'dashboard' && <DashboardPage />}
-        {rotaEfetiva === 'dre' && <DrePage />}
-        {rotaEfetiva === 'orcamento' && <OrcamentoPage />}
-        {rotaEfetiva === 'lancamentos' && <LancamentosPage />}
-        {rotaEfetiva === 'usuarios' && <Usuarios />}
-      </main>
+      <div className="ml-16 lg:ml-60">
+        <main key={rotaEfetiva} className="animate-fade">
+          {rotaEfetiva === 'dashboard' && <DashboardPage />}
+          {rotaEfetiva === 'dre' && <DrePage />}
+          {rotaEfetiva === 'orcamento' && <OrcamentoPage />}
+          {rotaEfetiva === 'lancamentos' && <LancamentosPage />}
+          {rotaEfetiva === 'usuarios' && <Usuarios />}
+        </main>
+      </div>
     </div>
   )
 }
@@ -102,11 +136,11 @@ function AppAutenticado() {
 function IndicadorSync() {
   const { statusSync, erroSync, ressincronizar } = useDre()
   const mapa: Record<typeof statusSync, { texto: string; cor: string; pisca?: boolean }> = {
-    carregando: { texto: 'Carregando…', cor: 'bg-faint', pisca: true },
+    carregando: { texto: 'Carregando…', cor: 'bg-white/40', pisca: true },
     salvando: { texto: 'Salvando…', cor: 'bg-gold', pisca: true },
-    sincronizado: { texto: 'Salvo na nuvem', cor: 'bg-green' },
+    sincronizado: { texto: 'Salvo na nuvem', cor: 'bg-lime' },
     erro: { texto: 'Falha ao salvar', cor: 'bg-danger' },
-    offline: { texto: 'Offline (só neste navegador)', cor: 'bg-faint' },
+    offline: { texto: 'Offline', cor: 'bg-white/30' },
   }
   const s = mapa[statusSync]
   const clicavel = statusSync === 'erro' || statusSync === 'offline'
@@ -114,34 +148,11 @@ function IndicadorSync() {
     <button
       onClick={() => clicavel && ressincronizar()}
       disabled={!clicavel}
-      title={erroSync ?? undefined}
-      className={`hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-muted md:flex ${
-        clicavel ? 'cursor-pointer hover:text-ink' : 'cursor-default'
-      }`}
+      title={erroSync ?? s.texto}
+      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-[11px] font-medium text-white/45"
     >
-      <span className={`h-2 w-2 rounded-full ${s.cor} ${s.pisca ? 'animate-pulse' : ''}`} />
-      <span>{s.texto}</span>
-    </button>
-  )
-}
-
-function BotaoNav({
-  children,
-  ativo,
-  onClick,
-}: {
-  children: React.ReactNode
-  ativo: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
-        ativo ? 'bg-green text-white shadow-sm' : 'text-muted hover:bg-green/8 hover:text-green'
-      }`}
-    >
-      {children}
+      <span className={`h-2 w-2 shrink-0 rounded-full ${s.cor} ${s.pisca ? 'animate-pulse' : ''}`} />
+      <span className="hidden truncate lg:inline">{s.texto}</span>
     </button>
   )
 }
