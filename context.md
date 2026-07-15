@@ -86,6 +86,13 @@ as contas já nascem classificadas e dá para **orçar/ler o DRE mesmo sem lanç
   Realizado × Orçado (barras), maiores desvios do mês, e o card **"✦ Insights"** (IA, sob demanda).
 - **DRE** — `DrePage.tsx`: DRE **analítico** — cada linha expande nas **contas** que a compõem
   (realizado × orçado × desvio, cores por sinal), com subtotais. Botão recolher/expandir tudo.
+  **Sacas + resultado por saca:** KPIs mostram sacas negociadas e R$/saca (receita líquida, lucro
+  bruto, resultado líquido = total ÷ sacas). Seção **"Resultado por cereal"** (`src/lib/graos.ts`,
+  `resumoGraos`): receita bruta / deduções / custo / lucro bruto por grão (soja, milho, sorgo, café)
+  + lucro/saca. Deduções rateadas pela receita; custos compartilhados do CPV (frete, armazenagem…)
+  rateados por volume de sacas; aquisição direta pela conta do grão (`GRAO_DE_CONTA`). Soma dos
+  lucros brutos por grão reconcilia com o DRE. **Sacas informadas manualmente** por grão/competência
+  (`EstadoDre.sacas`, editável por admin/sócio na própria tela do DRE).
 - **Orçamento** — `OrcamentoPage.tsx`: todas as contas agrupadas por linha do DRE, valor por conta;
   botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados. **Importar** (modal):
   três caminhos de entrada — manual (grade), **planilha/colar** (parse determinístico em `src/lib/importar.ts`:

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
-import { Card, Kicker, Select } from '../components/ui'
-import { formatBRL, formatPct, formatDataBR } from '../lib/format'
+import { useAuth } from '../context/AuthContext'
+import { podeAdministrar } from '../lib/permissoes'
+import { Card, Kicker, Select, NumInput } from '../components/ui'
+import { formatBRL, formatPct, formatDataBR, formatNum } from '../lib/format'
 import {
   montarDre,
   competenciasDisponiveis,
@@ -9,7 +11,8 @@ import {
   type Subtotais,
 } from '../lib/dre'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
-import { orcamentoAprovado, type LinhaDRE } from '../lib/tipos'
+import { resumoGraos, type ResumoGraos } from '../lib/graos'
+import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -41,7 +44,9 @@ function corDesvio(sinal: 1 | -1, desvio: number): string {
 }
 
 export function DrePage() {
-  const { estado } = useDre()
+  const { estado, salvarSacas } = useDre()
+  const { usuario } = useAuth()
+  const podeEditar = podeAdministrar(usuario?.papel)
   const competencias = useMemo(
     () => competenciasDisponiveis(estado.lancamentos),
     [estado.lancamentos],
@@ -63,6 +68,15 @@ export function DrePage() {
   )
   const temOrcamento = !!orcamento
   const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
+
+  const sacasDoMes = useMemo(
+    () => estado.sacas?.[competencia] ?? {},
+    [estado.sacas, competencia],
+  )
+  const resumo = useMemo(
+    () => resumoGraos(competencia, estado.lancamentos, mapa, sacasDoMes),
+    [competencia, estado.lancamentos, mapa, sacasDoMes],
+  )
 
   const [recolhidas, setRecolhidas] = useState<Set<LinhaDRE>>(new Set())
   const toggle = (l: LinhaDRE) =>
@@ -110,13 +124,14 @@ export function DrePage() {
         <>
           {/* KPIs */}
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard i={0} rotulo="Receita líquida" valor={dre.realizado.receitaLiquida} />
-            <StatCard i={1} rotulo="Lucro bruto" valor={dre.realizado.lucroBruto} />
-            <StatCard i={2} rotulo="EBITDA" valor={dre.realizado.ebitda} />
+            <StatCard i={0} rotulo="Receita líquida" valor={dre.realizado.receitaLiquida} porSaca={resumo.receitaLiquidaPorSaca} />
+            <StatCard i={1} rotulo="Lucro bruto" valor={dre.realizado.lucroBruto} porSaca={resumo.lucroBrutoPorSaca} />
+            <StatCard i={2} rotulo="Sacas negociadas" texto={resumo.sacasTotal > 0 ? formatNum(resumo.sacasTotal) : '—'} />
             <StatCard
               i={3}
               rotulo="Resultado líquido"
               valor={dre.realizado.resultadoLiquido}
+              porSaca={resumo.lucroLiquidoPorSaca}
               destaque
             />
           </div>
@@ -188,6 +203,13 @@ export function DrePage() {
             </div>
           </Card>
 
+          <ResumoCereais
+            resumo={resumo}
+            podeEditar={podeEditar}
+            sacas={sacasDoMes}
+            onSalvar={(s) => salvarSacas(competencia, s)}
+          />
+
           {!temOrcamento && (
             <p className="mt-3 text-xs text-faint">
               Sem orçamento para {rotuloCompetencia(competencia)}. Monte um em{' '}
@@ -200,14 +222,119 @@ export function DrePage() {
   )
 }
 
+function ResumoCereais({
+  resumo,
+  podeEditar,
+  sacas,
+  onSalvar,
+}: {
+  resumo: ResumoGraos
+  podeEditar: boolean
+  sacas: Partial<Record<Grao, number>>
+  onSalvar: (sacas: Partial<Record<Grao, number>>) => void
+}) {
+  const tot = resumo.graos.reduce(
+    (a, g) => ({
+      receitaBruta: a.receitaBruta + g.receitaBruta,
+      deducoes: a.deducoes + g.deducoes,
+      custo: a.custo + g.custo,
+      lucroBruto: a.lucroBruto + g.lucroBruto,
+    }),
+    { receitaBruta: 0, deducoes: 0, custo: 0, lucroBruto: 0 },
+  )
+  const brl = (v: number) => formatBRL(v)
+  const porSaca = (v: number | null) => (v == null ? '—' : formatBRL(v))
+
+  return (
+    <Card className="mt-4 animate-rise overflow-hidden p-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+        <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
+          Resultado por cereal
+        </span>
+        <span className="text-xs text-faint">
+          {resumo.sacasTotal > 0 ? `${formatNum(resumo.sacasTotal)} sacas no mês` : 'informe as sacas para ver o R$/saca'}
+        </span>
+      </div>
+
+      {podeEditar && (
+        <div className="grid grid-cols-2 gap-3 border-b border-line bg-cream/40 px-5 py-3 sm:grid-cols-4">
+          {GRAOS.map((g) => (
+            <label key={g} className="block">
+              <span className="mb-1 block text-[11px] font-medium text-muted">Sacas de {ROTULO_GRAO[g]}</span>
+              <NumInput
+                value={sacas[g] ?? 0}
+                onChange={(v) => onSalvar({ ...sacas, [g]: v ?? 0 })}
+                min={0}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+              <th className="py-2 pl-5 pr-3 font-semibold">Cereal</th>
+              <th className="py-2 px-3 text-right font-semibold">Sacas</th>
+              <th className="py-2 px-3 text-right font-semibold">Receita bruta</th>
+              <th className="py-2 px-3 text-right font-semibold">(−) Deduções</th>
+              <th className="py-2 px-3 text-right font-semibold">(−) Custo</th>
+              <th className="py-2 px-3 text-right font-semibold">(=) Lucro bruto</th>
+              <th className="py-2 pr-5 pl-3 text-right font-semibold">Lucro / saca</th>
+            </tr>
+          </thead>
+          <tbody>
+            {resumo.graos.map((g) => (
+              <tr key={g.grao} className="border-b border-line/50">
+                <td className="py-2.5 pl-5 pr-3 font-medium text-ink">{g.rotulo}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">
+                  {g.sacas > 0 ? formatNum(g.sacas) : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-ink">{g.receitaBruta ? brl(g.receitaBruta) : '—'}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">{g.deducoes ? brl(g.deducoes) : '—'}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">{g.custo ? brl(g.custo) : '—'}</td>
+                <td className="py-2.5 px-3 text-right font-semibold tabular-nums text-ink">{g.receitaBruta ? brl(g.lucroBruto) : '—'}</td>
+                <td className="py-2.5 pr-5 pl-3 text-right font-head font-semibold tabular-nums text-green">
+                  {porSaca(g.lucroBrutoPorSaca)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-line bg-cream/60 text-[13px] font-semibold">
+              <td className="py-2.5 pl-5 pr-3 text-muted">Total</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-ink">{resumo.sacasTotal ? formatNum(resumo.sacasTotal) : '—'}</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-ink">{brl(tot.receitaBruta)}</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-muted">{brl(tot.deducoes)}</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-muted">{brl(tot.custo)}</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-ink">{brl(tot.lucroBruto)}</td>
+              <td className="py-2.5 pr-5 pl-3 text-right font-head tabular-nums text-green">{porSaca(resumo.lucroBrutoPorSaca)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <p className="px-5 py-3 text-[11px] text-faint">
+        Deduções rateadas pela receita de cada grão; custos compartilhados do CPV (frete, armazenagem,
+        secagem, quebra) rateados pelo volume de sacas. Sacas informadas manualmente.
+      </p>
+    </Card>
+  )
+}
+
 function StatCard({
   rotulo,
   valor,
+  texto,
+  porSaca,
   destaque = false,
   i,
 }: {
   rotulo: string
-  valor: number
+  valor?: number
+  texto?: string
+  porSaca?: number | null
   destaque?: boolean
   i: number
 }) {
@@ -224,8 +351,13 @@ function StatCard({
           destaque ? 'text-green' : 'text-ink'
         }`}
       >
-        {formatBRL(valor)}
+        {texto ?? formatBRL(valor ?? 0)}
       </div>
+      {porSaca != null && (
+        <div className="mt-0.5 text-[11px] tabular-nums text-muted">
+          {formatBRL(porSaca)} <span className="text-faint">/ saca</span>
+        </div>
+      )}
     </div>
   )
 }

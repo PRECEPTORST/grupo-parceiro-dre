@@ -16,6 +16,7 @@ import type {
   Orcamento,
   PremissasCaixa,
   ConfigConfiabilidade,
+  Grao,
 } from '../lib/tipos'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura } from '../lib/permissoes'
@@ -34,6 +35,8 @@ interface DreContextValue {
   salvarPremissasCaixa: (premissas: PremissasCaixa) => void
   /** Atualiza a configuração da confiabilidade (piso + ignorados). */
   salvarConfigConfiabilidade: (config: ConfigConfiabilidade) => void
+  /** Salva as sacas vendidas de cada grão numa competência. */
+  salvarSacas: (competencia: string, sacas: Partial<Record<Grao, number>>) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -132,6 +135,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarConfigConfiabilidade = (config: ConfigConfiabilidade) =>
       setEstado((s) => ({ ...s, confiabilidade: config }))
 
+    const salvarSacas = (competencia: string, sacas: Partial<Record<Grao, number>>) =>
+      setEstado((s) => ({ ...s, sacas: { ...s.sacas, [competencia]: sacas } }))
+
     return {
       estado,
       mesclarLancamentos,
@@ -139,6 +145,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarOrcamento,
       salvarPremissasCaixa,
       salvarConfigConfiabilidade,
+      salvarSacas,
       statusSync,
       erroSync,
       ressincronizar,

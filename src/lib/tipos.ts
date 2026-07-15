@@ -86,6 +86,19 @@ export const META_LINHAS: Record<LinhaDRE, MetaLinha> = {
 }
 
 // ---------------------------------------------------------------------------
+// Grãos negociados — hoje soja, milho, sorgo e café. Usados para quebrar a
+// receita/deduções/lucro bruto por cereal e calcular resultados por saca.
+// ---------------------------------------------------------------------------
+export type Grao = 'soja' | 'milho' | 'sorgo' | 'cafe'
+export const GRAOS: Grao[] = ['soja', 'milho', 'sorgo', 'cafe']
+export const ROTULO_GRAO: Record<Grao, string> = {
+  soja: 'Soja',
+  milho: 'Milho',
+  sorgo: 'Sorgo',
+  cafe: 'Café',
+}
+
+// ---------------------------------------------------------------------------
 // Lançamento canônico — o que sai da ingestão do Safragold, normalizado.
 // `valor` é sempre em REAIS e POSITIVO (a magnitude que pertence à sua linha).
 // A camada de normalização já resolve débito/crédito e sinal.
@@ -251,6 +264,8 @@ export interface EstadoDre {
   premissasCaixa?: PremissasCaixa
   /** Configuração da confiabilidade (piso de materialidade + achados ignorados). */
   confiabilidade?: ConfigConfiabilidade
+  /** Sacas vendidas por competência ('YYYY-MM') e grão — informadas manualmente. */
+  sacas?: Record<string, Partial<Record<Grao, number>>>
 }
 
 export function estadoDreVazio(): EstadoDre {

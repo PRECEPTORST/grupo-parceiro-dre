@@ -10,6 +10,7 @@ import {
   type Classificacao,
   type LancamentoCanonico,
   type MapaClassificacao,
+  type Grao,
 } from './tipos'
 import { mapaDeClassificacoes, type GrupoContas } from './dre'
 
@@ -140,6 +141,22 @@ export const DESCRICAO_PLANO: Record<string, string> = Object.fromEntries(
 /** Nome da conta no plano; cai no `fallback` (ex.: histórico) se não estiver no plano. */
 export function nomeConta(conta: string, fallback = ''): string {
   return DESCRICAO_PLANO[conta] || fallback
+}
+
+/**
+ * Contas ligadas a um GRÃO específico (venda e aquisição), para a quebra do DRE
+ * por cereal. Contas de custo do CPV fora desta lista (frete, armazenagem,
+ * secagem, quebra…) são custos COMPARTILHADOS, rateados por volume de sacas.
+ */
+export const GRAO_DE_CONTA: Record<string, Grao> = {
+  '3.1.01': 'soja',
+  '4.1.01': 'soja',
+  '3.1.02': 'milho',
+  '4.1.02': 'milho',
+  '3.1.03': 'sorgo',
+  '4.1.03': 'sorgo',
+  '3.1.05': 'cafe',
+  '4.1.05': 'cafe',
 }
 
 /**
