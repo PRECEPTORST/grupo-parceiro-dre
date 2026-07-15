@@ -25,7 +25,17 @@ export function OrcamentoPage() {
     return [...set].sort().reverse()
   }, [estado.lancamentos, estado.orcamentos])
 
-  const [comp, setComp] = useState<string>(competencias[0] ?? competenciaAtual())
+  // Abre na competência mais recente que já tem dados (lançamentos ou orçamento
+  // salvo); só cai no mês atual se ainda não houver nada. Evita abrir num mês vazio.
+  const competenciaComDados = useMemo(() => {
+    const comDados = [
+      ...competenciasDisponiveis(estado.lancamentos),
+      ...estado.orcamentos.map((o) => o.competencia),
+    ].sort()
+    return comDados.length ? comDados[comDados.length - 1] : competenciaAtual()
+  }, [estado.lancamentos, estado.orcamentos])
+
+  const [comp, setComp] = useState<string>(competenciaComDados)
   const salvo = estado.orcamentos.find((o) => o.competencia === comp)
 
   const [valores, setValores] = useState<Record<string, number>>(() => salvo?.valores ?? {})
