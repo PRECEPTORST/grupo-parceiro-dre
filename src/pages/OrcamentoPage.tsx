@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
 import { podeEditarOrcamento } from '../lib/permissoes'
 import { Botao, Card, Kicker, NumInput } from '../components/ui'
 import { formatBRL } from '../lib/format'
-import { META_LINHAS, type Orcamento } from '../lib/tipos'
+import { META_LINHAS, type Orcamento, type OrigemOrcamento } from '../lib/tipos'
 import { contasPorLinha, mapaDeClassificacoes, competenciasDisponiveis } from '../lib/dre'
+import { parsePlanilha, type ContaConhecida, type ResultadoImport } from '../lib/importar'
 
 function competenciaAtual(): string {
   return new Date().toISOString().slice(0, 7)
@@ -58,8 +59,20 @@ export function OrcamentoPage() {
   )
   const gruposComContas = grupos.filter((g) => g.contas.length > 0)
 
+  const contasConhecidas = useMemo<ContaConhecida[]>(
+    () => gruposComContas.flatMap((g) => g.contas.map((c) => ({ conta: c.conta, descricao: c.descricao }))),
+    [gruposComContas],
+  )
+  const [importarAberto, setImportarAberto] = useState(false)
+
   const setConta = (conta: string, v: number | null) =>
     setValores((atual) => ({ ...atual, [conta]: v ?? 0 }))
+
+  const aplicarImportacao = (vals: Record<string, number>, origemImport: OrigemOrcamento) => {
+    setValores((atual) => ({ ...atual, ...vals }))
+    setOrigem(origemImport)
+    setImportarAberto(false)
+  }
 
   const salvar = () => {
     const orcamento: Orcamento = {
@@ -133,9 +146,14 @@ export function OrcamentoPage() {
               : 'Você tem acesso somente de consulta — o orçamento é exibido, mas não pode ser alterado.'}
           </p>
           {podeEditar && (
-            <Botao variante="fantasma" onClick={sugerir} disabled={sugerindo || semContas}>
-              {sugerindo ? 'Sugerindo…' : '✨ Sugerir com IA'}
-            </Botao>
+            <div className="flex flex-wrap gap-2">
+              <Botao variante="fantasma" onClick={() => setImportarAberto(true)} disabled={semContas}>
+                ⬆ Importar
+              </Botao>
+              <Botao variante="fantasma" onClick={sugerir} disabled={sugerindo || semContas}>
+                {sugerindo ? 'Sugerindo…' : '✨ Sugerir com IA'}
+              </Botao>
+            </div>
           )}
         </div>
 
@@ -200,6 +218,204 @@ export function OrcamentoPage() {
         Valores em reais, magnitude positiva (ex.: “Deduções” como número positivo). O DRE compara
         o realizado com este orçamento, conta a conta.
       </p>
+
+      {importarAberto && (
+        <ModalImportar
+          contas={contasConhecidas}
+          onAplicar={aplicarImportacao}
+          onFechar={() => setImportarAberto(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalImportar({
+  contas,
+  onAplicar,
+  onFechar,
+}: {
+  contas: ContaConhecida[]
+  onAplicar: (valores: Record<string, number>, origem: OrigemOrcamento) => void
+  onFechar: () => void
+}) {
+  const [modo, setModo] = useState<'planilha' | 'documento'>('planilha')
+  const [texto, setTexto] = useState('')
+  const [previa, setPrevia] = useState<ResultadoImport | null>(null)
+  const [obs, setObs] = useState('')
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const descDe = (conta: string) => contas.find((c) => c.conta === conta)?.descricao ?? ''
+
+  const trocarModo = (m: 'planilha' | 'documento') => {
+    setModo(m)
+    setPrevia(null)
+    setErro(null)
+    setObs('')
+  }
+
+  const lerArquivo = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    try {
+      setTexto(await f.text())
+      setPrevia(null)
+    } catch {
+      setErro('Não consegui ler o arquivo. Use CSV/TXT ou cole as células.')
+    }
+  }
+
+  const analisarPlanilha = () => {
+    setErro(null)
+    setObs('')
+    const r = parsePlanilha(texto, contas)
+    setPrevia(r)
+    if (!r.reconhecidas)
+      setErro('Nenhuma conta reconhecida. Cada linha precisa ter o código (ou a descrição) da conta e o valor.')
+  }
+
+  const extrairDocumento = async () => {
+    setCarregando(true)
+    setErro(null)
+    setObs('')
+    setPrevia(null)
+    try {
+      const resp = await fetch('/api/importar-orcamento', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ texto, contas }),
+      })
+      const d = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(d?.erro || `Erro ${resp.status}`)
+      const valores = (d.valores ?? {}) as Record<string, number>
+      setPrevia({ valores, reconhecidas: Object.keys(valores).length, ignoradas: [] })
+      setObs(d.observacoes ?? '')
+      if (!Object.keys(valores).length) setErro('A IA não encontrou valores mapeáveis para as contas conhecidas.')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const podeAplicar = !!previa && previa.reconhecidas > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 animate-fade" onClick={onFechar}>
+      <div
+        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-2xl animate-rise"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="font-head text-xs font-semibold uppercase tracking-[0.2em] text-green">Importar orçamento</div>
+            <h3 className="mt-0.5 text-lg font-bold text-ink">Dar entrada por planilha ou documento</h3>
+          </div>
+          <button onClick={onFechar} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-cream hover:text-ink" title="Fechar">
+            ✕
+          </button>
+        </div>
+
+        <div className="mb-4 flex gap-1.5">
+          {(['planilha', 'documento'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => trocarModo(m)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                modo === m ? 'bg-green text-white' : 'border border-line text-muted hover:bg-green/10 hover:text-green'
+              }`}
+            >
+              {m === 'planilha' ? 'Planilha / colar' : 'Documento (IA)'}
+            </button>
+          ))}
+        </div>
+
+        {modo === 'planilha' ? (
+          <>
+            <p className="mb-2 text-sm text-muted">
+              Cole as células do Excel (código ou descrição da conta + valor) ou envie um arquivo CSV/TXT.
+            </p>
+            <label className="mb-2 inline-block cursor-pointer rounded-lg border border-green/40 px-3 py-1.5 text-xs font-semibold text-green transition-colors hover:bg-green/10">
+              Escolher arquivo (CSV/TXT)
+              <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" onChange={lerArquivo} />
+            </label>
+          </>
+        ) : (
+          <p className="mb-2 text-sm text-muted">
+            Cole o texto do documento (e-mail, PDF, relatório). A IA extrai os valores e mapeia para as
+            contas conhecidas — você confere antes de aplicar.
+          </p>
+        )}
+
+        <textarea
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value)
+            setPrevia(null)
+          }}
+          rows={6}
+          placeholder={
+            modo === 'planilha'
+              ? '3.1.01\t1.500.000\n4.3.01\t90.000\nFolha administrativa\t88.000'
+              : 'Ex.: O orçamento de vendas para agosto é de 1,5 milhão; folha administrativa 90 mil…'
+          }
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-ink outline-none transition focus:border-green focus:ring-2 focus:ring-green/20"
+        />
+
+        <div className="mt-3 flex items-center gap-3">
+          {modo === 'planilha' ? (
+            <Botao variante="fantasma" onClick={analisarPlanilha} disabled={!texto.trim()}>
+              Analisar
+            </Botao>
+          ) : (
+            <Botao variante="fantasma" onClick={extrairDocumento} disabled={!texto.trim() || carregando}>
+              {carregando ? 'Extraindo…' : '✨ Extrair com IA'}
+            </Botao>
+          )}
+          {previa && <span className="text-xs text-muted">{previa.reconhecidas} conta(s) reconhecida(s)</span>}
+        </div>
+
+        {erro && <p className="mt-3 text-sm text-danger">{erro}</p>}
+
+        {previa && previa.reconhecidas > 0 && (
+          <div className="mt-4 rounded-lg border border-line bg-cream/40 p-3">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">Prévia</div>
+            <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+              {Object.entries(previa.valores).map(([conta, v]) => (
+                <div key={conta} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-ink">
+                    <span className="font-mono text-xs text-faint">{conta}</span>
+                    {descDe(conta) && ` · ${descDe(conta)}`}
+                  </span>
+                  <span className="shrink-0 font-head font-semibold tabular-nums text-ink">{formatBRL(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(obs || (previa && previa.ignoradas.length > 0)) && (
+          <div className="mt-3 rounded-lg border border-warn/40 bg-warn/5 p-3 text-xs text-gold-deep">
+            {obs && <p>{obs}</p>}
+            {previa && previa.ignoradas.length > 0 && (
+              <p>
+                {previa.ignoradas.length} linha(s) não reconhecida(s):{' '}
+                <span className="text-muted">{previa.ignoradas.slice(0, 3).join(' · ')}{previa.ignoradas.length > 3 ? '…' : ''}</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-line pt-4">
+          <button onClick={onFechar} className="text-sm font-medium text-muted hover:text-ink">
+            Cancelar
+          </button>
+          <Botao onClick={() => podeAplicar && onAplicar(previa!.valores, modo === 'planilha' ? 'planilha' : 'documento')} disabled={!podeAplicar}>
+            Aplicar ao orçamento
+          </Botao>
+        </div>
+      </div>
     </div>
   )
 }

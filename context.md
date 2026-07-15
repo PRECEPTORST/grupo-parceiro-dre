@@ -78,7 +78,10 @@ Um sócio jamais pode receber um número que "mudou porque o modelo achou".
 - **DRE** — `DrePage.tsx`: DRE **analítico** — cada linha expande nas **contas** que a compõem
   (realizado × orçado × desvio, cores por sinal), com subtotais. Botão recolher/expandir tudo.
 - **Orçamento** — `OrcamentoPage.tsx`: todas as contas agrupadas por linha do DRE, valor por conta;
-  botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados.
+  botão **"✨ Sugerir com IA"**. Abre na competência mais recente que tem dados. **Importar** (modal):
+  três caminhos de entrada — manual (grade), **planilha/colar** (parse determinístico em `src/lib/importar.ts`:
+  colar do Excel/CSV, casa conta por código ou descrição, com prévia) e **documento (IA)** (cola o texto de
+  um doc/e-mail/PDF → `api/importar-orcamento.ts` extrai os valores por conta). Prévia antes de aplicar.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção de caixa mês a mês. Motor determinístico
   `src/lib/caixa.ts` (`projetarCaixa`, zero IA) converte o DRE (competência) em caixa por PRAZOS
   editáveis (recebimento/pagamento/impostos), projeta os meses futuros por orçamento+histórico e
@@ -116,6 +119,8 @@ O papel é revalidado a cada request (revogação/mudança imediata).
 
 - `api/classificar.ts` — conta → linha do DRE (tool use, enum forçado, confiança).
 - `api/sugerir-orcamento.ts` — orçamento por conta a partir do histórico + mercado de grãos.
+- `api/importar-orcamento.ts` — extrai orçamento por conta do TEXTO de um documento (só mapeia
+  para contas conhecidas; não inventa conta). Complementa o parse determinístico de planilha.
 - `api/insights.ts` — análise executiva do DRE (realizado × orçado): resumo + pontos
   (positivo/atenção/risco) + recomendações. `max_tokens: 2800` e prompt conciso (senão trunca
   as recomendações). Card no Dashboard, sob demanda (controla custo de token).

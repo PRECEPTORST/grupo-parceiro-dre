@@ -507,12 +507,12 @@ function CelulaDia({
       <span className="text-[10px] font-semibold text-faint">{dia.dia}</span>
       {temMov && (
         <span className="mt-0.5 flex flex-col gap-px text-[9px] leading-tight tabular-nums">
-          {dia.entradas > 0 && (
-            <span className="text-green" title="A receber">▲ {formatBRLCompact(dia.entradas)}</span>
-          )}
-          {dia.saidas > 0 && (
-            <span className="text-danger" title="A pagar">▼ {formatBRLCompact(dia.saidas)}</span>
-          )}
+          <span className={dia.entradas > 0 ? 'text-green' : 'text-faint'} title="Entra (a receber)">
+            ▲ {formatBRLCompact(dia.entradas)}
+          </span>
+          <span className={dia.saidas > 0 ? 'text-danger' : 'text-faint'} title="Sai (a pagar)">
+            ▼ {formatBRLCompact(dia.saidas)}
+          </span>
         </span>
       )}
       <span

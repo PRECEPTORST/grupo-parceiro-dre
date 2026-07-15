@@ -119,7 +119,7 @@ export type MapaClassificacao = Record<string, LinhaDRE>
 // ---------------------------------------------------------------------------
 // Orçamento — construído no app (manual, planilha, histórico ou sugerido por IA).
 // ---------------------------------------------------------------------------
-export type OrigemOrcamento = 'manual' | 'planilha' | 'historico' | 'sugerido'
+export type OrigemOrcamento = 'manual' | 'planilha' | 'historico' | 'sugerido' | 'documento'
 
 export interface Orcamento {
   /** Competência 'YYYY-MM'. */
