@@ -90,12 +90,16 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
 - **`Classificacao`**: `{ contaSafragold, linha, confianca (0..1), justificativa }`. Confiança < 0.8
   (`LIMIAR_REVISAO`) → fila de revisão.
 - **`Orcamento`**: `{ competencia 'YYYY-MM', valores: Record<conta, number>, sacas?: Record<conta,
-  number>, precoSaca?: Record<conta, number>, origem, atualizadoEm, status: 'rascunho'|'aprovado',
-  aprovadoPor?, aprovadoEm? }`. **Orçamento é POR CONTA e sempre mês a mês.** Para contas de RECEITA DE
-  GRÃO (3.1.0x), `valores[conta] = sacas[conta] × precoSaca[conta]` (volume × preço); as demais contas
-  só têm `valores`. A **periodicidade** (mensal/trimestral/quadrimestral/anual) é só a lente de edição —
-  o dado continua um `Orcamento` por competência (DRE/caixa/dashboard não mudam). Retrocompatível:
-  orçamento antigo que gravava a receita de grão só por valor é preservado até informar sacas/preço.
+  number>, precoSaca?: Record<conta, number>, margemSaca?: Record<conta, number>, origem, atualizadoEm,
+  status: 'rascunho'|'aprovado', aprovadoPor?, aprovadoEm? }`. **Orçamento é POR CONTA e sempre mês a
+  mês.** Contas de RECEITA DE GRÃO (3.1.0x): `valores[receita] = sacas × precoSaca` (venda); **`margemSaca`
+  = margem bruta esperada R$/saca → preço de compra/saca = precoSaca − margemSaca → `valores[custo 4.1.0x]
+  = sacas × preço de compra`** (aquisição). Logo receita − custo = sacas × margem (reconcilia no DRE).
+  Chaves de `sacas`/`precoSaca`/`margemSaca` são a conta de RECEITA (3.1.0x); a conta de custo (4.1.0x)
+  é derivada. As demais contas só têm `valores`. A **periodicidade** (mensal/trimestral/quadrimestral/
+  anual) é só a lente de edição — o dado continua um `Orcamento` por competência (DRE/caixa/dashboard não
+  mudam). Retrocompatível: orçamento antigo que gravava receita/custo de grão só por valor é preservado
+  até informar sacas/preço/margem (`graoAtivo` = tem sacas OU preço OU margem).
 - **`Grao`** = 'soja'|'milho'|'sorgo'|'cafe' (`GRAOS`, `ROTULO_GRAO`).
 - **`EstadoDre`** (persistido no Blob): `{ lancamentos[], classificacoes[], orcamentos[],
   premissasCaixa?, confiabilidade?, sacas? }`. `sacas` = `Record<competencia, Partial<Record<Grao,
@@ -123,9 +127,11 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   no calendário) + Ano + Período no cabeçalho. **Mensal** = tela de um input por conta; **tri/quadri/
   anual** = GRADE mês a mês (colunas = meses do período) + coluna **"Total do período"** que distribui
   pela **sazonalidade do histórico** da conta (`distribuirSazonal`; fallback igual, soma fecha exata).
-  **Receita de grão** tem seção própria **"Receita por grão · sacas × preço"**: por mês informa sacas +
-  preço/saca → **= Receita** calculada (entra no `Orcamento.valores`); essas contas saem do editor de
-  valor (sem dupla entrada). **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
+  **Receita de grão** tem seção própria **"Receita e custo por grão · sacas × preço × margem"**: por mês
+  informa **sacas + preço venda/saca + margem bruta/saca**; deriva **preço compra/saca (venda − margem)**,
+  **= Receita** (sacas × venda), **(−) Custo aquisição** (sacas × compra, grava na conta 4.1.0x) e **=
+  Margem bruta** (receita − custo). Contas de receita E custo de grão saem do editor de valor (derivadas,
+  sem dupla entrada). **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
   agregado. **"✨ Sugerir com IA"** e **"⬆ Importar"** atuam só nas **contas de valor** (import = totais
   do período distribuídos pela sazonalidade); a receita de grão é planejada na grade sacas × preço.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção determinística `caixa.ts`. Converte DRE
@@ -249,6 +255,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | DRE por cereal + resultado por saca + **meta × realizado (volume/preço)** | ✅ |
 | **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
 | **Receita de grão por sacas × preço** (valor calculado) | ✅ |
+| **Margem bruta/saca → preço de compra + custo de aquisição** (grão) | ✅ |
 | Orçamento por conta (+ IA + importar planilha/doc) | ✅ |
 | Papel sócio + aprovação de orçamento (4 papéis) | ✅ |
 | Fluxo de caixa mensal + diário (Sprint 2) | ✅ |
@@ -260,12 +267,19 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
 | Sprint 3 (alertas WhatsApp) | ⬜ Próximo |
 
-**Git:** branch `main`, último commit **`0e1c8dd`** ("Modo de verificação local (?demo) para dev").
-Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos, `3d8fe9a` sync
-Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão sacas×preço +
-meta×realizado, `0e1c8dd` modo `?demo`. GitHub `Luvas-prog/grupo-parceiro-dre` (privado). **58 testes**
-passando (era 46; +10 de `orcamento.ts`, +2 dos helpers de grão). No working tree: `scripts/enoki-
-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado preservado em `ce8f743`.
+**Git:** branch `main`, último commit **`74ff0e6`** ("Orçamento de grão: margem bruta/saca → preço de
+compra e custo"). Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos,
+`3d8fe9a` sync Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão
+sacas×preço + meta×realizado, `0e1c8dd` modo `?demo`, `bbca565` context.md, `74ff0e6` margem/custo por
+grão. GitHub `Luvas-prog/grupo-parceiro-dre` (privado). **60 testes** passando. No working tree:
+`scripts/enoki-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado em `ce8f743`.
+
+**RETOMAR AQUI (pendências abertas quando o Luciano voltar):**
+- Opcional: estender o painel **Meta × realizado** (DRE por cereal) p/ comparar **margem/saca orçada ×
+  realizada** — ⚠️ alinhar definições: a margem ORÇADA é o spread venda − compra (sem deduções); o
+  realizado do DRE (`lucroBrutoPorSaca`) inclui deduções e custos rateados. Usar `(receitaBruta −
+  custo)/sacas` do `resumoGraos` seria o comparável mais próximo.
+- Roadmap (seção 15): Sprint 3 WhatsApp OU decidir a fonte contábil da Enoki (jan–jun).
 
 ## 14. Rodar localmente
 
