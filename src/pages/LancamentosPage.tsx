@@ -5,10 +5,10 @@ import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { formatBRL } from '../lib/format'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
-import { META_LINHAS, LIMIAR_REVISAO, type LancamentoCanonico } from '../lib/tipos'
+import { META_LINHAS, LIMIAR_REVISAO } from '../lib/tipos'
 
 export function LancamentosPage() {
-  const { estado, mesclarLancamentos, salvarClassificacoes } = useDre()
+  const { estado, sincronizarSafragold, salvarClassificacoes } = useDre()
   const { usuario } = useAuth()
   const admin = podeAdministrar(usuario?.papel)
   const [sincronizando, setSincronizando] = useState(false)
@@ -33,13 +33,9 @@ export function LancamentosPage() {
     setErro(null)
     setAviso(null)
     try {
-      const resp = await fetch('/api/safragold-sync', { headers: { accept: 'application/json' } })
-      const d = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(d?.erro || `Erro ${resp.status}`)
-      const lancamentos = (d.lancamentos ?? []) as LancamentoCanonico[]
-      mesclarLancamentos(lancamentos)
+      const { importados, simulado } = await sincronizarSafragold()
       setAviso(
-        `${lancamentos.length} lançamento(s) importados.${d.simulado ? ' (dados SIMULADOS — Safragold ainda não conectado)' : ''}`,
+        `${importados} lançamento(s) importados.${simulado ? ' (dados SIMULADOS — Safragold ainda não conectado)' : ''}`,
       )
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e))

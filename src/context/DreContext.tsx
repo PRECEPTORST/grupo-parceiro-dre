@@ -19,14 +19,12 @@ import type {
   Grao,
 } from '../lib/tipos'
 import { useAuth } from './AuthContext'
-import { ehSomenteLeitura } from '../lib/permissoes'
+import { ehSomenteLeitura, podeAdministrar } from '../lib/permissoes'
 
 export type StatusSync = 'carregando' | 'sincronizado' | 'salvando' | 'erro' | 'offline'
 
 interface DreContextValue {
   estado: EstadoDre
-  /** Substitui os lançamentos (ex.: após sincronizar o Safragold). Faz merge por id. */
-  mesclarLancamentos: (novos: LancamentoCanonico[]) => void
   /** Salva/atualiza classificações de contas (merge por contaSafragold). */
   salvarClassificacoes: (novas: Classificacao[]) => void
   /** Cria ou substitui o orçamento de uma competência. */
@@ -37,6 +35,8 @@ interface DreContextValue {
   salvarConfigConfiabilidade: (config: ConfigConfiabilidade) => void
   /** Salva as sacas vendidas de cada grão numa competência. */
   salvarSacas: (competencia: string, sacas: Partial<Record<Grao, number>>) => void
+  /** Puxa os lançamentos do Safragold e mescla no estado (merge por id). */
+  sincronizarSafragold: () => Promise<{ importados: number; simulado: boolean }>
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -86,6 +86,33 @@ export function DreProvider({ children }: { children: ReactNode }) {
     ressincronizar()
   }, [ressincronizar])
 
+  // Sincronização com o Safragold — compartilhada pelo botão manual (Lançamentos)
+  // e pela sincronização automática abaixo. Faz merge por id no estado.
+  const sincronizarSafragold = useCallback(async () => {
+    const resp = await fetch('/api/safragold-sync', { headers: { accept: 'application/json' } })
+    const d = await resp.json().catch(() => ({}))
+    if (!resp.ok) throw new Error(d?.erro || `Erro ${resp.status}`)
+    const novos = (d.lancamentos ?? []) as LancamentoCanonico[]
+    setEstado((s) => {
+      const porId = new Map(s.lancamentos.map((l) => [l.id, l]))
+      for (const n of novos) porId.set(n.id, n)
+      return { ...s, lancamentos: [...porId.values()] }
+    })
+    return { importados: novos.length, simulado: !!d.simulado }
+  }, [])
+
+  // Sincroniza o Safragold AUTOMATICAMENTE uma vez por sessão, assim que a nuvem
+  // termina de hidratar, para quem pode gravar (o merge dispara o save na nuvem).
+  // Silencioso: o botão manual em Lançamentos segue disponível p/ retry/feedback.
+  const autoSincronizado = useRef(false)
+  useEffect(() => {
+    if (autoSincronizado.current) return
+    if (statusSync !== 'sincronizado') return
+    if (!podeAdministrar(usuario?.papel)) return
+    autoSincronizado.current = true
+    void sincronizarSafragold().catch(() => {})
+  }, [statusSync, usuario?.papel, sincronizarSafragold])
+
   useEffect(() => {
     salvarEstado(estado)
     if (!hidratado.current) return
@@ -106,13 +133,6 @@ export function DreProvider({ children }: { children: ReactNode }) {
   }, [estado])
 
   const value = useMemo<DreContextValue>(() => {
-    const mesclarLancamentos = (novos: LancamentoCanonico[]) =>
-      setEstado((s) => {
-        const porId = new Map(s.lancamentos.map((l) => [l.id, l]))
-        for (const n of novos) porId.set(n.id, n)
-        return { ...s, lancamentos: [...porId.values()] }
-      })
-
     const salvarClassificacoes = (novas: Classificacao[]) =>
       setEstado((s) => {
         const porConta = new Map(s.classificacoes.map((c) => [c.contaSafragold, c]))
@@ -140,17 +160,17 @@ export function DreProvider({ children }: { children: ReactNode }) {
 
     return {
       estado,
-      mesclarLancamentos,
       salvarClassificacoes,
       salvarOrcamento,
       salvarPremissasCaixa,
       salvarConfigConfiabilidade,
       salvarSacas,
+      sincronizarSafragold,
       statusSync,
       erroSync,
       ressincronizar,
     }
-  }, [estado, statusSync, erroSync, ressincronizar])
+  }, [estado, statusSync, erroSync, ressincronizar, sincronizarSafragold])
 
   return <DreContext.Provider value={value}>{children}</DreContext.Provider>
 }
