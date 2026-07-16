@@ -1,8 +1,8 @@
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { Fragment, useMemo, useState, type ChangeEvent } from 'react'
 import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
 import { podeEditarOrcamento, podeAprovarOrcamento } from '../lib/permissoes'
-import { Botao, Card, Kicker, NumInput } from '../components/ui'
+import { Botao, Card, Kicker, NumInput, Select } from '../components/ui'
 import { formatBRL } from '../lib/format'
 import {
   META_LINHAS,
@@ -14,9 +14,28 @@ import {
 import { competenciasDisponiveis } from '../lib/dre'
 import { catalogoPorLinha, mapaEfetivo } from '../lib/planoContas'
 import { parsePlanilha, type ContaConhecida, type ResultadoImport } from '../lib/importar'
+import {
+  PERIODICIDADES,
+  ROTULO_PERIODICIDADE,
+  mesesDoPeriodo,
+  periodosDoAno,
+  indiceDoMes,
+  distribuirSazonal,
+  rotuloMesCurto,
+  type Periodicidade,
+} from '../lib/orcamento'
 
-function competenciaAtual(): string {
-  return new Date().toISOString().slice(0, 7)
+type ValsPorMes = Record<string, Record<string, number>>
+
+/** Mantém só valores diferentes de zero — base da comparação "sujo/salvo". */
+function limpo(v: Record<string, number>): Record<string, number> {
+  const o: Record<string, number> = {}
+  for (const [k, x] of Object.entries(v)) if (x !== 0) o[k] = x
+  return o
+}
+/** Assinatura canônica de um conjunto de valores (independe de ordem). */
+function canon(v: Record<string, number>): string {
+  return JSON.stringify(Object.entries(limpo(v)).sort(([a], [b]) => a.localeCompare(b)))
 }
 
 export function OrcamentoPage() {
@@ -25,84 +44,114 @@ export function OrcamentoPage() {
   const podeEditar = podeEditarOrcamento(usuario?.papel)
   const podeAprovar = podeAprovarOrcamento(usuario?.papel)
 
-  const competencias = useMemo(() => {
-    const set = new Set<string>([
-      competenciaAtual(),
-      ...competenciasDisponiveis(estado.lancamentos),
-      ...estado.orcamentos.map((o) => o.competencia),
-    ])
-    return [...set].sort().reverse()
-  }, [estado.lancamentos, estado.orcamentos])
-
-  // Abre na competência mais recente que já tem dados (lançamentos ou orçamento
-  // salvo); só cai no mês atual se ainda não houver nada. Evita abrir num mês vazio.
+  // Abre na competência mais recente com dados (lançamentos ou orçamento salvo).
   const competenciaComDados = useMemo(() => {
     const comDados = [
       ...competenciasDisponiveis(estado.lancamentos),
       ...estado.orcamentos.map((o) => o.competencia),
     ].sort()
-    return comDados.length ? comDados[comDados.length - 1] : competenciaAtual()
+    return comDados.length ? comDados[comDados.length - 1] : new Date().toISOString().slice(0, 7)
   }, [estado.lancamentos, estado.orcamentos])
 
-  const [comp, setComp] = useState<string>(competenciaComDados)
-  const salvo = estado.orcamentos.find((o) => o.competencia === comp)
+  const [periodicidade, setPeriodicidade] = useState<Periodicidade>('mensal')
+  const [ano, setAno] = useState(() => Number(competenciaComDados.slice(0, 4)))
+  const [indice, setIndice] = useState(() => Number(competenciaComDados.slice(5, 7)) - 1)
 
-  const [valores, setValores] = useState<Record<string, number>>(() => salvo?.valores ?? {})
-  const [origem, setOrigem] = useState(salvo?.origem ?? 'manual')
-  const [sugerindo, setSugerindo] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
+  const meses = useMemo(
+    () => mesesDoPeriodo(periodicidade, ano, indice),
+    [periodicidade, ano, indice],
+  )
+  const multi = periodicidade !== 'mensal'
 
-  const [ultimaComp, setUltimaComp] = useState(comp)
-  if (ultimaComp !== comp) {
-    setUltimaComp(comp)
-    const s = estado.orcamentos.find((o) => o.competencia === comp)
-    setValores(s?.valores ?? {})
-    setOrigem(s?.origem ?? 'manual')
-  }
+  const anos = useMemo(() => {
+    const set = new Set<number>()
+    const atual = new Date().getFullYear()
+    set.add(atual)
+    set.add(atual + 1)
+    set.add(Number(competenciaComDados.slice(0, 4)))
+    for (const o of estado.orcamentos) set.add(Number(o.competencia.slice(0, 4)))
+    for (const c of competenciasDisponiveis(estado.lancamentos)) set.add(Number(c.slice(0, 4)))
+    return [...set].sort((a, b) => b - a)
+  }, [estado.orcamentos, estado.lancamentos, competenciaComDados])
+
+  const opcoesPeriodo = useMemo(() => periodosDoAno(periodicidade, ano), [periodicidade, ano])
 
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
-  const grupos = useMemo(
-    () => catalogoPorLinha(estado.lancamentos, mapa),
-    [estado.lancamentos, mapa],
-  )
+  const grupos = useMemo(() => catalogoPorLinha(estado.lancamentos, mapa), [estado.lancamentos, mapa])
   const gruposComContas = grupos.filter((g) => g.contas.length > 0)
-
   const contasConhecidas = useMemo<ContaConhecida[]>(
     () => gruposComContas.flatMap((g) => g.contas.map((c) => ({ conta: c.conta, descricao: c.descricao }))),
     [gruposComContas],
   )
+
+  const salvoDoMes = (m: string) => estado.orcamentos.find((o) => o.competencia === m) ?? null
+  const valsDeEstado = (ms: string[]): ValsPorMes =>
+    Object.fromEntries(ms.map((m) => [m, { ...(salvoDoMes(m)?.valores ?? {}) }]))
+
+  const [vals, setVals] = useState<ValsPorMes>(() => valsDeEstado(meses))
+  const [origem, setOrigem] = useState<OrigemOrcamento>(() => salvoDoMes(meses[0])?.origem ?? 'manual')
+  const [sugerindo, setSugerindo] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const [importarAberto, setImportarAberto] = useState(false)
 
-  const setConta = (conta: string, v: number | null) =>
-    setValores((atual) => ({ ...atual, [conta]: v ?? 0 }))
-
-  const aplicarImportacao = (vals: Record<string, number>, origemImport: OrigemOrcamento) => {
-    setValores((atual) => ({ ...atual, ...vals }))
-    setOrigem(origemImport)
-    setImportarAberto(false)
+  // Recarrega os valores do estado ao trocar de período (periodicidade/ano/índice).
+  const chave = `${periodicidade}|${ano}|${indice}`
+  const [ultimaChave, setUltimaChave] = useState(chave)
+  if (ultimaChave !== chave) {
+    setUltimaChave(chave)
+    setVals(valsDeEstado(meses))
+    const primeiro = meses.map(salvoDoMes).find(Boolean)
+    setOrigem(primeiro?.origem ?? 'manual')
   }
 
-  // Enquanto não salvo, "sujo" = valores divergem do que está gravado.
-  const alterado = JSON.stringify(valores) !== JSON.stringify(salvo?.valores ?? {})
-  const aprovado = orcamentoAprovado(salvo) && !alterado
+  const getV = (m: string, conta: string) => vals[m]?.[conta] ?? 0
+  const setV = (m: string, conta: string, n: number) =>
+    setVals((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
+  const totalConta = (conta: string) => meses.reduce((s, m) => s + getV(m, conta), 0)
+  const setTotalConta = (conta: string, total: number) => {
+    const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+    setVals((a) => {
+      const next = { ...a }
+      for (const m of meses) next[m] = { ...next[m], [conta]: dist[m] }
+      return next
+    })
+  }
+
+  const trocarPeriodicidade = (p: Periodicidade) => {
+    const primeiroMesAtual = Number(meses[0].slice(5, 7))
+    setPeriodicidade(p)
+    setIndice(indiceDoMes(p, primeiroMesAtual))
+  }
+
+  // Situação agregada do período.
+  const salvosDoPeriodo = meses.map(salvoDoMes).filter(Boolean) as Orcamento[]
+  const temAlgum = salvosDoPeriodo.length > 0
+  const alterado = meses.some((m) => canon(vals[m] ?? {}) !== canon(salvoDoMes(m)?.valores ?? {}))
+  const todosAprovados = temAlgum && salvosDoPeriodo.every((o) => orcamentoAprovado(o))
+  const aprovado = todosAprovados && !alterado
 
   const persistir = (status: StatusOrcamento) => {
     const agora = new Date().toISOString()
-    const orcamento: Orcamento = {
-      competencia: comp,
-      valores,
-      origem,
-      atualizadoEm: agora,
-      status,
-      ...(status === 'aprovado'
-        ? { aprovadoPor: usuario?.usuario, aprovadoEm: agora }
-        : { aprovadoPor: undefined, aprovadoEm: undefined }),
+    for (const m of meses) {
+      const valoresMes = limpo(vals[m] ?? {})
+      // Não cria registro para mês vazio que nunca teve orçamento.
+      if (Object.keys(valoresMes).length === 0 && !salvoDoMes(m)) continue
+      salvarOrcamento({
+        competencia: m,
+        valores: valoresMes,
+        origem,
+        atualizadoEm: agora,
+        status,
+        ...(status === 'aprovado'
+          ? { aprovadoPor: usuario?.usuario, aprovadoEm: agora }
+          : { aprovadoPor: undefined, aprovadoEm: undefined }),
+      })
     }
-    salvarOrcamento(orcamento)
   }
   const salvar = () => persistir('rascunho')
   const aprovar = () => persistir('aprovado')
 
+  // Sugestão da IA: valor MENSAL por conta, aplicado a cada mês do período.
   const sugerir = async () => {
     setSugerindo(true)
     setErro(null)
@@ -111,7 +160,7 @@ export function OrcamentoPage() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          competencia: comp,
+          competencia: meses[0],
           historicoLancamentos: estado.lancamentos,
           classificacoes: estado.classificacoes,
         }),
@@ -121,7 +170,15 @@ export function OrcamentoPage() {
         throw new Error(d?.erro || `Erro ${resp.status}`)
       }
       const d = await resp.json()
-      setValores((atual) => ({ ...atual, ...(d.valores ?? {}) }))
+      const sugeridos = (d.valores ?? {}) as Record<string, number>
+      setVals((a) => {
+        const next = { ...a }
+        for (const m of meses) {
+          next[m] = { ...next[m] }
+          for (const [conta, v] of Object.entries(sugeridos)) next[m][conta] = v
+        }
+        return next
+      })
       setOrigem('sugerido')
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e))
@@ -130,10 +187,29 @@ export function OrcamentoPage() {
     }
   }
 
+  // Import: valores por conta são TOTAIS DO PERÍODO, distribuídos pela sazonalidade.
+  const aplicarImportacao = (importados: Record<string, number>, origemImport: OrigemOrcamento) => {
+    setVals((a) => {
+      const next = { ...a }
+      for (const m of meses) next[m] = { ...next[m] }
+      for (const [conta, total] of Object.entries(importados)) {
+        const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+        for (const m of meses) next[m][conta] = dist[m]
+      }
+      return next
+    })
+    setOrigem(origemImport)
+    setImportarAberto(false)
+  }
+
   const semContas = gruposComContas.length === 0
+  const totalPeriodo = gruposComContas.reduce(
+    (s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0),
+    0,
+  )
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className={`mx-auto px-6 py-8 ${multi ? 'max-w-6xl' : 'max-w-3xl'}`}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 animate-rise">
         <div>
           <Kicker>Planejamento orçamentário</Kicker>
@@ -141,22 +217,44 @@ export function OrcamentoPage() {
             Orçamento por <span className="text-green">conta</span>
           </h1>
           <div className="mt-2">
-            <BadgeStatus orcamento={salvo} alterado={alterado} />
+            <BadgeStatus
+              temAlgum={temAlgum}
+              alterado={alterado}
+              aprovado={todosAprovados}
+              aprovadoPor={salvosDoPeriodo[0]?.aprovadoPor}
+              aprovadoEm={salvosDoPeriodo[0]?.aprovadoEm}
+            />
           </div>
         </div>
-        <div className="w-44">
-          <span className="mb-1 block text-xs font-medium text-muted">Competência</span>
-          <select
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-green"
-            value={comp}
-            onChange={(e) => setComp(e.target.value)}
-          >
-            {competencias.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-40">
+            <span className="mb-1 block text-xs font-medium text-muted">Periodicidade</span>
+            <Select
+              value={periodicidade}
+              onChange={(v) => trocarPeriodicidade(v as Periodicidade)}
+              options={PERIODICIDADES.map((p) => ({ value: p, label: ROTULO_PERIODICIDADE[p] }))}
+            />
+          </div>
+          <div className="w-24">
+            <span className="mb-1 block text-xs font-medium text-muted">Ano</span>
+            <Select
+              value={String(ano)}
+              onChange={(v) => setAno(Number(v))}
+              options={anos.map((a) => ({ value: String(a), label: String(a) }))}
+            />
+          </div>
+          {periodicidade !== 'anual' && (
+            <div className="w-44">
+              <span className="mb-1 block text-xs font-medium text-muted">
+                {periodicidade === 'mensal' ? 'Mês' : 'Período'}
+              </span>
+              <Select
+                value={String(indice)}
+                onChange={(v) => setIndice(Number(v))}
+                options={opcoesPeriodo.map((p) => ({ value: String(p.indice), label: p.rotulo }))}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -164,7 +262,9 @@ export function OrcamentoPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-md text-sm text-muted">
             {podeEditar
-              ? 'Defina o orçamento de cada conta. Peça uma sugestão da IA com base no histórico e no mercado de grãos.'
+              ? multi
+                ? 'Preencha mês a mês. A coluna “Total do período” distribui pela sazonalidade do histórico da conta — depois é só ajustar.'
+                : 'Defina o orçamento de cada conta. Peça uma sugestão da IA com base no histórico e no mercado de grãos.'
               : 'Você tem acesso somente de consulta — o orçamento é exibido, mas não pode ser alterado.'}
           </p>
           {podeEditar && (
@@ -186,33 +286,38 @@ export function OrcamentoPage() {
             Nenhuma conta classificada ainda. Sincronize e classifique os lançamentos em{' '}
             <strong className="text-ink">Lançamentos</strong> para orçar conta a conta.
           </p>
+        ) : multi ? (
+          <GradeMeses
+            grupos={gruposComContas}
+            meses={meses}
+            getV={getV}
+            setV={setV}
+            totalConta={totalConta}
+            setTotalConta={setTotalConta}
+            podeEditar={podeEditar}
+          />
         ) : (
           <div className="flex flex-col gap-5">
             {gruposComContas.map((g) => {
-              const total = g.contas.reduce((s, c) => s + (valores[c.conta] ?? 0), 0)
+              const total = g.contas.reduce((s, c) => s + getV(meses[0], c.conta), 0)
               return (
                 <div key={g.linha}>
                   <div className="mb-1.5 flex items-center justify-between border-b border-line pb-1">
                     <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
                       {META_LINHAS[g.linha].rotulo}
                     </span>
-                    <span className="text-xs font-semibold tabular-nums text-ink">
-                      {formatBRL(total)}
-                    </span>
+                    <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(total)}</span>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {g.contas.map((c) => (
-                      <div
-                        key={c.conta}
-                        className="grid grid-cols-[1fr_160px] items-center gap-3"
-                      >
+                      <div key={c.conta} className="grid grid-cols-[1fr_160px] items-center gap-3">
                         <span className="truncate text-sm text-muted">
                           <span className="font-mono text-xs text-faint">{c.conta}</span>
                           {c.descricao && ` · ${c.descricao}`}
                         </span>
                         <NumInput
-                          value={valores[c.conta] ?? 0}
-                          onChange={(v) => setConta(c.conta, v)}
+                          value={getV(meses[0], c.conta)}
+                          onChange={(v) => setV(meses[0], c.conta, v ?? 0)}
                           min={0}
                           disabled={!podeEditar}
                         />
@@ -227,7 +332,7 @@ export function OrcamentoPage() {
 
         {podeEditar && !semContas && (
           <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-            <Botao onClick={salvar} disabled={!alterado && !!salvo}>
+            <Botao onClick={salvar} disabled={!alterado && temAlgum}>
               Salvar rascunho
             </Botao>
             {podeAprovar && (
@@ -235,27 +340,38 @@ export function OrcamentoPage() {
                 {aprovado ? '✓ Aprovado' : '✓ Aprovar orçamento'}
               </Botao>
             )}
-            <span className="text-xs text-faint">
-              Origem: {origem}
-              {salvo && ` · salvo em ${new Date(salvo.atualizadoEm).toLocaleDateString('pt-BR')}`}
+            <span className="ml-auto text-xs font-semibold tabular-nums text-ink">
+              Total do período: {formatBRL(totalPeriodo)}
             </span>
           </div>
         )}
-        {podeEditar && !podeAprovar && !semContas && (
-          <p className="mt-2 text-[11px] text-faint">
-            O planejamento só passa a valer como oficial após a aprovação de um <strong>sócio</strong>.
-          </p>
+        {podeEditar && !semContas && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 text-[11px] text-faint">
+            <span>Origem: {origem}</span>
+            {temAlgum && (
+              <span>
+                · salvo em{' '}
+                {new Date(
+                  salvosDoPeriodo.reduce((a, o) => (o.atualizadoEm > a ? o.atualizadoEm : a), ''),
+                ).toLocaleDateString('pt-BR')}
+              </span>
+            )}
+            {!podeAprovar && (
+              <span>· só passa a valer como oficial após a aprovação de um <strong>sócio</strong>.</span>
+            )}
+          </div>
         )}
       </Card>
 
       <p className="text-xs text-faint">
-        Valores em reais, magnitude positiva (ex.: “Deduções” como número positivo). O DRE compara
-        o realizado com este orçamento, conta a conta.
+        Valores em reais, magnitude positiva. O orçamento é sempre guardado mês a mês — a periodicidade
+        é só a lente de edição. O DRE compara o realizado com este orçamento, conta a conta.
       </p>
 
       {importarAberto && (
         <ModalImportar
           contas={contasConhecidas}
+          multi={multi}
           onAplicar={aplicarImportacao}
           onFechar={() => setImportarAberto(false)}
         />
@@ -264,17 +380,117 @@ export function OrcamentoPage() {
   )
 }
 
-function BadgeStatus({ orcamento, alterado }: { orcamento?: Orcamento; alterado: boolean }) {
+interface GrupoLinha {
+  linha: keyof typeof META_LINHAS
+  contas: { conta: string; descricao: string }[]
+}
+
+function GradeMeses({
+  grupos,
+  meses,
+  getV,
+  setV,
+  totalConta,
+  setTotalConta,
+  podeEditar,
+}: {
+  grupos: GrupoLinha[]
+  meses: string[]
+  getV: (m: string, conta: string) => number
+  setV: (m: string, conta: string, n: number) => void
+  totalConta: (conta: string) => number
+  setTotalConta: (conta: string, total: number) => void
+  podeEditar: boolean
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-separate border-spacing-0 text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wider text-faint">
+            <th className="sticky left-0 z-10 bg-surface py-2 pr-3 text-left font-semibold">Conta</th>
+            {meses.map((m) => (
+              <th key={m} className="min-w-[92px] px-1.5 py-2 text-right font-semibold">
+                {rotuloMesCurto(m)}
+              </th>
+            ))}
+            <th className="min-w-[110px] px-1.5 py-2 text-right font-semibold text-green">
+              Total período
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {grupos.map((g) => {
+            const totalLinha = g.contas.reduce((s, c) => s + totalConta(c.conta), 0)
+            return (
+              <Fragment key={g.linha}>
+                <tr>
+                  <td
+                    colSpan={meses.length + 1}
+                    className="sticky left-0 bg-cream/40 py-1.5 pl-0.5 pr-2 font-head text-xs font-semibold uppercase tracking-wider text-green"
+                  >
+                    {META_LINHAS[g.linha].rotulo}
+                  </td>
+                  <td className="bg-cream/40 px-1.5 py-1.5 text-right text-xs font-semibold tabular-nums text-ink">
+                    {formatBRL(totalLinha)}
+                  </td>
+                </tr>
+                {g.contas.map((c) => (
+                  <tr key={c.conta} className="hover:bg-cream/30">
+                    <td className="sticky left-0 z-10 max-w-[220px] truncate bg-surface py-1 pr-3 text-muted">
+                      <span className="font-mono text-xs text-faint">{c.conta}</span>
+                      {c.descricao && ` · ${c.descricao}`}
+                    </td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1 py-1">
+                        <NumInput
+                          value={getV(m, c.conta)}
+                          onChange={(v) => setV(m, c.conta, v ?? 0)}
+                          min={0}
+                          disabled={!podeEditar}
+                        />
+                      </td>
+                    ))}
+                    <td className="px-1 py-1">
+                      <NumInput
+                        value={totalConta(c.conta)}
+                        onChange={(v) => setTotalConta(c.conta, v ?? 0)}
+                        min={0}
+                        disabled={!podeEditar}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function BadgeStatus({
+  temAlgum,
+  alterado,
+  aprovado,
+  aprovadoPor,
+  aprovadoEm,
+}: {
+  temAlgum: boolean
+  alterado: boolean
+  aprovado: boolean
+  aprovadoPor?: string
+  aprovadoEm?: string
+}) {
   const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold'
-  if (!orcamento)
-    return <span className={`${base} bg-cream text-faint`}>Sem orçamento para o mês</span>
+  if (!temAlgum) return <span className={`${base} bg-cream text-faint`}>Sem orçamento no período</span>
   if (alterado)
     return <span className={`${base} bg-warn/10 text-gold-deep`}>● Rascunho com alterações não salvas</span>
-  if (orcamentoAprovado(orcamento))
+  if (aprovado)
     return (
       <span className={`${base} bg-green/10 text-green`}>
-        ✓ Aprovado{orcamento.aprovadoPor ? ` por ${orcamento.aprovadoPor}` : ''}
-        {orcamento.aprovadoEm ? ` · ${new Date(orcamento.aprovadoEm).toLocaleDateString('pt-BR')}` : ''}
+        ✓ Aprovado{aprovadoPor ? ` por ${aprovadoPor}` : ''}
+        {aprovadoEm ? ` · ${new Date(aprovadoEm).toLocaleDateString('pt-BR')}` : ''}
       </span>
     )
   return <span className={`${base} bg-warn/10 text-gold-deep`}>⏳ Pendente de aprovação do sócio</span>
@@ -282,10 +498,12 @@ function BadgeStatus({ orcamento, alterado }: { orcamento?: Orcamento; alterado:
 
 function ModalImportar({
   contas,
+  multi,
   onAplicar,
   onFechar,
 }: {
   contas: ContaConhecida[]
+  multi: boolean
   onAplicar: (valores: Record<string, number>, origem: OrigemOrcamento) => void
   onFechar: () => void
 }) {
@@ -366,6 +584,13 @@ function ModalImportar({
             ✕
           </button>
         </div>
+
+        {multi && (
+          <p className="mb-3 rounded-lg border border-green/30 bg-green/5 p-2.5 text-xs text-green-deep">
+            Os valores importados são tratados como <strong>totais do período</strong> e distribuídos
+            pelos meses conforme a sazonalidade do histórico — você ajusta na grade depois.
+          </p>
+        )}
 
         <div className="mb-4 flex gap-1.5">
           {(['planilha', 'documento'] as const).map((m) => (
