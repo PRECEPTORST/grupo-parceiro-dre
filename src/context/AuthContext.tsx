@@ -24,7 +24,9 @@ interface AuthValue {
   sair: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthValue | null>(null)
+// Exportado para o modo de verificação local (src/dev/demo.tsx) injetar uma
+// sessão mockada em dev. Em produção só `AuthProvider`/`useAuth` são usados.
+export const AuthContext = createContext<AuthValue | null>(null)
 
 async function lerErro(resp: Response): Promise<string> {
   try {
