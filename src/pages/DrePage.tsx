@@ -10,7 +10,7 @@ import {
   type LinhaResultado,
   type Subtotais,
 } from '../lib/dre'
-import { mapaEfetivo, nomeConta } from '../lib/planoContas'
+import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
 import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
@@ -77,6 +77,23 @@ export function DrePage() {
     () => resumoGraos(competencia, estado.lancamentos, mapa, sacasDoMes),
     [competencia, estado.lancamentos, mapa, sacasDoMes],
   )
+
+  // Meta (orçado) × realizado por grão: volume (sacas) e preço/saca. As sacas e
+  // o preço orçados vêm da conta de receita do grão no orçamento do mês.
+  const metasGrao = useMemo(() => {
+    if (!orcamento) return []
+    return GRAOS.map((g) => {
+      const conta = Object.keys(GRAO_DE_CONTA).find(
+        (c) => GRAO_DE_CONTA[c] === g && mapa[c] === 'receita_bruta',
+      )
+      const sacasOrc = conta ? (orcamento.sacas?.[conta] ?? 0) : 0
+      const precoOrc = conta ? (orcamento.precoSaca?.[conta] ?? 0) : 0
+      const rg = resumo.graos.find((x) => x.grao === g)
+      const sacasReal = rg?.sacas ?? 0
+      const precoReal = sacasReal > 0 ? (rg?.receitaBruta ?? 0) / sacasReal : 0
+      return { grao: g, rotulo: ROTULO_GRAO[g], sacasOrc, precoOrc, sacasReal, precoReal }
+    }).filter((m) => m.sacasOrc > 0 || m.precoOrc > 0)
+  }, [orcamento, mapa, resumo])
 
   const [recolhidas, setRecolhidas] = useState<Set<LinhaDRE>>(new Set())
   const toggle = (l: LinhaDRE) =>
@@ -210,6 +227,8 @@ export function DrePage() {
             onSalvar={(s) => salvarSacas(competencia, s)}
           />
 
+          {metasGrao.length > 0 && <MetaCereais metas={metasGrao} />}
+
           {!temOrcamento && (
             <p className="mt-3 text-xs text-faint">
               Sem orçamento para {rotuloCompetencia(competencia)}. Monte um em{' '}
@@ -318,6 +337,83 @@ function ResumoCereais({
       <p className="px-5 py-3 text-[11px] text-faint">
         Deduções rateadas pela receita de cada grão; custos compartilhados do CPV (frete, armazenagem,
         secagem, quebra) rateados pelo volume de sacas. Sacas informadas manualmente.
+      </p>
+    </Card>
+  )
+}
+
+interface MetaGrao {
+  grao: Grao
+  rotulo: string
+  sacasOrc: number
+  precoOrc: number
+  sacasReal: number
+  precoReal: number
+}
+
+function MetaCereais({ metas }: { metas: MetaGrao[] }) {
+  const variacao = (real: number, orc: number) => (orc > 0 ? ((real - orc) / orc) * 100 : null)
+  const Badge = ({ pct }: { pct: number | null }) => {
+    if (pct == null) return <span className="text-faint">—</span>
+    const bom = pct >= 0
+    return (
+      <span className={`text-[11px] font-semibold tabular-nums ${bom ? 'text-green' : 'text-danger'}`}>
+        {bom ? '▲' : '▼'} {formatPct(Math.abs(pct))}
+      </span>
+    )
+  }
+
+  return (
+    <Card className="mt-4 animate-rise overflow-hidden p-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+        <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
+          Meta × realizado por grão
+        </span>
+        <span className="text-xs text-faint">volume e preço/saca — orçado × realizado</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+              <th className="py-2 pl-5 pr-3 font-semibold">Cereal</th>
+              <th className="py-2 px-3 text-right font-semibold">Sacas real</th>
+              <th className="py-2 px-3 text-right font-semibold">Sacas meta</th>
+              <th className="py-2 px-3 text-right font-semibold">Volume</th>
+              <th className="py-2 px-3 text-right font-semibold">Preço/saca real</th>
+              <th className="py-2 px-3 text-right font-semibold">Preço/saca meta</th>
+              <th className="py-2 pr-5 pl-3 text-right font-semibold">Preço</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metas.map((m) => (
+              <tr key={m.grao} className="border-b border-line/50">
+                <td className="py-2.5 pl-5 pr-3 font-medium text-ink">{m.rotulo}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-ink">
+                  {m.sacasReal > 0 ? formatNum(m.sacasReal) : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">
+                  {m.sacasOrc > 0 ? formatNum(m.sacasOrc) : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-right">
+                  <Badge pct={variacao(m.sacasReal, m.sacasOrc)} />
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-ink">
+                  {m.precoReal > 0 ? formatBRL(m.precoReal) : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">
+                  {m.precoOrc > 0 ? formatBRL(m.precoOrc) : '—'}
+                </td>
+                <td className="py-2.5 pr-5 pl-3 text-right">
+                  <Badge pct={variacao(m.precoReal, m.precoOrc)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-5 py-3 text-[11px] text-faint">
+        Meta de volume e preço vem do orçamento de receita por grão (sacas × preço). Preço/saca
+        realizado = receita bruta do grão ÷ sacas do mês.
       </p>
     </Card>
   )

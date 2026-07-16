@@ -12,7 +12,7 @@ import {
   type StatusOrcamento,
 } from '../lib/tipos'
 import { competenciasDisponiveis } from '../lib/dre'
-import { catalogoPorLinha, mapaEfetivo } from '../lib/planoContas'
+import { catalogoPorLinha, mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { parsePlanilha, type ContaConhecida, type ResultadoImport } from '../lib/importar'
 import {
   PERIODICIDADES,
@@ -21,6 +21,8 @@ import {
   periodosDoAno,
   indiceDoMes,
   distribuirSazonal,
+  contasReceitaGrao,
+  valorReceita,
   rotuloMesCurto,
   type Periodicidade,
 } from '../lib/orcamento'
@@ -44,7 +46,6 @@ export function OrcamentoPage() {
   const podeEditar = podeEditarOrcamento(usuario?.papel)
   const podeAprovar = podeAprovarOrcamento(usuario?.papel)
 
-  // Abre na competência mais recente com dados (lançamentos ou orçamento salvo).
   const competenciaComDados = useMemo(() => {
     const comDados = [
       ...competenciasDisponiveis(estado.lancamentos),
@@ -57,10 +58,7 @@ export function OrcamentoPage() {
   const [ano, setAno] = useState(() => Number(competenciaComDados.slice(0, 4)))
   const [indice, setIndice] = useState(() => Number(competenciaComDados.slice(5, 7)) - 1)
 
-  const meses = useMemo(
-    () => mesesDoPeriodo(periodicidade, ano, indice),
-    [periodicidade, ano, indice],
-  )
+  const meses = useMemo(() => mesesDoPeriodo(periodicidade, ano, indice), [periodicidade, ano, indice])
   const multi = periodicidade !== 'mensal'
 
   const anos = useMemo(() => {
@@ -78,32 +76,65 @@ export function OrcamentoPage() {
 
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const grupos = useMemo(() => catalogoPorLinha(estado.lancamentos, mapa), [estado.lancamentos, mapa])
-  const gruposComContas = grupos.filter((g) => g.contas.length > 0)
-  const contasConhecidas = useMemo<ContaConhecida[]>(
-    () => gruposComContas.flatMap((g) => g.contas.map((c) => ({ conta: c.conta, descricao: c.descricao }))),
-    [gruposComContas],
+
+  // Contas de receita de grão são orçadas por sacas × preço (seção própria);
+  // saem do editor de valor para não haver dupla entrada.
+  const contasGrao = useMemo(() => contasReceitaGrao(mapa), [mapa])
+  const contasGraoSet = useMemo(() => new Set(contasGrao), [contasGrao])
+  const contasGraoInfo = useMemo(
+    () => contasGrao.map((c) => ({ conta: c, descricao: nomeConta(c) })),
+    [contasGrao],
   )
 
-  const salvoDoMes = (m: string) => estado.orcamentos.find((o) => o.competencia === m) ?? null
-  const valsDeEstado = (ms: string[]): ValsPorMes =>
-    Object.fromEntries(ms.map((m) => [m, { ...(salvoDoMes(m)?.valores ?? {}) }]))
+  const gruposValor = grupos
+    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasGraoSet.has(c.conta)) }))
+    .filter((g) => g.contas.length > 0)
+  const semContas = gruposValor.length === 0 && contasGrao.length === 0
 
-  const [vals, setVals] = useState<ValsPorMes>(() => valsDeEstado(meses))
+  const contasConhecidas = useMemo<ContaConhecida[]>(
+    () =>
+      grupos.flatMap((g) => g.contas.map((c) => ({ conta: c.conta, descricao: c.descricao }))),
+    [grupos],
+  )
+  const [importarAberto, setImportarAberto] = useState(false)
+
+  const salvoDoMes = (m: string) => estado.orcamentos.find((o) => o.competencia === m) ?? null
+  const carregar = (ms: string[]) => {
+    const vals: ValsPorMes = {}
+    const sacas: ValsPorMes = {}
+    const precos: ValsPorMes = {}
+    for (const m of ms) {
+      const o = salvoDoMes(m)
+      // vals guarda TODAS as contas (inclusive o valor legado das contas de grão,
+      // p/ não perder orçamentos antigos que gravavam a receita de grão só por valor).
+      vals[m] = { ...(o?.valores ?? {}) }
+      sacas[m] = { ...(o?.sacas ?? {}) }
+      precos[m] = { ...(o?.precoSaca ?? {}) }
+    }
+    return { vals, sacas, precos }
+  }
+
+  const inicial = useMemo(() => carregar(meses), []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [vals, setVals] = useState<ValsPorMes>(inicial.vals)
+  const [sacas, setSacas] = useState<ValsPorMes>(inicial.sacas)
+  const [precos, setPrecos] = useState<ValsPorMes>(inicial.precos)
   const [origem, setOrigem] = useState<OrigemOrcamento>(() => salvoDoMes(meses[0])?.origem ?? 'manual')
   const [sugerindo, setSugerindo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [importarAberto, setImportarAberto] = useState(false)
 
-  // Recarrega os valores do estado ao trocar de período (periodicidade/ano/índice).
+  // Recarrega ao trocar de período (periodicidade/ano/índice).
   const chave = `${periodicidade}|${ano}|${indice}`
   const [ultimaChave, setUltimaChave] = useState(chave)
   if (ultimaChave !== chave) {
     setUltimaChave(chave)
-    setVals(valsDeEstado(meses))
-    const primeiro = meses.map(salvoDoMes).find(Boolean)
-    setOrigem(primeiro?.origem ?? 'manual')
+    const c = carregar(meses)
+    setVals(c.vals)
+    setSacas(c.sacas)
+    setPrecos(c.precos)
+    setOrigem(meses.map(salvoDoMes).find(Boolean)?.origem ?? 'manual')
   }
 
+  // Acessores de valor (contas não-grão).
   const getV = (m: string, conta: string) => vals[m]?.[conta] ?? 0
   const setV = (m: string, conta: string, n: number) =>
     setVals((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
@@ -117,28 +148,72 @@ export function OrcamentoPage() {
     })
   }
 
+  // Acessores de receita de grão (sacas × preço → valor).
+  const getSaca = (m: string, conta: string) => sacas[m]?.[conta] ?? 0
+  const getPreco = (m: string, conta: string) => precos[m]?.[conta] ?? 0
+  const setSaca = (m: string, conta: string, n: number) =>
+    setSacas((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
+  const setPreco = (m: string, conta: string, n: number) =>
+    setPrecos((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
+  // Receita da conta de grão: sacas × preço quando informados; senão o valor
+  // legado guardado em `vals` (orçamento antigo que só tinha valor).
+  const valorGrao = (m: string, conta: string) =>
+    getSaca(m, conta) || getPreco(m, conta)
+      ? valorReceita(getSaca(m, conta), getPreco(m, conta))
+      : (vals[m]?.[conta] ?? 0)
+  const totalSacas = (conta: string) => meses.reduce((s, m) => s + getSaca(m, conta), 0)
+  const totalValorGrao = (conta: string) => meses.reduce((s, m) => s + valorGrao(m, conta), 0)
+  const setTotalSacas = (conta: string, total: number) => {
+    const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+    setSacas((a) => {
+      const next = { ...a }
+      for (const m of meses) next[m] = { ...next[m], [conta]: dist[m] }
+      return next
+    })
+  }
+
   const trocarPeriodicidade = (p: Periodicidade) => {
     const primeiroMesAtual = Number(meses[0].slice(5, 7))
     setPeriodicidade(p)
     setIndice(indiceDoMes(p, primeiroMesAtual))
   }
 
+  // Valores efetivos de um mês (não-grão + receita de grão calculada).
+  const valoresDoMes = (m: string): Record<string, number> => {
+    const out = { ...limpo(vals[m] ?? {}) }
+    for (const c of contasGrao) {
+      const v = valorGrao(m, c)
+      if (v !== 0) out[c] = v
+      else delete out[c]
+    }
+    return out
+  }
+
   // Situação agregada do período.
   const salvosDoPeriodo = meses.map(salvoDoMes).filter(Boolean) as Orcamento[]
   const temAlgum = salvosDoPeriodo.length > 0
-  const alterado = meses.some((m) => canon(vals[m] ?? {}) !== canon(salvoDoMes(m)?.valores ?? {}))
+  const alterado = meses.some(
+    (m) =>
+      canon(valoresDoMes(m)) !== canon(salvoDoMes(m)?.valores ?? {}) ||
+      canon(sacas[m] ?? {}) !== canon(salvoDoMes(m)?.sacas ?? {}) ||
+      canon(precos[m] ?? {}) !== canon(salvoDoMes(m)?.precoSaca ?? {}),
+  )
   const todosAprovados = temAlgum && salvosDoPeriodo.every((o) => orcamentoAprovado(o))
   const aprovado = todosAprovados && !alterado
 
   const persistir = (status: StatusOrcamento) => {
     const agora = new Date().toISOString()
     for (const m of meses) {
-      const valoresMes = limpo(vals[m] ?? {})
-      // Não cria registro para mês vazio que nunca teve orçamento.
-      if (Object.keys(valoresMes).length === 0 && !salvoDoMes(m)) continue
+      const valores = valoresDoMes(m)
+      const sc = limpo(sacas[m] ?? {})
+      const pr = limpo(precos[m] ?? {})
+      const vazio = !Object.keys(valores).length && !Object.keys(sc).length && !Object.keys(pr).length
+      if (vazio && !salvoDoMes(m)) continue
       salvarOrcamento({
         competencia: m,
-        valores: valoresMes,
+        valores,
+        sacas: sc,
+        precoSaca: pr,
         origem,
         atualizadoEm: agora,
         status,
@@ -151,7 +226,8 @@ export function OrcamentoPage() {
   const salvar = () => persistir('rascunho')
   const aprovar = () => persistir('aprovado')
 
-  // Sugestão da IA: valor MENSAL por conta, aplicado a cada mês do período.
+  // Sugestão da IA: valor MENSAL por conta, aplicado a cada mês. Só contas de
+  // valor — a receita de grão é planejada por volume × preço na seção própria.
   const sugerir = async () => {
     setSugerindo(true)
     setErro(null)
@@ -175,7 +251,9 @@ export function OrcamentoPage() {
         const next = { ...a }
         for (const m of meses) {
           next[m] = { ...next[m] }
-          for (const [conta, v] of Object.entries(sugeridos)) next[m][conta] = v
+          for (const [conta, v] of Object.entries(sugeridos)) {
+            if (!contasGraoSet.has(conta)) next[m][conta] = v
+          }
         }
         return next
       })
@@ -187,12 +265,14 @@ export function OrcamentoPage() {
     }
   }
 
-  // Import: valores por conta são TOTAIS DO PERÍODO, distribuídos pela sazonalidade.
+  // Import: totais do período por conta, distribuídos pela sazonalidade. Só
+  // contas de valor (receita de grão fica na seção volume × preço).
   const aplicarImportacao = (importados: Record<string, number>, origemImport: OrigemOrcamento) => {
     setVals((a) => {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m] }
       for (const [conta, total] of Object.entries(importados)) {
+        if (contasGraoSet.has(conta)) continue
         const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
         for (const m of meses) next[m][conta] = dist[m]
       }
@@ -202,11 +282,9 @@ export function OrcamentoPage() {
     setImportarAberto(false)
   }
 
-  const semContas = gruposComContas.length === 0
-  const totalPeriodo = gruposComContas.reduce(
-    (s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0),
-    0,
-  )
+  const totalPeriodo =
+    gruposValor.reduce((s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0), 0) +
+    contasGrao.reduce((s, c) => s + totalValorGrao(c), 0)
 
   return (
     <div className={`mx-auto px-6 py-8 ${multi ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -262,9 +340,7 @@ export function OrcamentoPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-md text-sm text-muted">
             {podeEditar
-              ? multi
-                ? 'Preencha mês a mês. A coluna “Total do período” distribui pela sazonalidade do histórico da conta — depois é só ajustar.'
-                : 'Defina o orçamento de cada conta. Peça uma sugestão da IA com base no histórico e no mercado de grãos.'
+              ? 'A receita de grão é orçada por sacas × preço/saca (o valor é calculado). As demais contas, por valor.'
               : 'Você tem acesso somente de consulta — o orçamento é exibido, mas não pode ser alterado.'}
           </p>
           {podeEditar && (
@@ -286,47 +362,68 @@ export function OrcamentoPage() {
             Nenhuma conta classificada ainda. Sincronize e classifique os lançamentos em{' '}
             <strong className="text-ink">Lançamentos</strong> para orçar conta a conta.
           </p>
-        ) : multi ? (
-          <GradeMeses
-            grupos={gruposComContas}
-            meses={meses}
-            getV={getV}
-            setV={setV}
-            totalConta={totalConta}
-            setTotalConta={setTotalConta}
-            podeEditar={podeEditar}
-          />
         ) : (
-          <div className="flex flex-col gap-5">
-            {gruposComContas.map((g) => {
-              const total = g.contas.reduce((s, c) => s + getV(meses[0], c.conta), 0)
-              return (
-                <div key={g.linha}>
-                  <div className="mb-1.5 flex items-center justify-between border-b border-line pb-1">
-                    <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
-                      {META_LINHAS[g.linha].rotulo}
-                    </span>
-                    <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(total)}</span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    {g.contas.map((c) => (
-                      <div key={c.conta} className="grid grid-cols-[1fr_160px] items-center gap-3">
-                        <span className="truncate text-sm text-muted">
-                          <span className="font-mono text-xs text-faint">{c.conta}</span>
-                          {c.descricao && ` · ${c.descricao}`}
-                        </span>
-                        <NumInput
-                          value={getV(meses[0], c.conta)}
-                          onChange={(v) => setV(meses[0], c.conta, v ?? 0)}
-                          min={0}
-                          disabled={!podeEditar}
-                        />
+          <div className="flex flex-col gap-6">
+            {contasGrao.length > 0 && (
+              <ReceitaPorGrao
+                contas={contasGraoInfo}
+                meses={meses}
+                getSaca={getSaca}
+                setSaca={setSaca}
+                getPreco={getPreco}
+                setPreco={setPreco}
+                valorGrao={valorGrao}
+                totalSacas={totalSacas}
+                setTotalSacas={setTotalSacas}
+                totalValorGrao={totalValorGrao}
+                podeEditar={podeEditar}
+              />
+            )}
+
+            {gruposValor.length > 0 &&
+              (multi ? (
+                <GradeMeses
+                  grupos={gruposValor}
+                  meses={meses}
+                  getV={getV}
+                  setV={setV}
+                  totalConta={totalConta}
+                  setTotalConta={setTotalConta}
+                  podeEditar={podeEditar}
+                />
+              ) : (
+                <div className="flex flex-col gap-5">
+                  {gruposValor.map((g) => {
+                    const total = g.contas.reduce((s, c) => s + getV(meses[0], c.conta), 0)
+                    return (
+                      <div key={g.linha}>
+                        <div className="mb-1.5 flex items-center justify-between border-b border-line pb-1">
+                          <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
+                            {META_LINHAS[g.linha].rotulo}
+                          </span>
+                          <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(total)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {g.contas.map((c) => (
+                            <div key={c.conta} className="grid grid-cols-[1fr_160px] items-center gap-3">
+                              <span className="truncate text-sm text-muted">
+                                <span className="font-mono text-xs text-faint">{c.conta}</span>
+                                {c.descricao && ` · ${c.descricao}`}
+                              </span>
+                              <NumInput
+                                value={getV(meses[0], c.conta)}
+                                onChange={(v) => setV(meses[0], c.conta, v ?? 0)}
+                                min={0}
+                                disabled={!podeEditar}
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+              ))}
           </div>
         )}
 
@@ -365,7 +462,7 @@ export function OrcamentoPage() {
 
       <p className="text-xs text-faint">
         Valores em reais, magnitude positiva. O orçamento é sempre guardado mês a mês — a periodicidade
-        é só a lente de edição. O DRE compara o realizado com este orçamento, conta a conta.
+        é só a lente de edição. A receita de grão é orçada por sacas × preço; o valor entra no DRE.
       </p>
 
       {importarAberto && (
@@ -383,6 +480,114 @@ export function OrcamentoPage() {
 interface GrupoLinha {
   linha: keyof typeof META_LINHAS
   contas: { conta: string; descricao: string }[]
+}
+
+function ReceitaPorGrao({
+  contas,
+  meses,
+  getSaca,
+  setSaca,
+  getPreco,
+  setPreco,
+  valorGrao,
+  totalSacas,
+  setTotalSacas,
+  totalValorGrao,
+  podeEditar,
+}: {
+  contas: { conta: string; descricao: string }[]
+  meses: string[]
+  getSaca: (m: string, conta: string) => number
+  setSaca: (m: string, conta: string, n: number) => void
+  getPreco: (m: string, conta: string) => number
+  setPreco: (m: string, conta: string, n: number) => void
+  valorGrao: (m: string, conta: string) => number
+  totalSacas: (conta: string) => number
+  setTotalSacas: (conta: string, total: number) => void
+  totalValorGrao: (conta: string) => number
+  podeEditar: boolean
+}) {
+  const totalGeral = contas.reduce((s, c) => s + totalValorGrao(c.conta), 0)
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between border-b border-line pb-1">
+        <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
+          Receita por grão · sacas × preço
+        </span>
+        <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(totalGeral)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-faint">
+              <th className="sticky left-0 z-10 bg-surface py-2 pr-3 text-left font-semibold">Grão</th>
+              {meses.map((m) => (
+                <th key={m} className="min-w-[92px] px-1.5 py-2 text-right font-semibold">
+                  {rotuloMesCurto(m)}
+                </th>
+              ))}
+              <th className="min-w-[110px] px-1.5 py-2 text-right font-semibold text-green">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contas.map((c) => {
+              const tSacas = totalSacas(c.conta)
+              const tValor = totalValorGrao(c.conta)
+              const precoMedio = tSacas > 0 ? tValor / tSacas : 0
+              return (
+                <Fragment key={c.conta}>
+                  <tr>
+                    <td
+                      colSpan={meses.length + 2}
+                      className="sticky left-0 bg-cream/40 py-1.5 pl-0.5 pr-2 font-head text-xs font-semibold text-ink"
+                    >
+                      <span className="font-mono text-faint">{c.conta}</span>
+                      {c.descricao && ` · ${c.descricao}`}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-cream/30">
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-muted">Sacas</td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1 py-1">
+                        <NumInput value={getSaca(m, c.conta)} onChange={(v) => setSaca(m, c.conta, v ?? 0)} min={0} disabled={!podeEditar} />
+                      </td>
+                    ))}
+                    <td className="px-1 py-1">
+                      <NumInput value={tSacas} onChange={(v) => setTotalSacas(c.conta, v ?? 0)} min={0} disabled={!podeEditar} />
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-cream/30">
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-muted">Preço R$/saca</td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1 py-1">
+                        <NumInput value={getPreco(m, c.conta)} onChange={(v) => setPreco(m, c.conta, v ?? 0)} min={0} disabled={!podeEditar} />
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted" title="Preço médio ponderado">
+                      {precoMedio > 0 ? `~${formatBRL(precoMedio)}` : '—'}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-line/60">
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-[11px] font-semibold uppercase tracking-wide text-green">
+                      = Receita
+                    </td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-ink">
+                        {formatBRL(valorGrao(m, c.conta))}
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-green">
+                      {formatBRL(tValor)}
+                    </td>
+                  </tr>
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 function GradeMeses({
@@ -585,12 +790,10 @@ function ModalImportar({
           </button>
         </div>
 
-        {multi && (
-          <p className="mb-3 rounded-lg border border-green/30 bg-green/5 p-2.5 text-xs text-green-deep">
-            Os valores importados são tratados como <strong>totais do período</strong> e distribuídos
-            pelos meses conforme a sazonalidade do histórico — você ajusta na grade depois.
-          </p>
-        )}
+        <p className="mb-3 rounded-lg border border-green/30 bg-green/5 p-2.5 text-xs text-green-deep">
+          Importa <strong>contas de valor</strong>{multi ? ' (tratadas como totais do período, distribuídas pela sazonalidade)' : ''}. A
+          receita de grão é planejada por sacas × preço na grade acima.
+        </p>
 
         <div className="mb-4 flex gap-1.5">
           {(['planilha', 'documento'] as const).map((m) => (

@@ -151,6 +151,14 @@ export interface Orcamento {
    * DRE são derivados somando as contas de cada linha via classificação.
    */
   valores: Record<string, number>
+  /**
+   * Sacas ORÇADAS por conta de receita de grão (volume planejado). Para essas
+   * contas o valor é derivado: `valores[conta] = sacas[conta] × precoSaca[conta]`.
+   * Ausente/zero nas contas que não são receita de grão.
+   */
+  sacas?: Record<string, number>
+  /** Preço/saca ORÇADO por conta de receita de grão. */
+  precoSaca?: Record<string, number>
   origem: OrigemOrcamento
   atualizadoEm: string
   /** Aprovação do sócio. Ausente = trata-se como `rascunho`. */

@@ -8,7 +8,8 @@
 // Ao informar um total de período, ele é distribuído pelos meses seguindo a
 // SAZONALIDADE do histórico da conta (a venda de grãos concentra em certos
 // meses); sem histórico, distribui igual. A soma dos meses fecha com o total.
-import type { LancamentoCanonico } from './tipos'
+import type { LancamentoCanonico, MapaClassificacao } from './tipos'
+import { GRAO_DE_CONTA } from './planoContas'
 
 export const PERIODICIDADES = ['mensal', 'trimestral', 'quadrimestral', 'anual'] as const
 export type Periodicidade = (typeof PERIODICIDADES)[number]
@@ -142,4 +143,28 @@ export function distribuirSazonal(
     }
   })
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Receita de grão orçada por VOLUME × PREÇO.
+//
+// As contas de venda de grão (3.1.0x) são orçadas por sacas × preço/saca; o
+// valor que vai para o DRE é o produto. As demais contas seguem só por valor.
+// ---------------------------------------------------------------------------
+
+/** true se a conta é RECEITA de grão (venda de soja/milho/sorgo/café). */
+export function ehReceitaGrao(conta: string, mapa: MapaClassificacao): boolean {
+  return !!GRAO_DE_CONTA[conta] && mapa[conta] === 'receita_bruta'
+}
+
+/** Contas de receita de grão presentes no mapa efetivo, em ordem. */
+export function contasReceitaGrao(mapa: MapaClassificacao): string[] {
+  return Object.keys(GRAO_DE_CONTA)
+    .filter((c) => mapa[c] === 'receita_bruta')
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/** Valor da receita orçada de uma conta de grão = sacas × preço/saca (em centavos exatos). */
+export function valorReceita(sacas: number, precoSaca: number): number {
+  return Math.round(sacas * precoSaca * 100) / 100
 }

@@ -6,7 +6,11 @@ import {
   sazonalidadeConta,
   pesosSazonais,
   distribuirSazonal,
+  ehReceitaGrao,
+  contasReceitaGrao,
+  valorReceita,
 } from './orcamento'
+import { mapaEfetivo } from './planoContas'
 import type { LancamentoCanonico } from './tipos'
 
 describe('mesesDoPeriodo', () => {
@@ -83,5 +87,22 @@ describe('sazonalidade e distribuição', () => {
     expect(soma).toBe(100)
     // 100/3 = 33,33 + 33,33 + 33,34
     expect(d['2026-03']).toBeCloseTo(33.34, 2)
+  })
+})
+
+describe('receita de grão (volume × preço)', () => {
+  const mapa = mapaEfetivo([])
+
+  it('identifica as contas de receita de grão', () => {
+    expect(ehReceitaGrao('3.1.01', mapa)).toBe(true) // venda de soja
+    expect(ehReceitaGrao('4.1.01', mapa)).toBe(false) // compra de soja (custo)
+    expect(ehReceitaGrao('3.1.99', mapa)).toBe(false)
+    expect(contasReceitaGrao(mapa)).toEqual(['3.1.01', '3.1.02', '3.1.03', '3.1.05'])
+  })
+
+  it('valorReceita = sacas × preço, em centavos exatos', () => {
+    expect(valorReceita(1000, 120.5)).toBe(120_500)
+    expect(valorReceita(0, 120)).toBe(0)
+    expect(valorReceita(333, 100.005)).toBe(33_301.67) // 33301,665 → arredonda em centavos
   })
 })
