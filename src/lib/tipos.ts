@@ -157,8 +157,14 @@ export interface Orcamento {
    * Ausente/zero nas contas que não são receita de grão.
    */
   sacas?: Record<string, number>
-  /** Preço/saca ORÇADO por conta de receita de grão. */
+  /** Preço de VENDA/saca ORÇADO por conta de receita de grão. */
   precoSaca?: Record<string, number>
+  /**
+   * Margem bruta esperada por saca (R$/saca), por conta de receita de grão.
+   * Preço de compra/saca = precoSaca − margemSaca; o custo de aquisição da conta
+   * de custo do grão (4.1.0x) = sacas × preço de compra.
+   */
+  margemSaca?: Record<string, number>
   origem: OrigemOrcamento
   atualizadoEm: string
   /** Aprovação do sócio. Ausente = trata-se como `rascunho`. */

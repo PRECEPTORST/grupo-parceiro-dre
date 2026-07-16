@@ -8,7 +8,7 @@
 // Ao informar um total de período, ele é distribuído pelos meses seguindo a
 // SAZONALIDADE do histórico da conta (a venda de grãos concentra em certos
 // meses); sem histórico, distribui igual. A soma dos meses fecha com o total.
-import type { LancamentoCanonico, MapaClassificacao } from './tipos'
+import type { Grao, LancamentoCanonico, MapaClassificacao } from './tipos'
 import { GRAO_DE_CONTA } from './planoContas'
 
 export const PERIODICIDADES = ['mensal', 'trimestral', 'quadrimestral', 'anual'] as const
@@ -164,7 +164,33 @@ export function contasReceitaGrao(mapa: MapaClassificacao): string[] {
     .sort((a, b) => a.localeCompare(b))
 }
 
+/** Conta de CUSTO (aquisição) do mesmo grão de uma conta de receita. */
+export function contaCustoDaReceita(receitaConta: string, mapa: MapaClassificacao): string | undefined {
+  const g: Grao | undefined = GRAO_DE_CONTA[receitaConta]
+  if (!g) return undefined
+  return Object.keys(GRAO_DE_CONTA).find((c) => GRAO_DE_CONTA[c] === g && mapa[c] === 'custo_produto')
+}
+
+/** Contas de custo de grão presentes no mapa efetivo, em ordem. */
+export function contasCustoGrao(mapa: MapaClassificacao): string[] {
+  return Object.keys(GRAO_DE_CONTA)
+    .filter((c) => mapa[c] === 'custo_produto')
+    .sort((a, b) => a.localeCompare(b))
+}
+
 /** Valor da receita orçada de uma conta de grão = sacas × preço/saca (em centavos exatos). */
 export function valorReceita(sacas: number, precoSaca: number): number {
   return Math.round(sacas * precoSaca * 100) / 100
+}
+
+/**
+ * Custo de aquisição orçado = sacas × preço de COMPRA, onde
+ * preço de compra/saca = preço de venda/saca − margem bruta/saca.
+ * A margem bruta esperada por saca é o que se subtrai da receita p/ chegar à compra.
+ */
+export function precoCompraSaca(precoVendaSaca: number, margemSaca: number): number {
+  return precoVendaSaca - margemSaca
+}
+export function valorCusto(sacas: number, precoVendaSaca: number, margemSaca: number): number {
+  return Math.round(sacas * precoCompraSaca(precoVendaSaca, margemSaca) * 100) / 100
 }

@@ -22,7 +22,11 @@ import {
   indiceDoMes,
   distribuirSazonal,
   contasReceitaGrao,
+  contaCustoDaReceita,
+  contasCustoGrao,
   valorReceita,
+  valorCusto,
+  precoCompraSaca,
   rotuloMesCurto,
   type Periodicidade,
 } from '../lib/orcamento'
@@ -77,10 +81,22 @@ export function OrcamentoPage() {
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
   const grupos = useMemo(() => catalogoPorLinha(estado.lancamentos, mapa), [estado.lancamentos, mapa])
 
-  // Contas de receita de grão são orçadas por sacas × preço (seção própria);
-  // saem do editor de valor para não haver dupla entrada.
+  // Receita de grão é orçada por sacas × preço, e o CUSTO (aquisição) é derivado
+  // pela margem/saca (preço de compra = venda − margem). Ambas as contas — receita
+  // (3.1.0x) e custo (4.1.0x) — saem do editor de valor para não haver dupla entrada.
   const contasGrao = useMemo(() => contasReceitaGrao(mapa), [mapa])
-  const contasGraoSet = useMemo(() => new Set(contasGrao), [contasGrao])
+  const custoDeReceita = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const c of contasGrao) {
+      const cc = contaCustoDaReceita(c, mapa)
+      if (cc) m[c] = cc
+    }
+    return m
+  }, [contasGrao, mapa])
+  const contasGraoSet = useMemo(
+    () => new Set<string>([...contasGrao, ...contasCustoGrao(mapa)]),
+    [contasGrao, mapa],
+  )
   const contasGraoInfo = useMemo(
     () => contasGrao.map((c) => ({ conta: c, descricao: nomeConta(c) })),
     [contasGrao],
@@ -103,21 +119,24 @@ export function OrcamentoPage() {
     const vals: ValsPorMes = {}
     const sacas: ValsPorMes = {}
     const precos: ValsPorMes = {}
+    const margens: ValsPorMes = {}
     for (const m of ms) {
       const o = salvoDoMes(m)
       // vals guarda TODAS as contas (inclusive o valor legado das contas de grão,
-      // p/ não perder orçamentos antigos que gravavam a receita de grão só por valor).
+      // p/ não perder orçamentos antigos que gravavam a receita/custo de grão só por valor).
       vals[m] = { ...(o?.valores ?? {}) }
       sacas[m] = { ...(o?.sacas ?? {}) }
       precos[m] = { ...(o?.precoSaca ?? {}) }
+      margens[m] = { ...(o?.margemSaca ?? {}) }
     }
-    return { vals, sacas, precos }
+    return { vals, sacas, precos, margens }
   }
 
   const inicial = useMemo(() => carregar(meses), []) // eslint-disable-line react-hooks/exhaustive-deps
   const [vals, setVals] = useState<ValsPorMes>(inicial.vals)
   const [sacas, setSacas] = useState<ValsPorMes>(inicial.sacas)
   const [precos, setPrecos] = useState<ValsPorMes>(inicial.precos)
+  const [margens, setMargens] = useState<ValsPorMes>(inicial.margens)
   const [origem, setOrigem] = useState<OrigemOrcamento>(() => salvoDoMes(meses[0])?.origem ?? 'manual')
   const [sugerindo, setSugerindo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -131,6 +150,7 @@ export function OrcamentoPage() {
     setVals(c.vals)
     setSacas(c.sacas)
     setPrecos(c.precos)
+    setMargens(c.margens)
     setOrigem(meses.map(salvoDoMes).find(Boolean)?.origem ?? 'manual')
   }
 
@@ -148,21 +168,37 @@ export function OrcamentoPage() {
     })
   }
 
-  // Acessores de receita de grão (sacas × preço → valor).
+  // Acessores de receita de grão (sacas × preço → valor; margem → preço de compra → custo).
   const getSaca = (m: string, conta: string) => sacas[m]?.[conta] ?? 0
   const getPreco = (m: string, conta: string) => precos[m]?.[conta] ?? 0
+  const getMargem = (m: string, conta: string) => margens[m]?.[conta] ?? 0
   const setSaca = (m: string, conta: string, n: number) =>
     setSacas((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
   const setPreco = (m: string, conta: string, n: number) =>
     setPrecos((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
-  // Receita da conta de grão: sacas × preço quando informados; senão o valor
-  // legado guardado em `vals` (orçamento antigo que só tinha valor).
+  const setMargem = (m: string, conta: string, n: number) =>
+    setMargens((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
+  // "Grão ativo" no mês = há sacas, preço OU margem informados → usa o modelo
+  // volume × preço. Senão cai no valor LEGADO (orçamento antigo só por valor).
+  const graoAtivo = (m: string, conta: string) =>
+    !!(getSaca(m, conta) || getPreco(m, conta) || getMargem(m, conta))
+  const precoCompra = (m: string, conta: string) =>
+    precoCompraSaca(getPreco(m, conta), getMargem(m, conta))
+  // Receita da conta de grão (3.1.0x).
   const valorGrao = (m: string, conta: string) =>
-    getSaca(m, conta) || getPreco(m, conta)
+    graoAtivo(m, conta)
       ? valorReceita(getSaca(m, conta), getPreco(m, conta))
       : (vals[m]?.[conta] ?? 0)
+  // Custo de aquisição (conta de custo 4.1.0x) = sacas × preço de compra.
+  const custoGrao = (m: string, conta: string) => {
+    const cc = custoDeReceita[conta]
+    return graoAtivo(m, conta)
+      ? valorCusto(getSaca(m, conta), getPreco(m, conta), getMargem(m, conta))
+      : (cc ? (vals[m]?.[cc] ?? 0) : 0)
+  }
   const totalSacas = (conta: string) => meses.reduce((s, m) => s + getSaca(m, conta), 0)
   const totalValorGrao = (conta: string) => meses.reduce((s, m) => s + valorGrao(m, conta), 0)
+  const totalCustoGrao = (conta: string) => meses.reduce((s, m) => s + custoGrao(m, conta), 0)
   const setTotalSacas = (conta: string, total: number) => {
     const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
     setSacas((a) => {
@@ -178,13 +214,18 @@ export function OrcamentoPage() {
     setIndice(indiceDoMes(p, primeiroMesAtual))
   }
 
-  // Valores efetivos de um mês (não-grão + receita de grão calculada).
+  // Valores efetivos de um mês: contas de valor + receita de grão (3.1.0x) e
+  // custo de aquisição (4.1.0x) derivados de sacas/preço/margem.
   const valoresDoMes = (m: string): Record<string, number> => {
     const out = { ...limpo(vals[m] ?? {}) }
+    const set = (conta: string, v: number) => {
+      if (v !== 0) out[conta] = v
+      else delete out[conta]
+    }
     for (const c of contasGrao) {
-      const v = valorGrao(m, c)
-      if (v !== 0) out[c] = v
-      else delete out[c]
+      set(c, valorGrao(m, c))
+      const cc = custoDeReceita[c]
+      if (cc) set(cc, custoGrao(m, c))
     }
     return out
   }
@@ -196,7 +237,8 @@ export function OrcamentoPage() {
     (m) =>
       canon(valoresDoMes(m)) !== canon(salvoDoMes(m)?.valores ?? {}) ||
       canon(sacas[m] ?? {}) !== canon(salvoDoMes(m)?.sacas ?? {}) ||
-      canon(precos[m] ?? {}) !== canon(salvoDoMes(m)?.precoSaca ?? {}),
+      canon(precos[m] ?? {}) !== canon(salvoDoMes(m)?.precoSaca ?? {}) ||
+      canon(margens[m] ?? {}) !== canon(salvoDoMes(m)?.margemSaca ?? {}),
   )
   const todosAprovados = temAlgum && salvosDoPeriodo.every((o) => orcamentoAprovado(o))
   const aprovado = todosAprovados && !alterado
@@ -207,13 +249,19 @@ export function OrcamentoPage() {
       const valores = valoresDoMes(m)
       const sc = limpo(sacas[m] ?? {})
       const pr = limpo(precos[m] ?? {})
-      const vazio = !Object.keys(valores).length && !Object.keys(sc).length && !Object.keys(pr).length
+      const mg = limpo(margens[m] ?? {})
+      const vazio =
+        !Object.keys(valores).length &&
+        !Object.keys(sc).length &&
+        !Object.keys(pr).length &&
+        !Object.keys(mg).length
       if (vazio && !salvoDoMes(m)) continue
       salvarOrcamento({
         competencia: m,
         valores,
         sacas: sc,
         precoSaca: pr,
+        margemSaca: mg,
         origem,
         atualizadoEm: agora,
         status,
@@ -284,7 +332,7 @@ export function OrcamentoPage() {
 
   const totalPeriodo =
     gruposValor.reduce((s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0), 0) +
-    contasGrao.reduce((s, c) => s + totalValorGrao(c), 0)
+    contasGrao.reduce((s, c) => s + totalValorGrao(c) + totalCustoGrao(c), 0)
 
   return (
     <div className={`mx-auto px-6 py-8 ${multi ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -340,7 +388,7 @@ export function OrcamentoPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-md text-sm text-muted">
             {podeEditar
-              ? 'A receita de grão é orçada por sacas × preço/saca (o valor é calculado). As demais contas, por valor.'
+              ? 'Grãos: sacas × preço/saca = receita; a margem bruta/saca define o preço de compra (venda − margem) e o custo de aquisição. As demais contas, por valor.'
               : 'Você tem acesso somente de consulta — o orçamento é exibido, mas não pode ser alterado.'}
           </p>
           {podeEditar && (
@@ -372,10 +420,15 @@ export function OrcamentoPage() {
                 setSaca={setSaca}
                 getPreco={getPreco}
                 setPreco={setPreco}
+                getMargem={getMargem}
+                setMargem={setMargem}
+                precoCompra={precoCompra}
                 valorGrao={valorGrao}
+                custoGrao={custoGrao}
                 totalSacas={totalSacas}
                 setTotalSacas={setTotalSacas}
                 totalValorGrao={totalValorGrao}
+                totalCustoGrao={totalCustoGrao}
                 podeEditar={podeEditar}
               />
             )}
@@ -462,7 +515,8 @@ export function OrcamentoPage() {
 
       <p className="text-xs text-faint">
         Valores em reais, magnitude positiva. O orçamento é sempre guardado mês a mês — a periodicidade
-        é só a lente de edição. A receita de grão é orçada por sacas × preço; o valor entra no DRE.
+        é só a lente de edição. Grãos: sacas × preço = receita e sacas × (preço − margem) = custo de
+        aquisição — ambos entram no DRE (receita − custo = margem bruta orçada).
       </p>
 
       {importarAberto && (
@@ -489,10 +543,15 @@ function ReceitaPorGrao({
   setSaca,
   getPreco,
   setPreco,
+  getMargem,
+  setMargem,
+  precoCompra,
   valorGrao,
+  custoGrao,
   totalSacas,
   setTotalSacas,
   totalValorGrao,
+  totalCustoGrao,
   podeEditar,
 }: {
   contas: { conta: string; descricao: string }[]
@@ -501,18 +560,24 @@ function ReceitaPorGrao({
   setSaca: (m: string, conta: string, n: number) => void
   getPreco: (m: string, conta: string) => number
   setPreco: (m: string, conta: string, n: number) => void
+  getMargem: (m: string, conta: string) => number
+  setMargem: (m: string, conta: string, n: number) => void
+  precoCompra: (m: string, conta: string) => number
   valorGrao: (m: string, conta: string) => number
+  custoGrao: (m: string, conta: string) => number
   totalSacas: (conta: string) => number
   setTotalSacas: (conta: string, total: number) => void
   totalValorGrao: (conta: string) => number
+  totalCustoGrao: (conta: string) => number
   podeEditar: boolean
 }) {
   const totalGeral = contas.reduce((s, c) => s + totalValorGrao(c.conta), 0)
+  const brlSaca = (v: number) => (v > 0 ? `~${formatBRL(v)}` : '—')
   return (
     <div>
       <div className="mb-2 flex items-center justify-between border-b border-line pb-1">
         <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
-          Receita por grão · sacas × preço
+          Receita e custo por grão · sacas × preço × margem
         </span>
         <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(totalGeral)}</span>
       </div>
@@ -533,7 +598,11 @@ function ReceitaPorGrao({
             {contas.map((c) => {
               const tSacas = totalSacas(c.conta)
               const tValor = totalValorGrao(c.conta)
-              const precoMedio = tSacas > 0 ? tValor / tSacas : 0
+              const tCusto = totalCustoGrao(c.conta)
+              const tMargem = tValor - tCusto
+              const precoVendaMedio = tSacas > 0 ? tValor / tSacas : 0
+              const margemMedia = tSacas > 0 ? tMargem / tSacas : 0
+              const precoCompraMedio = tSacas > 0 ? tCusto / tSacas : 0
               return (
                 <Fragment key={c.conta}>
                   <tr>
@@ -557,17 +626,43 @@ function ReceitaPorGrao({
                     </td>
                   </tr>
                   <tr className="hover:bg-cream/30">
-                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-muted">Preço R$/saca</td>
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-muted">Preço venda R$/saca</td>
                     {meses.map((m) => (
                       <td key={m} className="px-1 py-1">
                         <NumInput value={getPreco(m, c.conta)} onChange={(v) => setPreco(m, c.conta, v ?? 0)} min={0} disabled={!podeEditar} />
                       </td>
                     ))}
-                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted" title="Preço médio ponderado">
-                      {precoMedio > 0 ? `~${formatBRL(precoMedio)}` : '—'}
+                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted" title="Preço de venda médio ponderado">
+                      {brlSaca(precoVendaMedio)}
                     </td>
                   </tr>
-                  <tr className="border-b border-line/60">
+                  <tr className="hover:bg-cream/30">
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-muted">Margem bruta R$/saca</td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1 py-1">
+                        <NumInput value={getMargem(m, c.conta)} onChange={(v) => setMargem(m, c.conta, v ?? 0)} disabled={!podeEditar} />
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted" title="Margem média ponderada">
+                      {tSacas > 0 ? `~${formatBRL(margemMedia)}` : '—'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-[11px] uppercase tracking-wide text-faint">
+                      Preço compra R$/saca
+                    </td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1.5 py-1 text-right text-xs tabular-nums text-muted">
+                        {getSaca(m, c.conta) || getPreco(m, c.conta) || getMargem(m, c.conta)
+                          ? formatBRL(precoCompra(m, c.conta))
+                          : '—'}
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted">
+                      {brlSaca(precoCompraMedio)}
+                    </td>
+                  </tr>
+                  <tr>
                     <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-[11px] font-semibold uppercase tracking-wide text-green">
                       = Receita
                     </td>
@@ -578,6 +673,30 @@ function ReceitaPorGrao({
                     ))}
                     <td className="px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-green">
                       {formatBRL(tValor)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-[11px] uppercase tracking-wide text-faint">
+                      (−) Custo aquisição
+                    </td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1.5 py-1 text-right text-xs tabular-nums text-muted">
+                        {formatBRL(custoGrao(m, c.conta))}
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs tabular-nums text-muted">{formatBRL(tCusto)}</td>
+                  </tr>
+                  <tr className="border-b border-line/60">
+                    <td className="sticky left-0 z-10 bg-surface py-1 pl-3 pr-3 text-[11px] font-semibold uppercase tracking-wide text-green">
+                      = Margem bruta
+                    </td>
+                    {meses.map((m) => (
+                      <td key={m} className="px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-ink">
+                        {formatBRL(valorGrao(m, c.conta) - custoGrao(m, c.conta))}
+                      </td>
+                    ))}
+                    <td className="px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-green">
+                      {formatBRL(tMargem)}
                     </td>
                   </tr>
                 </Fragment>

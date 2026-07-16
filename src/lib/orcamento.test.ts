@@ -8,7 +8,11 @@ import {
   distribuirSazonal,
   ehReceitaGrao,
   contasReceitaGrao,
+  contaCustoDaReceita,
+  contasCustoGrao,
   valorReceita,
+  precoCompraSaca,
+  valorCusto,
 } from './orcamento'
 import { mapaEfetivo } from './planoContas'
 import type { LancamentoCanonico } from './tipos'
@@ -104,5 +108,20 @@ describe('receita de grão (volume × preço)', () => {
     expect(valorReceita(1000, 120.5)).toBe(120_500)
     expect(valorReceita(0, 120)).toBe(0)
     expect(valorReceita(333, 100.005)).toBe(33_301.67) // 33301,665 → arredonda em centavos
+  })
+
+  it('acha a conta de custo do mesmo grão de uma conta de receita', () => {
+    expect(contaCustoDaReceita('3.1.01', mapa)).toBe('4.1.01') // soja: venda 3.1.01 → compra 4.1.01
+    expect(contaCustoDaReceita('3.1.02', mapa)).toBe('4.1.02') // milho
+    expect(contaCustoDaReceita('9.9.99', mapa)).toBeUndefined()
+    expect(contasCustoGrao(mapa)).toEqual(['4.1.01', '4.1.02', '4.1.03', '4.1.05'])
+  })
+
+  it('preço de compra e custo derivam da margem por saca', () => {
+    // Venda 120/saca, margem 20/saca → compra 100/saca.
+    expect(precoCompraSaca(120, 20)).toBe(100)
+    expect(valorCusto(1000, 120, 20)).toBe(100_000) // 1000 × 100
+    // receita − custo = sacas × margem (reconcilia a margem bruta orçada)
+    expect(valorReceita(1000, 120) - valorCusto(1000, 120, 20)).toBe(20_000)
   })
 })
