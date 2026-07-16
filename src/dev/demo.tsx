@@ -25,9 +25,10 @@ const estado = {
   orcamentos: [
     {
       competencia: '2026-02',
-      valores: { '3.1.01': 480_000 },
+      valores: { '3.1.01': 480_000, '4.1.01': 400_000 },
       sacas: { '3.1.01': 4000 },
       precoSaca: { '3.1.01': 120 },
+      margemSaca: { '3.1.01': 20 },
       origem: 'manual',
       atualizadoEm: '2026-02-01T00:00:00.000Z',
       status: 'aprovado',

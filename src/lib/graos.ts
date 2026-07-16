@@ -26,6 +26,8 @@ export interface ResumoGrao {
   receitaBruta: number
   deducoes: number
   receitaLiquida: number
+  /** Aquisição DIRETA do grão (compra da conta 4.1.0x), sem os custos rateados do CPV. */
+  aquisicao: number
   custo: number
   lucroBruto: number
   /** Receita líquida ÷ sacas do grão (null se sem sacas informadas). */
@@ -107,6 +109,7 @@ export function resumoGraos(
       receitaBruta,
       deducoes: arred(ded),
       receitaLiquida,
+      aquisicao: arred(aquisicaoGrao[g]),
       custo,
       lucroBruto,
       receitaLiquidaPorSaca: s > 0 ? arred(receitaLiquida / s) : null,

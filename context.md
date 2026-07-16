@@ -120,9 +120,11 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   + lucro/saca. Rateio: **deduções pela receita**, **custos compartilhados do CPV por volume de sacas**,
   aquisição direta pela conta do grão. Soma dos lucros brutos por grão **reconcilia com o DRE**. Sacas
   informadas manualmente na própria tela (admin/sócio). Badge "pendente de aprovação" no orçamento.
-  **Painel "Meta × realizado por grão"** (`metasGrao`): quando há orçamento de sacas/preço, compara
-  **volume (sacas real × meta)** e **preço/saca (real × meta)** com variação ▲/▼. Preço/saca realizado
-  = receita bruta do grão ÷ sacas do mês; meta vem de `Orcamento.sacas`/`precoSaca` da conta do grão.
+  **Painel "Meta × realizado por grão"** (`metasGrao`): quando há orçamento de sacas/preço/margem,
+  compara **volume (sacas)**, **preço/saca** e **margem/saca**, real × meta, com variação ▲/▼. Realizado:
+  preço/saca = receita bruta ÷ sacas; **margem/saca = (receita bruta − aquisicao) ÷ sacas** (spread
+  venda − compra, sem deduções nem CPV rateado — casa com a margem orçada). Meta vem de
+  `Orcamento.sacas`/`precoSaca`/`margemSaca`. `resumoGraos` expõe `aquisicao` (compra direta 4.1.0x).
 - **Orçamento** — `OrcamentoPage.tsx`: **Periodicidade** (mensal/trimestral/quadrimestral/anual, fixa
   no calendário) + Ano + Período no cabeçalho. **Mensal** = tela de um input por conta; **tri/quadri/
   anual** = GRADE mês a mês (colunas = meses do período) + coluna **"Total do período"** que distribui
@@ -252,7 +254,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | Identidade visual + layout (menu lateral) | ✅ Publicado |
 | Dashboard (KPIs, gráficos) + **insights AUTOMÁTICOS** + run-rate | ✅ |
 | DRE analítico + até a data de hoje | ✅ |
-| DRE por cereal + resultado por saca + **meta × realizado (volume/preço)** | ✅ |
+| DRE por cereal + resultado por saca + **meta × realizado (volume/preço/margem)** | ✅ |
 | **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
 | **Receita de grão por sacas × preço** (valor calculado) | ✅ |
 | **Margem bruta/saca → preço de compra + custo de aquisição** (grão) | ✅ |
@@ -271,15 +273,17 @@ como o cliente chamava; a plataforma real é a Enoki.)
 compra e custo"). Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos,
 `3d8fe9a` sync Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão
 sacas×preço + meta×realizado, `0e1c8dd` modo `?demo`, `bbca565` context.md, `74ff0e6` margem/custo por
-grão. GitHub `Luvas-prog/grupo-parceiro-dre` (privado). **60 testes** passando. No working tree:
+grão + meta×realizado de margem/saca (`aquisicao` no `resumoGraos`). GitHub `Luvas-prog/grupo-parceiro-
+dre` (privado). **61 testes** passando. No working tree:
 `scripts/enoki-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado em `ce8f743`.
 
-**RETOMAR AQUI (pendências abertas quando o Luciano voltar):**
-- Opcional: estender o painel **Meta × realizado** (DRE por cereal) p/ comparar **margem/saca orçada ×
-  realizada** — ⚠️ alinhar definições: a margem ORÇADA é o spread venda − compra (sem deduções); o
-  realizado do DRE (`lucroBrutoPorSaca`) inclui deduções e custos rateados. Usar `(receitaBruta −
-  custo)/sacas` do `resumoGraos` seria o comparável mais próximo.
-- Roadmap (seção 15): Sprint 3 WhatsApp OU decidir a fonte contábil da Enoki (jan–jun).
+**FEITO nesta sessão (2026-07-16, cont.):** painel **Meta × realizado** (DRE por cereal) agora compara
+também **margem/saca orçada × realizada**. Definições alinhadas: margem ORÇADA = spread venda − compra
+(`margemSaca`); margem REALIZADA = `(receitaBruta − aquisicao) / sacas` — SEM deduções nem CPV rateado.
+Para isso, `resumoGraos` passou a expor **`aquisicao`** (compra direta do grão 4.1.0x, sem o
+compartilhado). `metasGrao` em `DrePage` calcula os três eixos (volume, preço, margem).
+
+**RETOMAR AQUI (roadmap, seção 15):** Sprint 3 WhatsApp OU decidir a fonte contábil da Enoki (jan–jun).
 
 ## 14. Rodar localmente
 

@@ -46,6 +46,14 @@ describe('resumoGraos', () => {
     expect(milho.lucroBruto).toBe(130_000) // 450k líq − 320k
   })
 
+  it('expõe a aquisição DIRETA do grão (sem o CPV rateado) — base do spread venda−compra', () => {
+    expect(soja.aquisicao).toBe(600_000) // 4.1.01, sem o frete rateado
+    expect(milho.aquisicao).toBe(300_000) // 4.1.02
+    // spread venda − compra por saca = (receita bruta − aquisição) ÷ sacas
+    expect((soja.receitaBruta - soja.aquisicao) / soja.sacas).toBe(40) // (1M − 600k)/10k
+    expect((milho.receitaBruta - milho.aquisicao) / milho.sacas).toBe(40) // (500k − 300k)/5k
+  })
+
   it('calcula resultados por saca de cada grão', () => {
     expect(soja.receitaLiquidaPorSaca).toBe(90) // 900k / 10k
     expect(soja.lucroBrutoPorSaca).toBe(26) // 260k / 10k

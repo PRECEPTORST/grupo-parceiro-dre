@@ -78,8 +78,10 @@ export function DrePage() {
     [competencia, estado.lancamentos, mapa, sacasDoMes],
   )
 
-  // Meta (orçado) × realizado por grão: volume (sacas) e preço/saca. As sacas e
-  // o preço orçados vêm da conta de receita do grão no orçamento do mês.
+  // Meta (orçado) × realizado por grão: volume (sacas), preço de VENDA/saca e
+  // MARGEM bruta/saca. Orçado vem da conta de receita do grão. A margem realizada
+  // é o spread venda − compra = (receita bruta − aquisição direta) ÷ sacas — sem
+  // deduções nem custos rateados, p/ casar com a definição do orçamento.
   const metasGrao = useMemo(() => {
     if (!orcamento) return []
     return GRAOS.map((g) => {
@@ -88,11 +90,13 @@ export function DrePage() {
       )
       const sacasOrc = conta ? (orcamento.sacas?.[conta] ?? 0) : 0
       const precoOrc = conta ? (orcamento.precoSaca?.[conta] ?? 0) : 0
+      const margemOrc = conta ? (orcamento.margemSaca?.[conta] ?? 0) : 0
       const rg = resumo.graos.find((x) => x.grao === g)
       const sacasReal = rg?.sacas ?? 0
       const precoReal = sacasReal > 0 ? (rg?.receitaBruta ?? 0) / sacasReal : 0
-      return { grao: g, rotulo: ROTULO_GRAO[g], sacasOrc, precoOrc, sacasReal, precoReal }
-    }).filter((m) => m.sacasOrc > 0 || m.precoOrc > 0)
+      const margemReal = sacasReal > 0 ? ((rg?.receitaBruta ?? 0) - (rg?.aquisicao ?? 0)) / sacasReal : 0
+      return { grao: g, rotulo: ROTULO_GRAO[g], sacasOrc, precoOrc, margemOrc, sacasReal, precoReal, margemReal }
+    }).filter((m) => m.sacasOrc > 0 || m.precoOrc > 0 || m.margemOrc > 0)
   }, [orcamento, mapa, resumo])
 
   const [recolhidas, setRecolhidas] = useState<Set<LinhaDRE>>(new Set())
@@ -347,8 +351,10 @@ interface MetaGrao {
   rotulo: string
   sacasOrc: number
   precoOrc: number
+  margemOrc: number
   sacasReal: number
   precoReal: number
+  margemReal: number
 }
 
 function MetaCereais({ metas }: { metas: MetaGrao[] }) {
@@ -369,7 +375,7 @@ function MetaCereais({ metas }: { metas: MetaGrao[] }) {
         <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
           Meta × realizado por grão
         </span>
-        <span className="text-xs text-faint">volume e preço/saca — orçado × realizado</span>
+        <span className="text-xs text-faint">volume, preço e margem/saca — orçado × realizado</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -381,7 +387,10 @@ function MetaCereais({ metas }: { metas: MetaGrao[] }) {
               <th className="py-2 px-3 text-right font-semibold">Volume</th>
               <th className="py-2 px-3 text-right font-semibold">Preço/saca real</th>
               <th className="py-2 px-3 text-right font-semibold">Preço/saca meta</th>
-              <th className="py-2 pr-5 pl-3 text-right font-semibold">Preço</th>
+              <th className="py-2 px-3 text-right font-semibold">Preço</th>
+              <th className="py-2 px-3 text-right font-semibold">Margem/saca real</th>
+              <th className="py-2 px-3 text-right font-semibold">Margem/saca meta</th>
+              <th className="py-2 pr-5 pl-3 text-right font-semibold">Margem</th>
             </tr>
           </thead>
           <tbody>
@@ -403,8 +412,17 @@ function MetaCereais({ metas }: { metas: MetaGrao[] }) {
                 <td className="py-2.5 px-3 text-right tabular-nums text-muted">
                   {m.precoOrc > 0 ? formatBRL(m.precoOrc) : '—'}
                 </td>
-                <td className="py-2.5 pr-5 pl-3 text-right">
+                <td className="py-2.5 px-3 text-right">
                   <Badge pct={variacao(m.precoReal, m.precoOrc)} />
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-ink">
+                  {m.sacasReal > 0 ? formatBRL(m.margemReal) : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-muted">
+                  {m.margemOrc > 0 ? formatBRL(m.margemOrc) : '—'}
+                </td>
+                <td className="py-2.5 pr-5 pl-3 text-right">
+                  <Badge pct={variacao(m.margemReal, m.margemOrc)} />
                 </td>
               </tr>
             ))}
@@ -412,8 +430,9 @@ function MetaCereais({ metas }: { metas: MetaGrao[] }) {
         </table>
       </div>
       <p className="px-5 py-3 text-[11px] text-faint">
-        Meta de volume e preço vem do orçamento de receita por grão (sacas × preço). Preço/saca
-        realizado = receita bruta do grão ÷ sacas do mês.
+        Meta vem do orçamento de receita por grão (sacas × preço, margem/saca). Realizado: preço/saca =
+        receita bruta ÷ sacas; margem/saca = (receita bruta − aquisição direta) ÷ sacas — spread
+        venda − compra, sem deduções nem custos rateados, para casar com a definição do orçamento.
       </p>
     </Card>
   )
