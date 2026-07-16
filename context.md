@@ -1,7 +1,7 @@
 # GPResults — Contexto do Projeto
 
 > Memória geral do app, para retomar o trabalho numa sessão nova sem perder o histórico.
-> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-07-15**.
+> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-07-16**.
 
 ---
 
@@ -31,7 +31,9 @@ materialidade. Recorrência: operação/SLA + consumo de IA (tokens Claude) repa
 **Estado dos sprints:** Sprint 1 ✅, **Sprint 2 ✅ (fluxo de caixa + confiabilidade/materialidade)**,
 Sprint 3 ⬜ (WhatsApp). **Além dos sprints, já entregue:** papel sócio + aprovação de orçamento,
 plano de contas de grãos, importar orçamento (planilha/documento), DRE até a data de hoje, run-rate
-nos insights, e **DRE por cereal + resultado por saca**.
+nos insights, **DRE por cereal + resultado por saca**, **insights e sincronização do Safragold
+automáticos**, **orçamento por periodicidade (mensal/trimestral/quadrimestral/anual)** e **receita de
+grão orçada por sacas × preço + meta × realizado**.
 
 ## 3. Stack técnica
 
@@ -55,7 +57,8 @@ Enoki (ERP)  →  Ingestão  →  Classificação (IA)  →  Motores determinís
    linha do DRE, com grau de confiança. Só classifica as ainda não classificadas.
 3. **Motores determinísticos (zero IA):** `src/lib/dre.ts` (DRE), `src/lib/caixa.ts` (fluxo de caixa),
    `src/lib/confiabilidade.ts` (sanidade/materialidade), `src/lib/graos.ts` (por cereal/saca),
-   `src/lib/importar.ts` (parse de planilha). Todos testados.
+   `src/lib/importar.ts` (parse de planilha), `src/lib/orcamento.ts` (periodicidade + distribuição
+   sazonal + receita de grão sacas × preço). Todos testados.
 4. **UI** — React (abas Início/DRE/Orçamento/Fluxo de caixa/Confiabilidade/Lançamentos/Usuários).
 
 **REGRA DE OURO:** toda a matemática (DRE, caixa, materialidade, por-saca) é SEMPRE código puro e
@@ -86,8 +89,13 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   do IR, resultado líquido.
 - **`Classificacao`**: `{ contaSafragold, linha, confianca (0..1), justificativa }`. Confiança < 0.8
   (`LIMIAR_REVISAO`) → fila de revisão.
-- **`Orcamento`**: `{ competencia 'YYYY-MM', valores: Record<conta, number>, origem, atualizadoEm,
-  status: 'rascunho'|'aprovado', aprovadoPor?, aprovadoEm? }`. **Orçamento é POR CONTA.**
+- **`Orcamento`**: `{ competencia 'YYYY-MM', valores: Record<conta, number>, sacas?: Record<conta,
+  number>, precoSaca?: Record<conta, number>, origem, atualizadoEm, status: 'rascunho'|'aprovado',
+  aprovadoPor?, aprovadoEm? }`. **Orçamento é POR CONTA e sempre mês a mês.** Para contas de RECEITA DE
+  GRÃO (3.1.0x), `valores[conta] = sacas[conta] × precoSaca[conta]` (volume × preço); as demais contas
+  só têm `valores`. A **periodicidade** (mensal/trimestral/quadrimestral/anual) é só a lente de edição —
+  o dado continua um `Orcamento` por competência (DRE/caixa/dashboard não mudam). Retrocompatível:
+  orçamento antigo que gravava a receita de grão só por valor é preservado até informar sacas/preço.
 - **`Grao`** = 'soja'|'milho'|'sorgo'|'cafe' (`GRAOS`, `ROTULO_GRAO`).
 - **`EstadoDre`** (persistido no Blob): `{ lancamentos[], classificacoes[], orcamentos[],
   premissasCaixa?, confiabilidade?, sacas? }`. `sacas` = `Record<competencia, Partial<Record<Grao,
@@ -97,7 +105,10 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
 
 - **Início (Dashboard)** — `DashboardPage.tsx`: hero "Resultado líquido", KPIs (receita líq., lucro
   bruto, EBITDA) com margem/desvio, evolução, Realizado × Orçado, maiores desvios, e o card
-  **"✦ Insights"** (IA, sob demanda). No mês corrente mostra "(até DD/MM)" e a projeção de fechamento.
+  **"✦ Insights"** (IA). No mês corrente mostra "(até DD/MM)" e a projeção de fechamento. **Insights
+  AUTOMÁTICOS:** o card gera a análise sozinho ao abrir e ao trocar de competência (guarda de `useRef`
+  contra refetch no StrictMode); o botão vira "Atualizar análise" (regeração manual). ⚠️ Gasta token a
+  cada geração — se virar problema, cachear a análise por competência no Blob.
 - **DRE** — `DrePage.tsx`: DRE **analítico** (cada linha expande nas contas; realizado × orçado ×
   desvio; subtotais). **DRE parcial até hoje** no mês corrente (`ateData`; nota "realizado até DD/MM").
   **Sacas + R$/saca** nos KPIs (receita líq., lucro bruto, resultado líq. = total ÷ sacas). Seção
@@ -105,10 +116,18 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   + lucro/saca. Rateio: **deduções pela receita**, **custos compartilhados do CPV por volume de sacas**,
   aquisição direta pela conta do grão. Soma dos lucros brutos por grão **reconcilia com o DRE**. Sacas
   informadas manualmente na própria tela (admin/sócio). Badge "pendente de aprovação" no orçamento.
-- **Orçamento** — `OrcamentoPage.tsx`: contas por linha, valor por conta. **Status/aprovação**: badge
-  (rascunho/pendente/aprovado), botões "Salvar rascunho" e (só sócio) "✓ Aprovar orçamento".
-  **"✨ Sugerir com IA"** e **"⬆ Importar"** (modal 3 caminhos: manual, planilha/CSV determinístico
-  `importar.ts`, ou documento via IA `api/importar-orcamento.ts`, com prévia).
+  **Painel "Meta × realizado por grão"** (`metasGrao`): quando há orçamento de sacas/preço, compara
+  **volume (sacas real × meta)** e **preço/saca (real × meta)** com variação ▲/▼. Preço/saca realizado
+  = receita bruta do grão ÷ sacas do mês; meta vem de `Orcamento.sacas`/`precoSaca` da conta do grão.
+- **Orçamento** — `OrcamentoPage.tsx`: **Periodicidade** (mensal/trimestral/quadrimestral/anual, fixa
+  no calendário) + Ano + Período no cabeçalho. **Mensal** = tela de um input por conta; **tri/quadri/
+  anual** = GRADE mês a mês (colunas = meses do período) + coluna **"Total do período"** que distribui
+  pela **sazonalidade do histórico** da conta (`distribuirSazonal`; fallback igual, soma fecha exata).
+  **Receita de grão** tem seção própria **"Receita por grão · sacas × preço"**: por mês informa sacas +
+  preço/saca → **= Receita** calculada (entra no `Orcamento.valores`); essas contas saem do editor de
+  valor (sem dupla entrada). **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
+  agregado. **"✨ Sugerir com IA"** e **"⬆ Importar"** atuam só nas **contas de valor** (import = totais
+  do período distribuídos pela sazonalidade); a receita de grão é planejada na grade sacas × preço.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção determinística `caixa.ts`. Converte DRE
   (competência) em caixa por PRAZOS editáveis, projeta futuro por orçamento+histórico, roda o saldo a
   partir de um saldo inicial. Hero do saldo, alerta de liquidez, premissas editáveis, gráfico + tabela
@@ -124,7 +143,10 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   por severidade (com **código · nome** da conta) e ações (reclassificar via Select, ignorar em
   `EstadoDre.confiabilidade`), resumo executivo da IA (`api/resumo-confiabilidade.ts`). É a base do Sprint 3.
 - **Lançamentos** — `LancamentosPage.tsx`: tabela (data, conta **código · nome**, histórico, valor,
-  linha do DRE via `mapaEfetivo`), botões **Sincronizar** e **Classificar** (admin).
+  linha do DRE via `mapaEfetivo`), botões **Sincronizar** e **Classificar** (admin). **Sincronização
+  AUTOMÁTICA:** o Safragold sincroniza sozinho uma vez por sessão ao abrir o app (após hidratar a
+  nuvem, só para quem pode gravar) — a lógica é `sincronizarSafragold` no `DreContext`, reusada pelo
+  botão manual. Não gasta token (só puxa dados). Consulta/orçamento não disparam o auto-sync.
 - **Usuários** — `Usuarios.tsx`: gestão de usuários (sócio/admin).
 - **Login** — `Login.tsx`: senha; 1º acesso cria o admin.
 
@@ -200,11 +222,16 @@ como o cliente chamava; a plataforma real é a Enoki.)
 
 - **Recharts v3 + React StrictMode:** barras/áreas travam em altura 0 → SEMPRE `isAnimationActive={false}`.
 - **Insights da IA:** verboso; `max_tokens: 2800` + pedir concisão (senão trunca recomendações).
-- **Verificação de UI:** o preview do harness fica preso ao diretório da sessão. Padrão que funciona:
-  **modo demo temporário** (`?demo=1` no `main.tsx` + auth simulada no `AuthContext` + `?rota=`/`?y=`),
-  screenshot via computer-use, e **reverter**. Pegou bugs reais. ⚠️ **`git checkout` para reverter o
-  demo APAGA edições REAIS que estejam no mesmo arquivo** (aconteceu com o papel `socio` no
-  `AuthContext`) — reverter seletivamente ou só depois de commitar a parte real.
+- **Verificação de UI:** o preview do harness serve **o projeto do diretório da SESSÃO**. Se a sessão
+  abrir fora de `~/Projects/grupo-parceiro-dre` (ex.: rodando o Claude a partir de `preceptor-pricing`),
+  o preview serve o OUTRO app. Soluções: (a) **abrir o Claude Code direto em `~/Projects/grupo-parceiro-
+  dre`** (aí a config `dre` na porta 5173 já funciona); ou (b) repontar: adicionar uma config no
+  `launch.json` da sessão rodando `npm --prefix ~/Projects/grupo-parceiro-dre run dev -- --port 5174`.
+- **Modo de verificação local (`?demo`)** — AGORA É FEATURE DE DEV COMMITADA (`src/dev/demo.tsx`, ativado
+  em `main.tsx` por import dinâmico sob `import.meta.env.DEV`): mocka a auth (`AuthContext` exportado) e
+  semeia um cenário no localStorage → confere Orçamento/DRE sem backend/login. **Fora do bundle de
+  produção** (verificado). Rodar `npm run dev` e abrir `?demo`. Substitui o antigo hack temporário — não
+  precisa mais editar/reverter `main.tsx`/`AuthContext` à mão nem arriscar `git checkout` apagando edição real.
 - **Datas ISO:** `new Date('YYYY-MM-DD')` é UTC → desloca 1 dia em BRT. Usar `formatDataBR` (split).
 - **Vercel Blob:** força cache de CDN por pathname; cada gravação cria objeto novo (`addRandomSuffix`)
   e a leitura pega o mais recente via `list()` (ver `lib/blobdoc.ts`).
@@ -212,27 +239,33 @@ como o cliente chamava; a plataforma real é a Enoki.)
 - **Ações de IA/backend não rodam no modo demo** (precisam de sessão real): Classificar, Sincronizar,
   Sugerir, Insights, Gerar resumo só funcionam na produção logado.
 
-## 13. Estado atual (2026-07-15)
+## 13. Estado atual (2026-07-16)
 
 | Área | Status |
 |---|---|
 | Identidade visual + layout (menu lateral) | ✅ Publicado |
-| Dashboard (KPIs, gráficos, insights + run-rate) | ✅ |
+| Dashboard (KPIs, gráficos) + **insights AUTOMÁTICOS** + run-rate | ✅ |
 | DRE analítico + até a data de hoje | ✅ |
-| DRE por cereal + resultado por saca | ✅ |
+| DRE por cereal + resultado por saca + **meta × realizado (volume/preço)** | ✅ |
+| **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
+| **Receita de grão por sacas × preço** (valor calculado) | ✅ |
 | Orçamento por conta (+ IA + importar planilha/doc) | ✅ |
 | Papel sócio + aprovação de orçamento (4 papéis) | ✅ |
 | Fluxo de caixa mensal + diário (Sprint 2) | ✅ |
 | Confiabilidade/materialidade (Sprint 2) | ✅ |
 | Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
+| **Sincronização Safragold automática** ao abrir | ✅ |
+| Modo de verificação local `?demo` (dev) | ✅ |
 | Dados | 🟡 Simulados (semeados) |
 | **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
 | Sprint 3 (alertas WhatsApp) | ⬜ Próximo |
 
-**Git:** branch `main`, último commit **`83be94c`** ("DRE por cereal + resultados por saca"). No
-working tree: `scripts/enoki-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). GitHub
-`Luvas-prog/grupo-parceiro-dre` (privado). **46 testes** passando. Layout alternativo descartado
-preservado no commit `ce8f743`.
+**Git:** branch `main`, último commit **`0e1c8dd`** ("Modo de verificação local (?demo) para dev").
+Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos, `3d8fe9a` sync
+Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão sacas×preço +
+meta×realizado, `0e1c8dd` modo `?demo`. GitHub `Luvas-prog/grupo-parceiro-dre` (privado). **58 testes**
+passando (era 46; +10 de `orcamento.ts`, +2 dos helpers de grão). No working tree: `scripts/enoki-
+scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado preservado em `ce8f743`.
 
 ## 14. Rodar localmente
 
@@ -249,8 +282,29 @@ Login: 1º acesso cria o admin. `scripts/seed-demo.mjs` semeia a nuvem para demo
 
 ## 15. Próximos passos
 
-1. **Integração real com a Enoki** — rodar/analisar o `scripts/enoki-scrape.mjs` e decidir o caminho
-   (scraping viável? senão cobrar export CSV / acesso ao banco). Destrava sair dos dados simulados.
-2. **Sprint 3 — alertas no WhatsApp com materialidade** (o motor de confiabilidade já rankeia por
-   materialidade → base pronta; falta escolher provedor: Twilio ou API oficial da Meta + custo).
-3. Possíveis pedidos de UI: mais indicadores, insights automáticos vs sob demanda, ajustes por feedback.
+**PRIORIDADE NOVA (definida em 2026-07-15): AUDITAR o DRE de jan–jun, mês a mês, DENTRO do app.**
+A situação real não é só extrair da Enoki — é que **os números da Enoki não são confiáveis** e
+precisam ser auditados antes de virar DRE. O cliente quer o app como **ferramenta de auditoria**.
+Três dimensões da auditoria (feedback do Luciano):
+  1. **Classificação** — contas caindo na linha errada do DRE. → JÁ EXISTE (reclassificar via
+     `mapaEfetivo`/`classificacoes`; regras `nao_classificada`/`baixa_confianca`).
+  2. **Duplicidade** — lançamentos repetidos. → JÁ EXISTE (regra `duplicidade` em `confiabilidade.ts`).
+  3. **Conciliação bancária** — lançamentos "não condizentes com o movimento bancário". Confronta os
+     lançamentos contra o **extrato do banco** (fonte externa da verdade). ➡️ **SAIU DE ESCOPO do
+     GPResults (decisão 2026-07-16): será feita no app SEPARADO "Concili" que o Luciano está
+     construindo.** Um core determinístico (importador OFX+CSV + motor `conciliacao.ts` reaproveitando
+     os prazos da `caixa.ts`) chegou a ser prototipado e testado aqui, mas foi **revertido** do GPResults
+     — reconstruir no Concili se necessário. As dimensões 1 e 2 (classificação, duplicidade) seguem
+     nativas no GPResults via confiabilidade.
+
+**PENDENTE p/ retomar:** COMO os lançamentos contábeis da Enoki (jan–jun) chegam para carregar/auditar
+(razão/balancete Excel? PDF via IA? ainda travado?) — Luciano vai decidir e voltamos.
+
+**Depois disso (roadmap que continua):**
+- **Sprint 3 — alertas no WhatsApp com materialidade** (motor de confiabilidade já rankeia → base pronta;
+  falta provedor: Twilio ou API oficial da Meta + custo).
+- **Integração real com a Enoki** — `scripts/enoki-scrape.mjs` (scraping recon, nunca rodou: Playwright
+  não instalado, credenciais ENOKI_* nem estão no `.env.local`). Segue como caminho de fundo.
+- **App Concili (separado):** conciliação bancária (extrato OFX/CSV × lançamentos) — projeto próprio do
+  Luciano, fora do GPResults.
+- Possíveis pedidos de UI: mais indicadores, ajustes por feedback. (Insights automáticos já entregues.)
