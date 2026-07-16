@@ -8,7 +8,7 @@
 // Ao informar um total de período, ele é distribuído pelos meses seguindo a
 // SAZONALIDADE do histórico da conta (a venda de grãos concentra em certos
 // meses); sem histórico, distribui igual. A soma dos meses fecha com o total.
-import type { Grao, LancamentoCanonico, MapaClassificacao } from './tipos'
+import type { BaseImposto, Grao, LancamentoCanonico, MapaClassificacao, RegraImposto } from './tipos'
 import { GRAO_DE_CONTA } from './planoContas'
 
 export const PERIODICIDADES = ['mensal', 'trimestral', 'quadrimestral', 'anual'] as const
@@ -193,4 +193,35 @@ export function precoCompraSaca(precoVendaSaca: number, margemSaca: number): num
 }
 export function valorCusto(sacas: number, precoVendaSaca: number, margemSaca: number): number {
   return Math.round(sacas * precoCompraSaca(precoVendaSaca, margemSaca) * 100) / 100
+}
+
+// ---------------------------------------------------------------------------
+// Tributos automáticos — valor = base × alíquota, lançado na conta da regra.
+// ---------------------------------------------------------------------------
+
+/** Valor de um tributo = base × alíquota (%), em centavos exatos. */
+export function valorImposto(base: number, aliquota: number): number {
+  return Math.round(base * (aliquota / 100) * 100) / 100
+}
+
+/**
+ * Soma dos impostos POR CONTA, dadas as regras ativas e os totais de cada base
+ * (venda/compra/margem). Regras inativas são ignoradas; várias regras na mesma
+ * conta somam.
+ */
+export function impostosPorConta(
+  regras: RegraImposto[],
+  bases: Record<BaseImposto, number>,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const r of regras) {
+    if (!r.ativo) continue
+    const v = valorImposto(bases[r.base] ?? 0, r.aliquota)
+    if (v !== 0) out[r.conta] = arred((out[r.conta] ?? 0) + v)
+  }
+  return out
+}
+
+function arred(v: number): number {
+  return Math.round(v * 100) / 100
 }

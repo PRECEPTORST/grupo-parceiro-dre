@@ -2,14 +2,17 @@ import { Fragment, useMemo, useState, type ChangeEvent } from 'react'
 import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
 import { podeEditarOrcamento, podeAprovarOrcamento } from '../lib/permissoes'
-import { Botao, Card, Kicker, NumInput, Select } from '../components/ui'
+import { Botao, Card, Kicker, NumInput, Select, TextInput } from '../components/ui'
 import { formatBRL } from '../lib/format'
 import {
   META_LINHAS,
   orcamentoAprovado,
+  impostosPadrao,
   type Orcamento,
   type OrigemOrcamento,
   type StatusOrcamento,
+  type RegraImposto,
+  type BaseImposto,
 } from '../lib/tipos'
 import { competenciasDisponiveis } from '../lib/dre'
 import { catalogoPorLinha, mapaEfetivo, nomeConta } from '../lib/planoContas'
@@ -27,6 +30,7 @@ import {
   valorReceita,
   valorCusto,
   precoCompraSaca,
+  valorImposto,
   rotuloMesCurto,
   type Periodicidade,
 } from '../lib/orcamento'
@@ -45,7 +49,7 @@ function canon(v: Record<string, number>): string {
 }
 
 export function OrcamentoPage() {
-  const { estado, salvarOrcamento } = useDre()
+  const { estado, salvarOrcamento, salvarImpostos } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeEditarOrcamento(usuario?.papel)
   const podeAprovar = podeAprovarOrcamento(usuario?.papel)
@@ -102,8 +106,20 @@ export function OrcamentoPage() {
     [contasGrao],
   )
 
+  // Tributos automáticos: cada regra ativa deriva o valor de uma conta (imposto)
+  // a partir de uma base. Essas contas saem do editor de valor (derivadas).
+  const regras = useMemo(() => estado.impostos ?? impostosPadrao(), [estado.impostos])
+  const regrasAtivas = useMemo(() => regras.filter((r) => r.ativo), [regras])
+  const contasImpostoAtivas = useMemo(() => new Set(regrasAtivas.map((r) => r.conta)), [regrasAtivas])
+
+  // Conjunto de contas DERIVADAS (grão + impostos ativos) — fora do editor de valor.
+  const contasDerivadas = useMemo(
+    () => new Set<string>([...contasGraoSet, ...contasImpostoAtivas]),
+    [contasGraoSet, contasImpostoAtivas],
+  )
+
   const gruposValor = grupos
-    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasGraoSet.has(c.conta)) }))
+    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasDerivadas.has(c.conta)) }))
     .filter((g) => g.contas.length > 0)
   const semContas = gruposValor.length === 0 && contasGrao.length === 0
 
@@ -113,6 +129,7 @@ export function OrcamentoPage() {
     [grupos],
   )
   const [importarAberto, setImportarAberto] = useState(false)
+  const [impostosAberto, setImpostosAberto] = useState(false)
 
   const salvoDoMes = (m: string) => estado.orcamentos.find((o) => o.competencia === m) ?? null
   const carregar = (ms: string[]) => {
@@ -214,8 +231,35 @@ export function OrcamentoPage() {
     setIndice(indiceDoMes(p, primeiroMesAtual))
   }
 
+  // Bases dos tributos por mês. Venda = TODA a receita orçada EXCETO financeira
+  // (receita de grão + demais contas de receita_bruta/outras_receitas_operacionais);
+  // compra = aquisição de grão; margem = venda − compra.
+  const vendaBase = (m: string): number => {
+    let base = contasGrao.reduce((s, c) => s + valorGrao(m, c), 0)
+    for (const conta of Object.keys(vals[m] ?? {})) {
+      if (contasDerivadas.has(conta)) continue
+      const linha = mapa[conta]
+      if (linha === 'receita_bruta' || linha === 'outras_receitas_operacionais') base += getV(m, conta)
+    }
+    return base
+  }
+  const compraBase = (m: string): number => contasGrao.reduce((s, c) => s + custoGrao(m, c), 0)
+  const basesDoMes = (m: string): Record<BaseImposto, number> => {
+    const venda = vendaBase(m)
+    const compra = compraBase(m)
+    return { venda, compra, margem: venda - compra }
+  }
+  // Impostos derivados de um mês, por conta (inclui zero p/ contas de regra ativa,
+  // para sobrescrever qualquer valor manual/legado).
+  const impostosDoMes = (m: string): Record<string, number> => {
+    const bases = basesDoMes(m)
+    const out: Record<string, number> = {}
+    for (const r of regrasAtivas) out[r.conta] = (out[r.conta] ?? 0) + valorImposto(bases[r.base], r.aliquota)
+    return out
+  }
+
   // Valores efetivos de um mês: contas de valor + receita de grão (3.1.0x) e
-  // custo de aquisição (4.1.0x) derivados de sacas/preço/margem.
+  // custo de aquisição (4.1.0x) derivados de sacas/preço/margem + impostos derivados.
   const valoresDoMes = (m: string): Record<string, number> => {
     const out = { ...limpo(vals[m] ?? {}) }
     const set = (conta: string, v: number) => {
@@ -227,6 +271,7 @@ export function OrcamentoPage() {
       const cc = custoDeReceita[c]
       if (cc) set(cc, custoGrao(m, c))
     }
+    for (const [conta, v] of Object.entries(impostosDoMes(m))) set(conta, v)
     return out
   }
 
@@ -300,7 +345,7 @@ export function OrcamentoPage() {
         for (const m of meses) {
           next[m] = { ...next[m] }
           for (const [conta, v] of Object.entries(sugeridos)) {
-            if (!contasGraoSet.has(conta)) next[m][conta] = v
+            if (!contasDerivadas.has(conta)) next[m][conta] = v
           }
         }
         return next
@@ -320,7 +365,7 @@ export function OrcamentoPage() {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m] }
       for (const [conta, total] of Object.entries(importados)) {
-        if (contasGraoSet.has(conta)) continue
+        if (contasDerivadas.has(conta)) continue
         const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
         for (const m of meses) next[m][conta] = dist[m]
       }
@@ -330,9 +375,14 @@ export function OrcamentoPage() {
     setImportarAberto(false)
   }
 
+  const totalImpostos = meses.reduce(
+    (s, m) => s + Object.values(impostosDoMes(m)).reduce((a, b) => a + b, 0),
+    0,
+  )
   const totalPeriodo =
     gruposValor.reduce((s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0), 0) +
-    contasGrao.reduce((s, c) => s + totalValorGrao(c) + totalCustoGrao(c), 0)
+    contasGrao.reduce((s, c) => s + totalValorGrao(c) + totalCustoGrao(c), 0) +
+    totalImpostos
 
   return (
     <div className={`mx-auto px-6 py-8 ${multi ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -393,6 +443,9 @@ export function OrcamentoPage() {
           </p>
           {podeEditar && (
             <div className="flex flex-wrap gap-2">
+              <Botao variante="fantasma" onClick={() => setImpostosAberto(true)}>
+                ⚙ Alíquotas
+              </Botao>
               <Botao variante="fantasma" onClick={() => setImportarAberto(true)} disabled={semContas}>
                 ⬆ Importar
               </Botao>
@@ -431,6 +484,10 @@ export function OrcamentoPage() {
                 totalCustoGrao={totalCustoGrao}
                 podeEditar={podeEditar}
               />
+            )}
+
+            {regrasAtivas.length > 0 && (
+              <ImpostosAutomaticos regras={regrasAtivas} meses={meses} basesDoMes={basesDoMes} />
             )}
 
             {gruposValor.length > 0 &&
@@ -525,6 +582,17 @@ export function OrcamentoPage() {
           multi={multi}
           onAplicar={aplicarImportacao}
           onFechar={() => setImportarAberto(false)}
+        />
+      )}
+
+      {impostosAberto && (
+        <ModalImpostos
+          regras={regras}
+          onSalvar={(rs) => {
+            salvarImpostos(rs)
+            setImpostosAberto(false)
+          }}
+          onFechar={() => setImpostosAberto(false)}
         />
       )}
     </div>
@@ -789,6 +857,170 @@ function GradeMeses({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+const ROTULO_BASE: Record<BaseImposto, string> = { venda: 'venda', compra: 'compra', margem: 'margem' }
+
+function ImpostosAutomaticos({
+  regras,
+  meses,
+  basesDoMes,
+}: {
+  regras: RegraImposto[]
+  meses: string[]
+  basesDoMes: (m: string) => Record<BaseImposto, number>
+}) {
+  const valorRegra = (r: RegraImposto, m: string) => valorImposto(basesDoMes(m)[r.base], r.aliquota)
+  const totalRegra = (r: RegraImposto) => meses.reduce((s, m) => s + valorRegra(r, m), 0)
+  const totalGeral = regras.reduce((s, r) => s + totalRegra(r), 0)
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between border-b border-line pb-1">
+        <span className="font-head text-xs font-semibold uppercase tracking-wider text-green">
+          Impostos automáticos · % sobre venda / compra
+        </span>
+        <span className="text-xs font-semibold tabular-nums text-ink">{formatBRL(totalGeral)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-faint">
+              <th className="sticky left-0 z-10 bg-surface py-2 pr-3 text-left font-semibold">Tributo</th>
+              {meses.map((m) => (
+                <th key={m} className="min-w-[92px] px-1.5 py-2 text-right font-semibold">
+                  {rotuloMesCurto(m)}
+                </th>
+              ))}
+              <th className="min-w-[110px] px-1.5 py-2 text-right font-semibold text-green">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {regras.map((r) => (
+              <tr key={r.id} className="border-b border-line/50 hover:bg-cream/30">
+                <td className="sticky left-0 z-10 bg-surface py-1.5 pr-3">
+                  <span className="text-ink">{r.nome}</span>
+                  <span className="ml-1 text-[11px] text-faint">
+                    · {r.aliquota}% da {ROTULO_BASE[r.base]} · {r.conta}
+                  </span>
+                </td>
+                {meses.map((m) => (
+                  <td key={m} className="px-1.5 py-1.5 text-right text-xs tabular-nums text-ink">
+                    {formatBRL(valorRegra(r, m))}
+                  </td>
+                ))}
+                <td className="px-1.5 py-1.5 text-right text-xs font-semibold tabular-nums text-green">
+                  {formatBRL(totalRegra(r))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-[11px] text-faint">
+        Calculado automaticamente e lançado nas contas de dedução/imposto do DRE. Ajuste as alíquotas em
+        “⚙ Alíquotas”.
+      </p>
+    </div>
+  )
+}
+
+function ModalImpostos({
+  regras,
+  onSalvar,
+  onFechar,
+}: {
+  regras: RegraImposto[]
+  onSalvar: (regras: RegraImposto[]) => void
+  onFechar: () => void
+}) {
+  const [rs, setRs] = useState<RegraImposto[]>(() => regras.map((r) => ({ ...r })))
+  const set = (i: number, patch: Partial<RegraImposto>) =>
+    setRs((a) => a.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const remover = (i: number) => setRs((a) => a.filter((_, j) => j !== i))
+  const adicionar = () =>
+    setRs((a) => [
+      ...a,
+      { id: crypto.randomUUID(), nome: 'Novo tributo', conta: '', base: 'venda', aliquota: 0, ativo: true },
+    ])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 animate-fade" onClick={onFechar}>
+      <div
+        className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-2xl animate-rise"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="font-head text-xs font-semibold uppercase tracking-[0.2em] text-green">Impostos automáticos</div>
+            <h3 className="mt-0.5 text-lg font-bold text-ink">Alíquotas dos tributos</h3>
+          </div>
+          <button onClick={onFechar} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-cream hover:text-ink" title="Fechar">
+            ✕
+          </button>
+        </div>
+
+        <p className="mb-4 rounded-lg border border-warn/40 bg-warn/5 p-2.5 text-xs text-gold-deep">
+          ⚠️ As alíquotas são um <strong>ponto de partida</strong> típico p/ comércio de grãos — confirme
+          com o contador. Variam por regime (Real/Presumido), UF e tipo de operação (diferimento de ICMS,
+          suspensão de PIS/COFINS em grão in natura, Funrural na compra de produtor PF).
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-[auto_1fr_70px_110px_78px_auto] items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-faint">
+            <span>Ativo</span>
+            <span>Tributo</span>
+            <span>Conta</span>
+            <span>Base</span>
+            <span className="text-right">Alíquota %</span>
+            <span />
+          </div>
+          {rs.map((r, i) => (
+            <div key={r.id} className="grid grid-cols-[auto_1fr_70px_110px_78px_auto] items-center gap-2">
+              <input
+                type="checkbox"
+                checked={r.ativo}
+                onChange={(e) => set(i, { ativo: e.target.checked })}
+                className="h-4 w-4 accent-green"
+              />
+              <TextInput value={r.nome} onChange={(v) => set(i, { nome: v })} placeholder="Nome do tributo" />
+              <TextInput value={r.conta} onChange={(v) => set(i, { conta: v })} placeholder="3.2.02" />
+              <Select
+                value={r.base}
+                onChange={(v) => set(i, { base: v as BaseImposto })}
+                options={[
+                  { value: 'venda', label: '% da venda' },
+                  { value: 'compra', label: '% da compra' },
+                  { value: 'margem', label: '% da margem' },
+                ]}
+              />
+              <NumInput value={r.aliquota} onChange={(v) => set(i, { aliquota: v ?? 0 })} min={0} step={0.01} />
+              <button
+                onClick={() => remover(i)}
+                className="rounded-md p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                title="Remover"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={adicionar}
+          className="mt-3 rounded-lg border border-green/40 px-3 py-1.5 text-xs font-semibold text-green transition-colors hover:bg-green/10"
+        >
+          + Adicionar tributo
+        </button>
+
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-line pt-4">
+          <button onClick={onFechar} className="text-sm font-medium text-muted hover:text-ink">
+            Cancelar
+          </button>
+          <Botao onClick={() => onSalvar(rs.filter((r) => r.conta.trim()))}>Salvar alíquotas</Botao>
+        </div>
+      </div>
     </div>
   )
 }

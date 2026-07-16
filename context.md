@@ -133,7 +133,13 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   informa **sacas + preço venda/saca + margem bruta/saca**; deriva **preço compra/saca (venda − margem)**,
   **= Receita** (sacas × venda), **(−) Custo aquisição** (sacas × compra, grava na conta 4.1.0x) e **=
   Margem bruta** (receita − custo). Contas de receita E custo de grão saem do editor de valor (derivadas,
-  sem dupla entrada). **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
+  sem dupla entrada). **Impostos automáticos** (botão "⚙ Alíquotas" → `ModalImpostos`): tabela de
+  `RegraImposto` (nome · conta · base venda/compra/margem · alíquota %) em `EstadoDre.impostos` (default
+  `impostosPadrao`: Funrural 1,5% compra, PIS 0,65% venda, COFINS 3% venda, ICMS 0% inativo — EDITÁVEIS,
+  confirmar com contador). Cada regra ativa deriva o valor da sua conta de dedução/imposto a partir da
+  base (venda = TODA a receita orçada EXCETO financeira; compra = aquisição de grão; margem = venda −
+  compra), mês a mês, e entra no `Orcamento.valores` → no DRE. Contas de imposto ativas saem do editor de
+  valor. Seção "Impostos automáticos" mostra o calculado por mês/regra. **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
   agregado. **"✨ Sugerir com IA"** e **"⬆ Importar"** atuam só nas **contas de valor** (import = totais
   do período distribuídos pela sazonalidade); a receita de grão é planejada na grade sacas × preço.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção determinística `caixa.ts`. Converte DRE
@@ -258,6 +264,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
 | **Receita de grão por sacas × preço** (valor calculado) | ✅ |
 | **Margem bruta/saca → preço de compra + custo de aquisição** (grão) | ✅ |
+| **Impostos automáticos** (% de venda/compra → deduções, alíquotas editáveis) | ✅ |
 | Orçamento por conta (+ IA + importar planilha/doc) | ✅ |
 | Papel sócio + aprovação de orçamento (4 papéis) | ✅ |
 | Fluxo de caixa mensal + diário (Sprint 2) | ✅ |
@@ -273,17 +280,19 @@ como o cliente chamava; a plataforma real é a Enoki.)
 compra e custo"). Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos,
 `3d8fe9a` sync Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão
 sacas×preço + meta×realizado, `0e1c8dd` modo `?demo`, `bbca565` context.md, `74ff0e6` margem/custo por
-grão + meta×realizado de margem/saca (`aquisicao` no `resumoGraos`). GitHub `Luvas-prog/grupo-parceiro-
-dre` (privado). **61 testes** passando. No working tree:
+grão + meta×realizado de margem/saca + impostos automáticos no orçamento. GitHub `Luvas-prog/grupo-
+parceiro-dre` (privado). **64 testes** passando. No working tree:
 `scripts/enoki-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado em `ce8f743`.
 
-**FEITO nesta sessão (2026-07-16, cont.):** painel **Meta × realizado** (DRE por cereal) agora compara
-também **margem/saca orçada × realizada**. Definições alinhadas: margem ORÇADA = spread venda − compra
-(`margemSaca`); margem REALIZADA = `(receitaBruta − aquisicao) / sacas` — SEM deduções nem CPV rateado.
-Para isso, `resumoGraos` passou a expor **`aquisicao`** (compra direta do grão 4.1.0x, sem o
-compartilhado). `metasGrao` em `DrePage` calcula os três eixos (volume, preço, margem).
+**FEITO nesta sessão (2026-07-16, cont.):** (1) Painel **Meta × realizado** (DRE por cereal) compara
+também **margem/saca orçada × realizada** — margem ORÇADA = spread venda − compra (`margemSaca`); margem
+REALIZADA = `(receitaBruta − aquisicao)/sacas` (SEM deduções/CPV rateado); `resumoGraos` expõe
+`aquisicao`. (2) **Impostos automáticos** no orçamento (ver seção 6): tabela de alíquotas editáveis
+deriva as deduções (PIS/COFINS/Funrural/ICMS) de venda/compra e lança nas contas do DRE.
 
 **RETOMAR AQUI (roadmap, seção 15):** Sprint 3 WhatsApp OU decidir a fonte contábil da Enoki (jan–jun).
+Possível: IRPJ/CSLL sobre o RESULTADO (não sobre margem bruta — precisa do resultado após despesas; melhor
+no nível DRE, não na seção de grão).
 
 ## 14. Rodar localmente
 

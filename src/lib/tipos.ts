@@ -181,6 +181,38 @@ export function orcamentoAprovado(o?: Orcamento | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Tributos automáticos do orçamento.
+//
+// Alguns custos são PERCENTUAIS de compra/venda — impostos, sobretudo. Em vez de
+// digitar conta a conta, cada `RegraImposto` calcula o valor a partir de uma base
+// (receita de venda, custo de compra ou margem) e joga na conta do plano indicada.
+// As alíquotas abaixo são um PONTO DE PARTIDA típico p/ comércio de grãos e devem
+// ser conferidas com o contador (variam por regime/UF/operação).
+// ---------------------------------------------------------------------------
+export type BaseImposto = 'venda' | 'compra' | 'margem'
+
+export interface RegraImposto {
+  id: string
+  nome: string
+  /** Conta do plano onde o valor calculado é lançado (ex.: '3.2.02' PIS). */
+  conta: string
+  /** Sobre o que a alíquota incide. */
+  base: BaseImposto
+  /** Alíquota em % (ex.: 3 = 3%). */
+  aliquota: number
+  ativo: boolean
+}
+
+export function impostosPadrao(): RegraImposto[] {
+  return [
+    { id: 'funrural', nome: 'Funrural (compra de produtor PF)', conta: '3.2.04', base: 'compra', aliquota: 1.5, ativo: true },
+    { id: 'pis', nome: 'PIS sobre vendas', conta: '3.2.02', base: 'venda', aliquota: 0.65, ativo: true },
+    { id: 'cofins', nome: 'COFINS sobre vendas', conta: '3.2.03', base: 'venda', aliquota: 3.0, ativo: true },
+    { id: 'icms', nome: 'ICMS sobre vendas', conta: '3.2.01', base: 'venda', aliquota: 0, ativo: false },
+  ]
+}
+
+// ---------------------------------------------------------------------------
 // Projeção de fluxo de caixa (Sprint 2).
 //
 // O DRE está em regime de COMPETÊNCIA (quando o fato econômico ocorre). O caixa
@@ -278,6 +310,8 @@ export interface EstadoDre {
   premissasCaixa?: PremissasCaixa
   /** Configuração da confiabilidade (piso de materialidade + achados ignorados). */
   confiabilidade?: ConfigConfiabilidade
+  /** Regras de tributos automáticos do orçamento (ausente = usa `impostosPadrao`). */
+  impostos?: RegraImposto[]
   /** Sacas vendidas por competência ('YYYY-MM') e grão — informadas manualmente. */
   sacas?: Record<string, Partial<Record<Grao, number>>>
 }

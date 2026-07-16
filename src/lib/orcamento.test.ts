@@ -13,9 +13,11 @@ import {
   valorReceita,
   precoCompraSaca,
   valorCusto,
+  valorImposto,
+  impostosPorConta,
 } from './orcamento'
 import { mapaEfetivo } from './planoContas'
-import type { LancamentoCanonico } from './tipos'
+import { impostosPadrao, type LancamentoCanonico, type RegraImposto } from './tipos'
 
 describe('mesesDoPeriodo', () => {
   it('mensal → 1 mês', () => {
@@ -123,5 +125,33 @@ describe('receita de grão (volume × preço)', () => {
     expect(valorCusto(1000, 120, 20)).toBe(100_000) // 1000 × 100
     // receita − custo = sacas × margem (reconcilia a margem bruta orçada)
     expect(valorReceita(1000, 120) - valorCusto(1000, 120, 20)).toBe(20_000)
+  })
+})
+
+describe('tributos automáticos', () => {
+  it('valorImposto = base × alíquota (%)', () => {
+    expect(valorImposto(1_000_000, 3)).toBe(30_000) // COFINS 3%
+    expect(valorImposto(1_000_000, 0.65)).toBe(6_500) // PIS 0,65%
+    expect(valorImposto(500_000, 0)).toBe(0)
+  })
+
+  it('impostosPorConta aplica cada regra ativa na sua conta e base', () => {
+    const bases = { venda: 1_000_000, compra: 600_000, margem: 400_000 }
+    const r = impostosPorConta(impostosPadrao(), bases)
+    expect(r['3.2.02']).toBe(6_500) // PIS 0,65% da venda
+    expect(r['3.2.03']).toBe(30_000) // COFINS 3% da venda
+    expect(r['3.2.04']).toBe(9_000) // Funrural 1,5% da compra
+    expect(r['3.2.01']).toBeUndefined() // ICMS inativo (0%) → não lança
+  })
+
+  it('regras inativas são ignoradas e várias na mesma conta somam', () => {
+    const regras: RegraImposto[] = [
+      { id: 'a', nome: 'A', conta: '3.2.02', base: 'venda', aliquota: 1, ativo: true },
+      { id: 'b', nome: 'B', conta: '3.2.02', base: 'venda', aliquota: 2, ativo: true },
+      { id: 'c', nome: 'C', conta: '3.2.03', base: 'venda', aliquota: 5, ativo: false },
+    ]
+    const r = impostosPorConta(regras, { venda: 100_000, compra: 0, margem: 0 })
+    expect(r['3.2.02']).toBe(3_000) // 1% + 2% de 100k
+    expect(r['3.2.03']).toBeUndefined() // inativo
   })
 })

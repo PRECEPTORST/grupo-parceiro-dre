@@ -16,6 +16,7 @@ import type {
   Orcamento,
   PremissasCaixa,
   ConfigConfiabilidade,
+  RegraImposto,
   Grao,
 } from '../lib/tipos'
 import { useAuth } from './AuthContext'
@@ -35,6 +36,8 @@ interface DreContextValue {
   salvarConfigConfiabilidade: (config: ConfigConfiabilidade) => void
   /** Salva as sacas vendidas de cada grão numa competência. */
   salvarSacas: (competencia: string, sacas: Partial<Record<Grao, number>>) => void
+  /** Atualiza as regras de tributos automáticos do orçamento. */
+  salvarImpostos: (regras: RegraImposto[]) => void
   /** Puxa os lançamentos do Safragold e mescla no estado (merge por id). */
   sincronizarSafragold: () => Promise<{ importados: number; simulado: boolean }>
   statusSync: StatusSync
@@ -158,6 +161,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarSacas = (competencia: string, sacas: Partial<Record<Grao, number>>) =>
       setEstado((s) => ({ ...s, sacas: { ...s.sacas, [competencia]: sacas } }))
 
+    const salvarImpostos = (regras: RegraImposto[]) =>
+      setEstado((s) => ({ ...s, impostos: regras }))
+
     return {
       estado,
       salvarClassificacoes,
@@ -165,6 +171,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarPremissasCaixa,
       salvarConfigConfiabilidade,
       salvarSacas,
+      salvarImpostos,
       sincronizarSafragold,
       statusSync,
       erroSync,
