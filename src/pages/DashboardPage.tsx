@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -352,14 +352,12 @@ function InsightsIA({
   ehMesCorrente: boolean
 }) {
   const [analise, setAnalise] = useState<Analise | null>(null)
-  const [carregando, setCarregando] = useState(false)
+  // Já entra carregando: a análise é gerada automaticamente ao abrir (ver effect).
+  const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-
-  // A análise fica desatualizada ao trocar de competência → zera.
-  useEffect(() => {
-    setAnalise(null)
-    setErro(null)
-  }, [competencia])
+  // Competência cuja análise já foi disparada — evita refetch duplicado (StrictMode)
+  // e regeração a cada re-render que não troca de mês.
+  const autoGerado = useRef<string | null>(null)
 
   const gerar = async () => {
     setCarregando(true)
@@ -409,6 +407,19 @@ function InsightsIA({
       setCarregando(false)
     }
   }
+
+  // Gera a análise automaticamente ao abrir o dashboard e ao trocar de
+  // competência — o sócio não precisa clicar em "Gerar análise". O botão vira
+  // apenas "Atualizar análise" (regeração manual). Uma chamada por competência.
+  useEffect(() => {
+    if (autoGerado.current === competencia) return
+    autoGerado.current = competencia
+    setAnalise(null)
+    setErro(null)
+    setCarregando(true)
+    void gerar()
+    // gerar lê o DRE da competência atual pelo closure deste render.
+  }, [competencia]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card className="mb-4 animate-rise border-green/20 bg-gradient-to-br from-green/[0.05] to-surface">
