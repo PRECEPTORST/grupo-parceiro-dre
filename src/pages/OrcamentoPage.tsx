@@ -108,11 +108,20 @@ export function OrcamentoPage() {
 
   // Tributos automáticos: cálculo de REFERÊNCIA no Orçamento (% de venda/compra).
   // NÃO entra no orçamento salvo nem no DRE — os tributos do DRE vêm do Enoki.
+  // As contas de regra ATIVA aparecem só na seção de estimativa (fora do editor
+  // manual, sem dupla entrada) e não são persistidas.
   const regras = useMemo(() => estado.impostos ?? impostosPadrao(), [estado.impostos])
   const regrasAtivas = useMemo(() => regras.filter((r) => r.ativo), [regras])
+  const contasImpostoAtivas = useMemo(() => new Set(regrasAtivas.map((r) => r.conta)), [regrasAtivas])
+
+  // Contas fora do editor manual: grão (seção própria) + impostos ativos (estimativa).
+  const contasForaDoEditor = useMemo(
+    () => new Set<string>([...contasGraoSet, ...contasImpostoAtivas]),
+    [contasGraoSet, contasImpostoAtivas],
+  )
 
   const gruposValor = grupos
-    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasGraoSet.has(c.conta)) }))
+    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasForaDoEditor.has(c.conta)) }))
     .filter((g) => g.contas.length > 0)
   const semContas = gruposValor.length === 0 && contasGrao.length === 0
 
@@ -258,7 +267,17 @@ export function OrcamentoPage() {
       const cc = custoDeReceita[c]
       if (cc) set(cc, custoGrao(m, c))
     }
+    // Contas de imposto ativas não são persistidas (só estimativa) — inclui limpar
+    // valor legado que orçamentos antigos tenham gravado nessas contas.
+    for (const c of contasImpostoAtivas) delete out[c]
     return out
+  }
+  // Remove as contas de imposto ativas de um mapa (p/ comparar salvo × atual na
+  // mesma base — elas não fazem parte do orçamento persistido).
+  const semImpostos = (v: Record<string, number>): Record<string, number> => {
+    const o = { ...v }
+    for (const c of contasImpostoAtivas) delete o[c]
+    return o
   }
 
   // Situação agregada do período.
@@ -266,7 +285,7 @@ export function OrcamentoPage() {
   const temAlgum = salvosDoPeriodo.length > 0
   const alterado = meses.some(
     (m) =>
-      canon(valoresDoMes(m)) !== canon(salvoDoMes(m)?.valores ?? {}) ||
+      canon(valoresDoMes(m)) !== canon(semImpostos(salvoDoMes(m)?.valores ?? {})) ||
       canon(sacas[m] ?? {}) !== canon(salvoDoMes(m)?.sacas ?? {}) ||
       canon(precos[m] ?? {}) !== canon(salvoDoMes(m)?.precoSaca ?? {}) ||
       canon(margens[m] ?? {}) !== canon(salvoDoMes(m)?.margemSaca ?? {}),
@@ -331,7 +350,7 @@ export function OrcamentoPage() {
         for (const m of meses) {
           next[m] = { ...next[m] }
           for (const [conta, v] of Object.entries(sugeridos)) {
-            if (!contasGraoSet.has(conta)) next[m][conta] = v
+            if (!contasForaDoEditor.has(conta)) next[m][conta] = v
           }
         }
         return next
@@ -351,7 +370,7 @@ export function OrcamentoPage() {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m] }
       for (const [conta, total] of Object.entries(importados)) {
-        if (contasGraoSet.has(conta)) continue
+        if (contasForaDoEditor.has(conta)) continue
         const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
         for (const m of meses) next[m][conta] = dist[m]
       }

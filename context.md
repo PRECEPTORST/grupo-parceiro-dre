@@ -139,8 +139,9 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   `EstadoDre.impostos` (default `impostosPadrao`: Funrural 1,5% compra, PIS 0,65% venda, COFINS 3% venda,
   ICMS 0% inativo — EDITÁVEIS, confirmar com contador). A seção "Impostos automáticos" só EXIBE a
   estimativa por mês/regra (base venda = TODA a receita orçada EXCETO financeira; compra = aquisição de
-  grão; margem = venda − compra). NÃO grava em `Orcamento.valores`; as contas de dedução seguem como
-  contas manuais normais no editor de valor. **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
+  grão; margem = venda − compra). NÃO grava em `Orcamento.valores`. As contas de regra ATIVA saem do
+  editor de valor (aparecem só na estimativa, sem dupla entrada) e não são persistidas (limpa até valor
+  legado); contas de dedução SEM regra ativa (ex.: ISS, devoluções) seguem editáveis normalmente. **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
   agregado. **"✨ Sugerir com IA"** e **"⬆ Importar"** atuam só nas **contas de valor** (import = totais
   do período distribuídos pela sazonalidade); a receita de grão é planejada na grade sacas × preço.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção determinística `caixa.ts`. Converte DRE
