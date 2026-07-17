@@ -133,13 +133,14 @@ de lá** quando o cliente ajustar), publicado para aprovação do cliente.
   informa **sacas + preço venda/saca + margem bruta/saca**; deriva **preço compra/saca (venda − margem)**,
   **= Receita** (sacas × venda), **(−) Custo aquisição** (sacas × compra, grava na conta 4.1.0x) e **=
   Margem bruta** (receita − custo). Contas de receita E custo de grão saem do editor de valor (derivadas,
-  sem dupla entrada). **Impostos automáticos** (botão "⚙ Alíquotas" → `ModalImpostos`): tabela de
-  `RegraImposto` (nome · conta · base venda/compra/margem · alíquota %) em `EstadoDre.impostos` (default
-  `impostosPadrao`: Funrural 1,5% compra, PIS 0,65% venda, COFINS 3% venda, ICMS 0% inativo — EDITÁVEIS,
-  confirmar com contador). Cada regra ativa deriva o valor da sua conta de dedução/imposto a partir da
-  base (venda = TODA a receita orçada EXCETO financeira; compra = aquisição de grão; margem = venda −
-  compra), mês a mês, e entra no `Orcamento.valores` → no DRE. Contas de imposto ativas saem do editor de
-  valor. Seção "Impostos automáticos" mostra o calculado por mês/regra. **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
+  sem dupla entrada). **Impostos automáticos — SÓ REFERÊNCIA no Orçamento, NÃO entra no orçamento salvo nem
+  no DRE** (decisão do cliente: no DRE os tributos vêm do Enoki/realizado). Botão "⚙ Alíquotas" →
+  `ModalImpostos`: tabela de `RegraImposto` (nome · conta · base venda/compra/margem · alíquota %) em
+  `EstadoDre.impostos` (default `impostosPadrao`: Funrural 1,5% compra, PIS 0,65% venda, COFINS 3% venda,
+  ICMS 0% inativo — EDITÁVEIS, confirmar com contador). A seção "Impostos automáticos" só EXIBE a
+  estimativa por mês/regra (base venda = TODA a receita orçada EXCETO financeira; compra = aquisição de
+  grão; margem = venda − compra). NÃO grava em `Orcamento.valores`; as contas de dedução seguem como
+  contas manuais normais no editor de valor. **Salvar/Aprovar agem sobre TODOS os meses do período**; badge de status é
   agregado. **"✨ Sugerir com IA"** e **"⬆ Importar"** atuam só nas **contas de valor** (import = totais
   do período distribuídos pela sazonalidade); a receita de grão é planejada na grade sacas × preço.
 - **Fluxo de caixa** — `CaixaPage.tsx` (Sprint 2): projeção determinística `caixa.ts`. Converte DRE
@@ -264,7 +265,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
 | **Receita de grão por sacas × preço** (valor calculado) | ✅ |
 | **Margem bruta/saca → preço de compra + custo de aquisição** (grão) | ✅ |
-| **Impostos automáticos** (% de venda/compra → deduções, alíquotas editáveis) | ✅ |
+| **Impostos automáticos** (estimativa % venda/compra — só referência no Orçamento) | ✅ |
 | Orçamento por conta (+ IA + importar planilha/doc) | ✅ |
 | Papel sócio + aprovação de orçamento (4 papéis) | ✅ |
 | Fluxo de caixa mensal + diário (Sprint 2) | ✅ |

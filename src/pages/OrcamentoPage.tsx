@@ -106,20 +106,13 @@ export function OrcamentoPage() {
     [contasGrao],
   )
 
-  // Tributos automáticos: cada regra ativa deriva o valor de uma conta (imposto)
-  // a partir de uma base. Essas contas saem do editor de valor (derivadas).
+  // Tributos automáticos: cálculo de REFERÊNCIA no Orçamento (% de venda/compra).
+  // NÃO entra no orçamento salvo nem no DRE — os tributos do DRE vêm do Enoki.
   const regras = useMemo(() => estado.impostos ?? impostosPadrao(), [estado.impostos])
   const regrasAtivas = useMemo(() => regras.filter((r) => r.ativo), [regras])
-  const contasImpostoAtivas = useMemo(() => new Set(regrasAtivas.map((r) => r.conta)), [regrasAtivas])
-
-  // Conjunto de contas DERIVADAS (grão + impostos ativos) — fora do editor de valor.
-  const contasDerivadas = useMemo(
-    () => new Set<string>([...contasGraoSet, ...contasImpostoAtivas]),
-    [contasGraoSet, contasImpostoAtivas],
-  )
 
   const gruposValor = grupos
-    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasDerivadas.has(c.conta)) }))
+    .map((g) => ({ ...g, contas: g.contas.filter((c) => !contasGraoSet.has(c.conta)) }))
     .filter((g) => g.contas.length > 0)
   const semContas = gruposValor.length === 0 && contasGrao.length === 0
 
@@ -231,13 +224,14 @@ export function OrcamentoPage() {
     setIndice(indiceDoMes(p, primeiroMesAtual))
   }
 
-  // Bases dos tributos por mês. Venda = TODA a receita orçada EXCETO financeira
-  // (receita de grão + demais contas de receita_bruta/outras_receitas_operacionais);
+  // Bases dos tributos por mês (só p/ o cálculo de REFERÊNCIA dos impostos —
+  // não é persistido). Venda = TODA a receita orçada EXCETO financeira (receita de
+  // grão + demais contas de receita_bruta/outras_receitas_operacionais);
   // compra = aquisição de grão; margem = venda − compra.
   const vendaBase = (m: string): number => {
     let base = contasGrao.reduce((s, c) => s + valorGrao(m, c), 0)
     for (const conta of Object.keys(vals[m] ?? {})) {
-      if (contasDerivadas.has(conta)) continue
+      if (contasGraoSet.has(conta)) continue
       const linha = mapa[conta]
       if (linha === 'receita_bruta' || linha === 'outras_receitas_operacionais') base += getV(m, conta)
     }
@@ -249,17 +243,10 @@ export function OrcamentoPage() {
     const compra = compraBase(m)
     return { venda, compra, margem: venda - compra }
   }
-  // Impostos derivados de um mês, por conta (inclui zero p/ contas de regra ativa,
-  // para sobrescrever qualquer valor manual/legado).
-  const impostosDoMes = (m: string): Record<string, number> => {
-    const bases = basesDoMes(m)
-    const out: Record<string, number> = {}
-    for (const r of regrasAtivas) out[r.conta] = (out[r.conta] ?? 0) + valorImposto(bases[r.base], r.aliquota)
-    return out
-  }
 
   // Valores efetivos de um mês: contas de valor + receita de grão (3.1.0x) e
-  // custo de aquisição (4.1.0x) derivados de sacas/preço/margem + impostos derivados.
+  // custo de aquisição (4.1.0x) derivados de sacas/preço/margem. Os impostos
+  // automáticos NÃO entram aqui (são só referência no Orçamento, não no DRE).
   const valoresDoMes = (m: string): Record<string, number> => {
     const out = { ...limpo(vals[m] ?? {}) }
     const set = (conta: string, v: number) => {
@@ -271,7 +258,6 @@ export function OrcamentoPage() {
       const cc = custoDeReceita[c]
       if (cc) set(cc, custoGrao(m, c))
     }
-    for (const [conta, v] of Object.entries(impostosDoMes(m))) set(conta, v)
     return out
   }
 
@@ -345,7 +331,7 @@ export function OrcamentoPage() {
         for (const m of meses) {
           next[m] = { ...next[m] }
           for (const [conta, v] of Object.entries(sugeridos)) {
-            if (!contasDerivadas.has(conta)) next[m][conta] = v
+            if (!contasGraoSet.has(conta)) next[m][conta] = v
           }
         }
         return next
@@ -365,7 +351,7 @@ export function OrcamentoPage() {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m] }
       for (const [conta, total] of Object.entries(importados)) {
-        if (contasDerivadas.has(conta)) continue
+        if (contasGraoSet.has(conta)) continue
         const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
         for (const m of meses) next[m][conta] = dist[m]
       }
@@ -375,14 +361,9 @@ export function OrcamentoPage() {
     setImportarAberto(false)
   }
 
-  const totalImpostos = meses.reduce(
-    (s, m) => s + Object.values(impostosDoMes(m)).reduce((a, b) => a + b, 0),
-    0,
-  )
   const totalPeriodo =
     gruposValor.reduce((s, g) => s + g.contas.reduce((sc, c) => sc + totalConta(c.conta), 0), 0) +
-    contasGrao.reduce((s, c) => s + totalValorGrao(c) + totalCustoGrao(c), 0) +
-    totalImpostos
+    contasGrao.reduce((s, c) => s + totalValorGrao(c) + totalCustoGrao(c), 0)
 
   return (
     <div className={`mx-auto px-6 py-8 ${multi ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -919,8 +900,8 @@ function ImpostosAutomaticos({
         </table>
       </div>
       <p className="mt-1 text-[11px] text-faint">
-        Calculado automaticamente e lançado nas contas de dedução/imposto do DRE. Ajuste as alíquotas em
-        “⚙ Alíquotas”.
+        Estimativa de referência a partir do orçamento — <strong>não entra no orçamento salvo nem no
+        DRE</strong> (os tributos realizados vêm do Enoki). Ajuste as alíquotas em “⚙ Alíquotas”.
       </p>
     </div>
   )
