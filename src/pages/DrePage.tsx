@@ -71,6 +71,19 @@ export function DrePage() {
     () => montarDre(competencia, estado.lancamentos, mapa, orcamento, ateData),
     [competencia, estado.lancamentos, mapa, orcamento, ateData],
   )
+
+  // Resultado líquido ACUMULADO no ano (YTD): soma o resultado de todos os meses
+  // do mesmo ano até o selecionado (o mês corrente entra parcial, até hoje).
+  const acumuladoAno = useMemo(() => {
+    const ano = competencia.slice(0, 4)
+    const meses = competencias.filter((c) => c.slice(0, 4) === ano && c <= competencia)
+    const total = meses.reduce((s, c) => {
+      const ate = c === hoje.slice(0, 7) ? hoje : undefined
+      return s + montarDre(c, estado.lancamentos, mapa, undefined, ate).realizado.resultadoLiquido
+    }, 0)
+    return { total, ano, nMeses: meses.length }
+  }, [competencias, competencia, estado.lancamentos, mapa, hoje])
+
   const temOrcamento = !!orcamento
   const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
 
@@ -149,7 +162,7 @@ export function DrePage() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
             <StatCard i={0} rotulo="Receita líquida" valor={dre.realizado.receitaLiquida} porSaca={resumo.receitaLiquidaPorSaca} />
             <StatCard i={1} rotulo="Lucro bruto" valor={dre.realizado.lucroBruto} porSaca={resumo.lucroBrutoPorSaca} />
             <StatCard i={2} rotulo="Sacas negociadas" texto={resumo.sacasTotal > 0 ? formatNum(resumo.sacasTotal) : '—'} />
@@ -158,6 +171,13 @@ export function DrePage() {
               rotulo="Resultado líquido"
               valor={dre.realizado.resultadoLiquido}
               porSaca={resumo.lucroLiquidoPorSaca}
+              destaque
+            />
+            <StatCard
+              i={4}
+              rotulo={`Acum. no ano (${acumuladoAno.ano})`}
+              valor={acumuladoAno.total}
+              sub={`até ${rotuloCompetencia(competencia)}`}
               destaque
             />
           </div>
@@ -463,6 +483,7 @@ function StatCard({
   valor,
   texto,
   porSaca,
+  sub,
   destaque = false,
   i,
 }: {
@@ -470,6 +491,7 @@ function StatCard({
   valor?: number
   texto?: string
   porSaca?: number | null
+  sub?: string
   destaque?: boolean
   i: number
 }) {
@@ -493,6 +515,7 @@ function StatCard({
           {formatBRL(porSaca)} <span className="text-faint">/ saca</span>
         </div>
       )}
+      {sub && <div className="mt-0.5 text-[11px] text-faint">{sub}</div>}
     </div>
   )
 }

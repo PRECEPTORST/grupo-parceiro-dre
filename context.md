@@ -351,6 +351,15 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 21. KPI "Resultado líquido acumulado no ano" no DRE (sessão 2026-08-04, pedido do usuário GP)
+
+Ao lado da caixa "Resultado líquido" (do mês), no topo do DRE, uma caixa **"Acum. no ano (AAAA)"** com o
+resultado líquido ACUMULADO (YTD): soma de `resultadoLiquido` de todos os meses do mesmo ano até o
+selecionado (mês corrente entra parcial via `ateData`), subtítulo "até <mês>/<ano>". Grid dos KPIs foi de
+`lg:grid-cols-4` p/ `lg:grid-cols-5`; `StatCard` ganhou prop `sub` (subtítulo livre). Cálculo `acumuladoAno`
+em `DrePage` (reusa `montarDre` por mês). Verificado no `?demo`: mai/2026 = R$ 200k no mês, R$ 900k no ano
+(fev 300k + mar 400k + mai 200k).
+
 ## 20. Rotina de lançar sacas por cereal (grade mês × grão) (sessão 2026-08-04)
 
 Antes as sacas eram lançadas UM MÊS por vez, embutido no card "Resultado por cereal" do DRE. Agora há um
