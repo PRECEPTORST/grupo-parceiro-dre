@@ -273,6 +273,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | Confiabilidade/materialidade (Sprint 2) | ✅ |
 | Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
 | **Sincronização Safragold automática** ao abrir | ✅ |
+| **Achados de auditoria** (motor estrutural + card na Confiabilidade — §17) | ✅ |
 | Modo de verificação local `?demo` (dev) | ✅ |
 | Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada — ver §16) |
 | **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
@@ -324,6 +325,30 @@ Enquanto a Enoki não abre, o cliente mandou a planilha **`DRE ACUMULADO _CEREAI
   na nuvem. Reativar dados fake NUNCA; quando a Enoki entrar, `buscarDoSafragold()` assume.
 - **Reimportar** (se o cliente mandar planilha corrigida): regerar o `estado-real.json` e rodar
   `node scripts/seed-real.mjs <json>`. Sem orçamento nesta carga (`orcamentos:[]`) — DRE mostra só realizado.
+
+## 17. Motor de AUDITORIA + card na Confiabilidade (sessão 2026-08-04)
+
+Card **"⚑ Achados de auditoria"** no topo da aba **Confiabilidade** (`ConfiabilidadePage`), alimentado
+pelo motor DETERMINÍSTICO `src/lib/auditoria.ts` (`analisarAuditoria(lancamentos, mapa, resultadoDeclarado?, opcoes?)`,
+9 testes em `auditoria.test.ts`; total do projeto = **73 testes**). Diferente da confiabilidade (que olha
+lançamento-a-lançamento DENTRO de um mês), a auditoria olha o DRE ESTRUTURAL de TODO o período carregado.
+**6 regras** (mesma entrada → mesma saída, zero IA):
+  1. `tributos_vendas` (alta) — deduções/receita bruta < 1% → imposto s/ vendas faltando.
+  2. `imposto_lucro` (alta) — IRPJ/CSLL = 0 com resultado-antes-do-IR acumulado > 0 (conservador: no
+     semestre real o acumulado é ~breakeven, então NÃO dispara — correto).
+  3. `depreciacao` (média) — depreciação idêntica em ≥3 meses (valor "chapado" = lançamento manual).
+  4. `reconciliacao` (média) — soma das nossas contas ≠ **`EstadoDre.resultadoDeclarado`** (novo campo:
+     `Record<'YYYY-MM', R$>` = LUCRO/PREJUÍZO informado na origem; `seed-real.mjs` grava da linha 79 da
+     planilha). É o achado "subtotais não fecham" tornado DETERMINÍSTICO e genérico.
+  5. `concentracao` (alta) — uma única conta ≥ 50% das despesas OPERACIONAIS do mês (**exclui o CPV** de
+     propósito: em grãos o custo da mercadoria é sempre dominante; senão mediria concentração à toa).
+  6. `margem` (baixa) — meses com margem bruta < 1%.
+**Achados reais (jan–jun/2026):** 5 — [alta] inadimplência abr concentra 63% das despesas (R$ 910.928);
+[alta] tributos 0,06% da receita; [média] reconciliação mar −R$ 802 / jun −R$ 28.168; [média] depreciação
+R$ 8.627,64 chapada em 6 meses; [baixa] margem abr 0,92%. Card é read-only (não tem ação de reclassificar,
+diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilidade ligada no demo
+temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
+preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
 ## 14. Rodar localmente
 

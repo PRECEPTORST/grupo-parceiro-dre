@@ -7,6 +7,7 @@ import { formatBRL } from '../lib/format'
 import { competenciasDisponiveis } from '../lib/dre'
 import { mapaEfetivo } from '../lib/planoContas'
 import { analisarConfiabilidade, type AchadoConfiabilidade, type Severidade } from '../lib/confiabilidade'
+import { analisarAuditoria, type AchadoAuditoria } from '../lib/auditoria'
 import { LINHAS_DRE, META_LINHAS, configConfiabilidadePadrao, type LinhaDRE } from '../lib/tipos'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -38,6 +39,12 @@ export function ConfiabilidadePage() {
 
   const config = estado.confiabilidade ?? configConfiabilidadePadrao()
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
+
+  // Auditoria: análise ESTRUTURAL de todo o período carregado (independe do mês selecionado).
+  const auditoria = useMemo(
+    () => analisarAuditoria(estado.lancamentos, mapa, estado.resultadoDeclarado),
+    [estado.lancamentos, mapa, estado.resultadoDeclarado],
+  )
 
   const relatorio = useMemo(
     () =>
@@ -98,6 +105,9 @@ export function ConfiabilidadePage() {
           />
         </div>
       </div>
+
+      {/* Achados de auditoria — estruturais, do período inteiro */}
+      {auditoria.achados.length > 0 && <AuditoriaSecao auditoria={auditoria} />}
 
       {/* Índice de confiança */}
       <div className="mb-4 animate-rise overflow-hidden rounded-2xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(35,40,31,0.04),0_16px_40px_-24px_rgba(35,40,31,0.25)]">
@@ -247,6 +257,85 @@ function AchadoCard({
           </button>
         </div>
       )}
+    </Card>
+  )
+}
+
+const CATEGORIA_AUD: Record<AchadoAuditoria['categoria'], string> = {
+  tributos_vendas: 'Tributos s/ vendas',
+  imposto_lucro: 'IRPJ/CSLL',
+  depreciacao: 'Depreciação',
+  reconciliacao: 'Reconciliação',
+  concentracao: 'Concentração',
+  margem: 'Margem',
+}
+
+function rotuloPeriodo(comps: string[]): string {
+  if (comps.length === 0) return ''
+  const ord = [...comps].sort()
+  return ord.length === 1
+    ? rotuloCompetencia(ord[0])
+    : `${rotuloCompetencia(ord[0])}–${rotuloCompetencia(ord[ord.length - 1])}`
+}
+
+function AuditoriaSecao({ auditoria }: { auditoria: ReturnType<typeof analisarAuditoria> }) {
+  return (
+    <section className="mb-5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-head text-sm font-semibold uppercase tracking-wider text-gold-deep">
+          <span>⚑</span> Achados de auditoria · {rotuloPeriodo(auditoria.competencias)}
+        </h2>
+        <span className="text-xs text-muted">
+          {auditoria.achados.length} achado(s) estrutural(is) no período
+        </span>
+      </div>
+      <div className="flex flex-col gap-3">
+        {auditoria.achados.map((a) => (
+          <AuditoriaAchadoCard key={a.id} a={a} />
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-faint">
+        Análise estrutural determinística sobre o DRE de todo o período — carga tributária, IRPJ/CSLL,
+        reconciliação com o total informado na origem, concentração de despesas e margem. Não depende de IA.
+      </p>
+    </section>
+  )
+}
+
+function AuditoriaAchadoCard({ a }: { a: AchadoAuditoria }) {
+  const e = ESTILO_SEV[a.severidade]
+  return (
+    <Card className={`animate-rise ${e.borda}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex gap-2.5">
+          <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${e.ponto}`} />
+          <div>
+            <div className="text-sm font-semibold text-ink">
+              {a.titulo}{' '}
+              <span className={`text-[11px] font-medium uppercase tracking-wide ${e.texto}`}>· {e.rotulo}</span>
+              <span className="ml-1.5 rounded bg-cream px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                {CATEGORIA_AUD[a.categoria]}
+              </span>
+            </div>
+            <div className="mt-0.5 text-sm text-muted">{a.detalhe}</div>
+            <div className="mt-1 text-[11px] text-faint">→ {a.acao}</div>
+            {a.competencias.length > 0 && a.competencias.length <= 3 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {a.competencias.map((c) => (
+                  <span key={c} className="rounded bg-cream px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                    {rotuloCompetencia(c)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {a.valor > 0 && (
+          <div className="text-right">
+            <div className="font-head text-lg font-semibold tabular-nums text-ink">{formatBRL(a.valor)}</div>
+          </div>
+        )}
+      </div>
     </Card>
   )
 }

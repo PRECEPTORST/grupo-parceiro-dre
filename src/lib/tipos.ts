@@ -314,6 +314,13 @@ export interface EstadoDre {
   impostos?: RegraImposto[]
   /** Sacas vendidas por competência ('YYYY-MM') e grão — informadas manualmente. */
   sacas?: Record<string, Partial<Record<Grao, number>>>
+  /**
+   * Resultado líquido INFORMADO na origem por competência ('YYYY-MM' → R$), quando
+   * os dados vêm de uma DRE já fechada (ex.: importação da DRE gerencial do cliente).
+   * A auditoria compara a soma das nossas contas com este total: se divergir, houve
+   * ajuste manual no subtotal da origem. Ausente quando a fonte não declara total.
+   */
+  resultadoDeclarado?: Record<string, number>
 }
 
 export function estadoDreVazio(): EstadoDre {
