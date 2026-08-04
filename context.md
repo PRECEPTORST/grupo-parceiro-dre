@@ -351,6 +351,28 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 19. Linha "Investimentos" abaixo do resultado (sessão 2026-08-04)
+
+Decisão do cliente: os **investimentos (capex — veículos, terrenos, consórcios, imobilizado) DEVEM ser
+classificados**, numa **linha própria ABAIXO do resultado**, com um subtotal **"Resultado após
+investimentos"** — igual à planilha dele (`LUCRO/PREJUÍZO` e, separado, `RESULTADO (−) INVESTIMENTOS`).
+- **`LINHAS_DRE` ganhou `'investimentos'`** (no fim; sinal −1; `META_LINHAS.investimentos`). Como
+  `calcularSubtotais` referencia cada linha pelo nome, investimentos **NÃO entra** em receita líquida/
+  lucro bruto/EBIT/EBITDA/antes do IR/resultado líquido — só no novo subtotal
+  **`Subtotais.resultadoAposInvestimentos` = resultadoLiquido − investimentos** (`dre.ts`). Assim o
+  resultado operacional/líquido continua batendo com o `resultadoDeclarado` (linha 79 da planilha) e a
+  reconciliação da auditoria (§17) segue válida.
+- **DrePage:** `SUBTOTAIS_APOS.investimentos` renderiza "Resultado após investimentos" (forte) depois da
+  linha. Verificado no `?demo`: líquido R$ 300k intacto, (−) Investimentos R$ 57k (veículo+terreno),
+  após investimentos R$ 243k.
+- **Caixa:** `TRATAMENTO_CAIXA` (Record exaustivo por linha) ganhou `investimentos: {fluxo:'saida',
+  prazo:'pagamento'}` — capex É saída de caixa real, então agora reduz o fluxo projetado.
+- **IA de importação** (`api/classificar-dre.ts`): enum ganhou `investimentos`; guia manda rotear
+  veículos/terrenos/consórcios/máquinas/imobilizado para `investimentos` (antes ia p/ `ignorar`).
+  `ignorar` agora é SÓ subtotal/percentual/cabeçalho.
+- ⚠️ **Reimportar em produção** para os investimentos aparecerem (o estado atual foi importado quando a
+  IA ainda os ignorava, então VEICULOS/TERRENO/CONSÓRCIOS não têm lançamento). **85 testes.**
+
 ## 18. Rotina de IMPORTAR DRE de planilha no app (sessão 2026-08-04)
 
 Botão **"⬆ Importar planilha (DRE)"** na página **Lançamentos** (admin) abre `ImportarDreModal` — automatiza

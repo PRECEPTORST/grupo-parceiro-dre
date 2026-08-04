@@ -54,6 +54,8 @@ export interface Subtotais {
   ebitda: number
   resultadoAntesIr: number
   resultadoLiquido: number
+  /** Resultado líquido menos os investimentos (capex) — visão da planilha do cliente. */
+  resultadoAposInvestimentos: number
 }
 
 export interface DreMensal {
@@ -81,6 +83,7 @@ function calcularSubtotais(v: Record<LinhaDRE, number>): Subtotais {
   const resultadoFinanceiro = v.receita_financeira - v.despesa_financeira
   const resultadoAntesIr = arredondar(resultadoOperacional + resultadoFinanceiro)
   const resultadoLiquido = arredondar(resultadoAntesIr - v.impostos_lucro)
+  const resultadoAposInvestimentos = arredondar(resultadoLiquido - v.investimentos)
   return {
     receitaLiquida,
     lucroBruto,
@@ -88,6 +91,7 @@ function calcularSubtotais(v: Record<LinhaDRE, number>): Subtotais {
     ebitda,
     resultadoAntesIr,
     resultadoLiquido,
+    resultadoAposInvestimentos,
   }
 }
 

@@ -19,6 +19,7 @@ export const LINHAS_DRE = [
   'receita_financeira',
   'despesa_financeira',
   'impostos_lucro',
+  'investimentos',
 ] as const
 
 export type LinhaDRE = (typeof LINHAS_DRE)[number]
@@ -82,6 +83,12 @@ export const META_LINHAS: Record<LinhaDRE, MetaLinha> = {
     rotulo: '(-) IRPJ e CSLL',
     sinal: -1,
     descricao: 'Imposto de renda e contribuição social sobre o lucro.',
+  },
+  investimentos: {
+    rotulo: '(-) Investimentos',
+    sinal: -1,
+    descricao:
+      'Aquisição de imobilizado (capex): veículos, terrenos, consórcios, máquinas e benfeitorias. Fica ABAIXO do resultado — não entra no resultado operacional.',
   },
 }
 

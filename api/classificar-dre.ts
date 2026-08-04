@@ -22,6 +22,7 @@ const LINHAS = [
   'receita_financeira',
   'despesa_financeira',
   'impostos_lucro',
+  'investimentos',
   'ignorar',
 ] as const
 
@@ -36,7 +37,8 @@ const GUIA = `Você classifica contas de uma DRE gerencial (comércio de grãos)
 - receita_financeira: juros recebidos, rendimentos de aplicação, descontos obtidos.
 - despesa_financeira: juros pagos, IOF, tarifas bancárias, descontos concedidos.
 - impostos_lucro: IRPJ, CSLL.
-- ignorar: use para SUBTOTAIS (receita líquida, custo total, despesa total, lucro bruto, margem, ROE, acumulado, resultado, lucro/prejuízo), para PERCENTUAIS e para INVESTIMENTOS/CAPEX (compra de veículos, terrenos, consórcios, imobilizado). Não são contas de resultado.`
+- investimentos: CAPEX — aquisição de imobilizado: compra de veículos, terrenos, consórcios, máquinas, benfeitorias. Fica ABAIXO do resultado (não é despesa operacional), mas DEVE ser classificado aqui (não ignorado).
+- ignorar: use APENAS para SUBTOTAIS (receita líquida, custo total, despesa total, lucro bruto, margem, ROE, acumulado, resultado, lucro/prejuízo), PERCENTUAIS e cabeçalhos de seção. Não são contas.`
 
 export default async function handler(req: any, res: any) {
   if (!authConfigurada()) {

@@ -53,6 +53,8 @@ const TRATAMENTO_CAIXA: Record<LinhaDRE, TrataCaixa> = {
   despesa_financeira: { fluxo: 'saida', prazo: 'pagamento' },
   // Depreciação/amortização não movimenta caixa — nunca entra no fluxo.
   depreciacao_amortizacao: { fluxo: 'ignorar', prazo: 'pagamento' },
+  // Investimentos (capex) SÃO saída de caixa real — a compra do bem paga na data.
+  investimentos: { fluxo: 'saida', prazo: 'pagamento' },
 }
 
 /** 'YYYY-MM' + n meses → 'YYYY-MM'. */

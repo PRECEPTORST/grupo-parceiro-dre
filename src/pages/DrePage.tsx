@@ -35,6 +35,9 @@ const SUBTOTAIS_APOS: Partial<Record<LinhaDRE, { chave: keyof Subtotais; rotulo:
     ],
     despesa_financeira: [{ chave: 'resultadoAntesIr', rotulo: 'Resultado antes do IR' }],
     impostos_lucro: [{ chave: 'resultadoLiquido', rotulo: 'Resultado líquido', forte: true }],
+    investimentos: [
+      { chave: 'resultadoAposInvestimentos', rotulo: 'Resultado após investimentos', forte: true },
+    ],
   }
 
 function corDesvio(sinal: 1 | -1, desvio: number): string {

@@ -48,6 +48,20 @@ describe('montarDre — analítico', () => {
     expect(dre.realizado.resultadoOperacional).toBe(130_000)
     expect(dre.realizado.resultadoAntesIr).toBe(100_000)
     expect(dre.realizado.resultadoLiquido).toBe(100_000)
+    // Sem investimentos: resultado após investimentos = resultado líquido.
+    expect(dre.realizado.resultadoAposInvestimentos).toBe(100_000)
+  })
+
+  it('investimentos ficam ABAIXO do resultado — não afetam o operacional', () => {
+    const comInvest = montarDre('2026-06', [...lancamentos, lanc('inv', '2026-06-15', '1.2.01', 40_000, 'Compra de veículo')], {
+      ...mapa,
+      '1.2.01': 'investimentos',
+    })
+    // Resultado operacional/líquido inalterados; só o "após investimentos" cai 40k.
+    expect(comInvest.realizado.resultadoOperacional).toBe(130_000)
+    expect(comInvest.realizado.resultadoLiquido).toBe(100_000)
+    expect(comInvest.realizado.resultadoAposInvestimentos).toBe(60_000)
+    expect(comInvest.linhas.find((l) => l.linha === 'investimentos')!.realizado).toBe(40_000)
   })
 
   it('isola contas sem classificação', () => {
