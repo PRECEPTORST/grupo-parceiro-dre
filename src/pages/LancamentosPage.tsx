@@ -3,6 +3,7 @@ import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
+import { ImportarDreModal } from '../components/ImportarDreModal'
 import { formatBRL } from '../lib/format'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { META_LINHAS, LIMIAR_REVISAO } from '../lib/tipos'
@@ -13,6 +14,7 @@ export function LancamentosPage() {
   const admin = podeAdministrar(usuario?.papel)
   const [sincronizando, setSincronizando] = useState(false)
   const [classificando, setClassificando] = useState(false)
+  const [importando, setImportando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -84,6 +86,9 @@ export function LancamentosPage() {
         </div>
         {admin && (
           <div className="flex gap-2">
+            <Botao variante="fantasma" onClick={() => setImportando(true)}>
+              ⬆ Importar planilha (DRE)
+            </Botao>
             <Botao onClick={sincronizar} disabled={sincronizando}>
               {sincronizando ? 'Sincronizando…' : '↻ Sincronizar Safragold'}
             </Botao>
@@ -177,6 +182,8 @@ export function LancamentosPage() {
           </div>
         </Card>
       )}
+
+      {admin && importando && <ImportarDreModal onClose={() => setImportando(false)} />}
     </div>
   )
 }

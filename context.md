@@ -274,6 +274,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
 | **Sincronização Safragold automática** ao abrir | ✅ |
 | **Achados de auditoria** (motor estrutural + card na Confiabilidade — §17) | ✅ |
+| **Importar DRE de planilha** (upload .xlsx + IA memoriza + preview — §18) | ✅ |
 | Modo de verificação local `?demo` (dev) | ✅ |
 | Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada — ver §16) |
 | **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
@@ -349,6 +350,34 @@ R$ 8.627,64 chapada em 6 meses; [baixa] margem abr 0,92%. Card é read-only (nã
 diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilidade ligada no demo
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
+
+## 18. Rotina de IMPORTAR DRE de planilha no app (sessão 2026-08-04)
+
+Botão **"⬆ Importar planilha (DRE)"** na página **Lançamentos** (admin) abre `ImportarDreModal` — automatiza
+o que antes era feito na mão (§16). Decisões do Luciano: **upload .xlsx** + **IA que memoriza** + **substituir tudo**.
+Fluxo: upload → parse determinístico → IA classifica só as contas NOVAS → revisão editável → grava.
+- **Dep nova:** `xlsx` (SheetJS 0.18.5) — **carregada por `import('xlsx')` dinâmico** no modal, então vira
+  chunk separado (~425KB), FORA do bundle principal. (Input trusted = arquivo do próprio admin; CVEs do
+  SheetJS antigo são de baixo risco aqui.) Aceita .xlsx/.xls/.csv.
+- **Parser determinístico** `src/lib/importarDre.ts` (`analisarMatriz`, `parseCompetenciaCabecalho`,
+  `ultimoDiaDoMes`, `chaveConta`; 11 testes). Acha a linha de cabeçalho (a que reconhece mais meses),
+  detecta competências ('YYYY-MM'), extrai contas (rótulo + valor/mês) e SINALIZA subtotais
+  (`ehSubtotal`: receita líquida/custo total/lucro bruto/margem/ROE/acumulado/investimento/===) e a linha
+  de resultado (`ehResultado`: lucro/prejuízo). ⚠️ **Mês SEM ano no rótulo é ignorado** — por isso a
+  planilha do cliente (out–dez/2025 vinham sem ano, "OUTUBRO") importa exatamente jan–jun/2026.
+- **IA** `api/classificar-dre.ts` (Opus 4.8, tool use, enum inclui **`ignorar`** p/ subtotal/percentual/
+  capex): recebe só as descrições NÃO memorizadas; devolve linha do DRE por descrição. Memorização = a
+  classificação aprovada fica em `EstadoDre.classificacoes` (chave = rótulo normalizado), então na próxima
+  importação a mesma conta já vem pronta (badge "memória"; "IA" = veio do modelo; "auto" = subtotal).
+- **Gravação:** `DreContext.importarDreGerencial({lancamentos, classificacoes, resultadoDeclarado})` —
+  SUBSTITUI os lançamentos, MESCLA classificações, grava `resultadoDeclarado` (da linha de resultado
+  escolhida no modal → alimenta a reconciliação da auditoria §17). Lançamento por conta×mês, `valor=abs`,
+  zeros descartados, data = último dia do mês; `contaSafragold` = rótulo da planilha (por isso aparece no
+  DRE analítico). **84 testes** no total. Verificado: parser rodado sobre o xlsx real (6 meses, 70 linhas,
+  subtotais/resultado corretos) + modal renderiza (upload) via `?demo`. A tabela de revisão não foi dirigida
+  no browser (seletor de arquivo nativo não é automatizável), mas o parse que a alimenta está coberto.
+- **Substitui o fluxo manual** do `scripts/seed-real.mjs` para o cliente (o script segue útil p/ carga
+  fora do app). ⚠️ Importar all-months da planilha: se quiser recortar meses, hoje edita-se a planilha.
 
 ## 14. Rodar localmente
 

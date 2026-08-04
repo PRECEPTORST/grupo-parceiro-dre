@@ -38,6 +38,15 @@ interface DreContextValue {
   salvarSacas: (competencia: string, sacas: Partial<Record<Grao, number>>) => void
   /** Atualiza as regras de tributos automáticos do orçamento. */
   salvarImpostos: (regras: RegraImposto[]) => void
+  /**
+   * Importa uma DRE gerencial já parseada: SUBSTITUI todos os lançamentos, MESCLA
+   * as classificações (memoriza) e grava o resultado declarado por competência.
+   */
+  importarDreGerencial: (dados: {
+    lancamentos: LancamentoCanonico[]
+    classificacoes: Classificacao[]
+    resultadoDeclarado: Record<string, number>
+  }) => void
   /** Puxa os lançamentos do Safragold e mescla no estado (merge por id). */
   sincronizarSafragold: () => Promise<{ importados: number; simulado: boolean }>
   statusSync: StatusSync
@@ -164,6 +173,19 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarImpostos = (regras: RegraImposto[]) =>
       setEstado((s) => ({ ...s, impostos: regras }))
 
+    const importarDreGerencial: DreContextValue['importarDreGerencial'] = (dados) =>
+      setEstado((s) => {
+        // Classificações: mescla por contaSafragold (memoriza; a importada vence).
+        const porConta = new Map(s.classificacoes.map((c) => [c.contaSafragold, c]))
+        for (const c of dados.classificacoes) porConta.set(c.contaSafragold, c)
+        return {
+          ...s,
+          lancamentos: dados.lancamentos, // substitui tudo
+          classificacoes: [...porConta.values()],
+          resultadoDeclarado: dados.resultadoDeclarado,
+        }
+      })
+
     return {
       estado,
       salvarClassificacoes,
@@ -172,6 +194,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarConfigConfiabilidade,
       salvarSacas,
       salvarImpostos,
+      importarDreGerencial,
       sincronizarSafragold,
       statusSync,
       erroSync,
