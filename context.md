@@ -274,7 +274,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
 | **Sincronização Safragold automática** ao abrir | ✅ |
 | Modo de verificação local `?demo` (dev) | ✅ |
-| Dados | 🟡 Simulados (semeados) |
+| Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada — ver §16) |
 | **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
 | Sprint 3 (alertas WhatsApp) | ⬜ Próximo |
 
@@ -292,9 +292,38 @@ REALIZADA = `(receitaBruta − aquisicao)/sacas` (SEM deduções/CPV rateado); `
 `aquisicao`. (2) **Impostos automáticos** no orçamento (ver seção 6): tabela de alíquotas editáveis
 deriva as deduções (PIS/COFINS/Funrural/ICMS) de venda/compra e lança nas contas do DRE.
 
-**RETOMAR AQUI (roadmap, seção 15):** Sprint 3 WhatsApp OU decidir a fonte contábil da Enoki (jan–jun).
-Possível: IRPJ/CSLL sobre o RESULTADO (não sobre margem bruta — precisa do resultado após despesas; melhor
-no nível DRE, não na seção de grão).
+**RETOMAR AQUI (roadmap, seção 15):** Sprint 3 WhatsApp. Fonte contábil jan–jun JÁ CARREGADA na mão
+(ver §16). Possível: IRPJ/CSLL sobre o RESULTADO (não sobre margem bruta — precisa do resultado após
+despesas; melhor no nível DRE, não na seção de grão).
+
+## 16. Importação manual da DRE gerencial jan–jun/2026 (sessão 2026-08-04)
+
+Enquanto a Enoki não abre, o cliente mandou a planilha **`DRE ACUMULADO _CEREAIS.xlsx`** (aba "DRE ACUM
+(2)", 1 coluna por mês). Importados **só jan–jun/2026** como dados REAIS, substituindo os simulados.
+
+- **Contas NÃO seguem o plano** → classifiquei cada uma **pela descrição** (pedido do Luciano). Códigos
+  sintéticos por grupo: `R.`/`D.`/`C.`/`DC.`/`DA.`/`DEP.`/`RF.`/`DF.`/`OR.`/`IL.` (63 contas). Aparecem
+  no **DRE analítico** dentro da sua linha (o cliente quer o DRE "aberto" com todas as despesas/receitas).
+- **Geração:** script Python lê o xlsx → `estado-real.json` (`{lancamentos, classificacoes, orcamentos:[]}`,
+  269 lançamentos, 1 por conta×mês, `valor=abs`, zeros descartados, data=último dia do mês). Gravado no
+  Blob por **`scripts/seed-real.mjs <json>`** (lê `BLOB_READ_WRITE_TOKEN` do `.env.local`; remove versões
+  antigas). ⚠️ **O JSON e o gerador têm valores financeiros do cliente → ficam FORA do git** (no scratchpad
+  da sessão). `seed-real.mjs` é genérico e foi commitado.
+- **Sinais validados** contra o "LUCRO/PREJUÍZO" da planilha: batem exato em Jan/Fev/Abr/Mai. **Resíduos
+  de auditoria:** Mar −R$ 802 e Jun −R$ 28.168 vêm de **ajuste manual nos subtotais da planilha** (em Jun
+  o CUSTO TOTAL foi reduzido pelo "Desconto Obtido") — a soma das contas visíveis não fecha com o subtotal
+  do cliente. Nossa versão soma as contas honestamente → **achado real de auditoria** p/ discutir c/ o cliente.
+- **Excluídos do DRE:** seção INVESTIMENTOS (veículos, consórcios, terreno) — são capex, ficam abaixo da
+  linha na própria planilha.
+- **Classificações a confirmar (⚠️):** COMISSÃO→comerciais (planilha punha no custo); FRETE→CPV (assumido
+  frete de compra/logística; se for de venda vira comercial); RETIRADA SÓCIOS→administrativas (é
+  distribuição, tecnicamente fora do DRE); PERDA INADIMPLÊNCIA (R$ 910k em abr, derruba o mês)→administrativas;
+  ICMS-PARCELAMENTO→deduções; MÓVEIS/UTENSÍLIOS→administrativas (pode ser imobilizado).
+- ⚠️ **Anti-poluição:** `api/safragold-sync.ts::lancamentosSimulados()` agora devolve **`[]`** — antes
+  injetava `sim-1…sim-12` (contas 3.1.01 etc.) que o auto-sync mergeava por cima do realizado e persistia
+  na nuvem. Reativar dados fake NUNCA; quando a Enoki entrar, `buscarDoSafragold()` assume.
+- **Reimportar** (se o cliente mandar planilha corrigida): regerar o `estado-real.json` e rodar
+  `node scripts/seed-real.mjs <json>`. Sem orçamento nesta carga (`orcamentos:[]`) — DRE mostra só realizado.
 
 ## 14. Rodar localmente
 

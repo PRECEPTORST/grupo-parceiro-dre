@@ -48,23 +48,17 @@ function normalizar(brutos: any[]): LancamentoCanonico[] {
   }))
 }
 
-/** Amostra de lançamentos de um grupo de grãos, para demo enquanto não há Safragold. */
+/**
+ * Amostra de lançamentos de demonstração. VAZIA em produção: os dados reais
+ * (jan–jun/2026) foram importados da DRE gerencial do cliente e vivem no Blob;
+ * devolver qualquer amostra aqui faria o auto-sync injetar números falsos por
+ * cima do realizado. Enquanto a integração com a Enoki não existir, o sync não
+ * traz nada. Quando `SAFRAGOLD_BASE_URL`/`SAFRAGOLD_API_KEY` forem configurados,
+ * `buscarDoSafragold()` assume e este caminho simulado deixa de ser usado.
+ * (O cenário de demo para desenvolvimento fica no modo `?demo`, em src/dev/demo.tsx.)
+ */
 function lancamentosSimulados(): LancamentoCanonico[] {
-  return [
-    { id: 'sim-1', data: '2026-06-05', contaSafragold: '3.1.01', historico: 'Venda de soja - contrato 4471', valor: 1_240_000 },
-    { id: 'sim-2', data: '2026-06-08', contaSafragold: '3.1.01', historico: 'Venda de milho - contrato 4478', valor: 610_000 },
-    { id: 'sim-3', data: '2026-06-10', contaSafragold: '3.2.01', historico: 'ICMS sobre vendas', valor: 205_000 },
-    { id: 'sim-4', data: '2026-06-10', contaSafragold: '3.2.02', historico: 'Funrural', valor: 34_000 },
-    { id: 'sim-5', data: '2026-06-12', contaSafragold: '4.1.01', historico: 'Aquisição de grãos p/ revenda', valor: 980_000 },
-    { id: 'sim-6', data: '2026-06-15', contaSafragold: '4.1.05', historico: 'Frete sobre compras', valor: 72_000 },
-    { id: 'sim-7', data: '2026-06-18', contaSafragold: '4.2.10', historico: 'Comissão de vendas', valor: 41_000 },
-    { id: 'sim-8', data: '2026-06-20', contaSafragold: '4.3.01', historico: 'Folha administrativa', valor: 88_000 },
-    { id: 'sim-9', data: '2026-06-22', contaSafragold: '4.3.08', historico: 'Aluguel do escritório', valor: 15_000 },
-    { id: 'sim-10', data: '2026-06-25', contaSafragold: '4.4.01', historico: 'Juros de empréstimo Banco X', valor: 27_500 },
-    { id: 'sim-11', data: '2026-06-28', contaSafragold: '3.5.01', historico: 'Rendimento de aplicação CDB', valor: 9_800 },
-    // Competência anterior, para exercitar o seletor de mês:
-    { id: 'sim-12', data: '2026-05-30', contaSafragold: '3.1.01', historico: 'Venda de soja - contrato 4460', valor: 1_050_000 },
-  ]
+  return []
 }
 
 export default async function handler(req: any, res: any) {
