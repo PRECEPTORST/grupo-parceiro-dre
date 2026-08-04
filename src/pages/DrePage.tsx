@@ -3,6 +3,7 @@ import { useDre } from '../context/DreContext'
 import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Card, Kicker, Select, NumInput } from '../components/ui'
+import { SacasModal } from '../components/SacasModal'
 import { formatBRL, formatPct, formatDataBR, formatNum } from '../lib/format'
 import {
   montarDre,
@@ -50,6 +51,7 @@ export function DrePage() {
   const { estado, salvarSacas } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeAdministrar(usuario?.papel)
+  const [lancarSacas, setLancarSacas] = useState(false)
   const competencias = useMemo(
     () => competenciasDisponiveis(estado.lancamentos),
     [estado.lancamentos],
@@ -232,6 +234,7 @@ export function DrePage() {
             podeEditar={podeEditar}
             sacas={sacasDoMes}
             onSalvar={(s) => salvarSacas(competencia, s)}
+            onLancarTodos={() => setLancarSacas(true)}
           />
 
           {metasGrao.length > 0 && <MetaCereais metas={metasGrao} />}
@@ -244,6 +247,8 @@ export function DrePage() {
           )}
         </>
       )}
+
+      {lancarSacas && <SacasModal onClose={() => setLancarSacas(false)} />}
     </div>
   )
 }
@@ -253,11 +258,13 @@ function ResumoCereais({
   podeEditar,
   sacas,
   onSalvar,
+  onLancarTodos,
 }: {
   resumo: ResumoGraos
   podeEditar: boolean
   sacas: Partial<Record<Grao, number>>
   onSalvar: (sacas: Partial<Record<Grao, number>>) => void
+  onLancarTodos: () => void
 }) {
   const tot = resumo.graos.reduce(
     (a, g) => ({
@@ -277,9 +284,19 @@ function ResumoCereais({
         <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
           Resultado por cereal
         </span>
-        <span className="text-xs text-faint">
-          {resumo.sacasTotal > 0 ? `${formatNum(resumo.sacasTotal)} sacas no mês` : 'informe as sacas para ver o R$/saca'}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-faint">
+            {resumo.sacasTotal > 0 ? `${formatNum(resumo.sacasTotal)} sacas no mês` : 'informe as sacas para ver o R$/saca'}
+          </span>
+          {podeEditar && (
+            <button
+              onClick={onLancarTodos}
+              className="rounded-lg border border-green/40 px-2.5 py-1 text-xs font-semibold text-green transition-colors hover:bg-green/10"
+            >
+              ⊞ Lançar sacas (todos os meses)
+            </button>
+          )}
+        </div>
       </div>
 
       {podeEditar && (

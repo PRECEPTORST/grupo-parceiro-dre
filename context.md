@@ -351,6 +351,16 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 20. Rotina de lançar sacas por cereal (grade mês × grão) (sessão 2026-08-04)
+
+Antes as sacas eram lançadas UM MÊS por vez, embutido no card "Resultado por cereal" do DRE. Agora há um
+botão **"⊞ Lançar sacas (todos os meses)"** nesse card (só `podeEditar` = admin/sócio) que abre
+`SacasModal` — uma **grade competências × grãos** (soja/milho/sorgo/café + totais) para lançar tudo de uma
+vez. Estado local; grava só ao clicar "Salvar sacas" via novo `DreContext.salvarSacasLote(Record<comp,
+Partial<Record<Grao,number>>>)` (merge por competência). Os meses da grade = `competenciasDisponiveis`.
+O card inline por mês continua existindo. Verificado no `?demo`: editar → salvar → persistir (localStorage)
+→ recarregar. **85 testes.** As sacas alimentam o R$/saca e o "meta × realizado" do DRE (`EstadoDre.sacas`).
+
 ## 19. Linha "Investimentos" abaixo do resultado (sessão 2026-08-04)
 
 Decisão do cliente: os **investimentos (capex — veículos, terrenos, consórcios, imobilizado) DEVEM ser

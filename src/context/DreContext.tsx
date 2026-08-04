@@ -36,6 +36,8 @@ interface DreContextValue {
   salvarConfigConfiabilidade: (config: ConfigConfiabilidade) => void
   /** Salva as sacas vendidas de cada grão numa competência. */
   salvarSacas: (competencia: string, sacas: Partial<Record<Grao, number>>) => void
+  /** Salva as sacas de VÁRIAS competências de uma vez (merge por competência). */
+  salvarSacasLote: (sacas: Record<string, Partial<Record<Grao, number>>>) => void
   /** Atualiza as regras de tributos automáticos do orçamento. */
   salvarImpostos: (regras: RegraImposto[]) => void
   /**
@@ -170,6 +172,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarSacas = (competencia: string, sacas: Partial<Record<Grao, number>>) =>
       setEstado((s) => ({ ...s, sacas: { ...s.sacas, [competencia]: sacas } }))
 
+    const salvarSacasLote = (sacas: Record<string, Partial<Record<Grao, number>>>) =>
+      setEstado((s) => ({ ...s, sacas: { ...s.sacas, ...sacas } }))
+
     const salvarImpostos = (regras: RegraImposto[]) =>
       setEstado((s) => ({ ...s, impostos: regras }))
 
@@ -193,6 +198,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarPremissasCaixa,
       salvarConfigConfiabilidade,
       salvarSacas,
+      salvarSacasLote,
       salvarImpostos,
       importarDreGerencial,
       sincronizarSafragold,
