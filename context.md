@@ -351,6 +351,17 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 22. Nota de divergência vs planilha de origem no DRE (sessão 2026-08-04, pedido do usuário GP)
+
+Abaixo dos KPIs do DRE, um card âmbar (info) aparece **só quando** o resultado somado das contas diverge
+do total INFORMADO na origem (`EstadoDre.resultadoDeclarado`) em algum mês do acumulado do ano. Calculado
+junto do `acumuladoAno` (`difDeclarado` + `mesesComDif`, tolerância R$ 1). Texto explica que é proposital
+(soma das contas × ajuste manual nos subtotais da planilha) e aponta a aba Confiabilidade. Na produção
+(jan–jun), em jun a nota mostra **R$ 28.970,57 (mar/2026, jun/2026)** — exatamente os dois resíduos que a
+auditoria (§17) já pegava. Dinâmica: some se não houver `resultadoDeclarado` ou divergência. Verificado no
+`?demo` (com `resultadoDeclarado` injetado). Confirmação do acumulado real: **jun/2026 = −R$ 11.349,97**
+(semestre levemente negativo, puxado pelo prejuízo de abril).
+
 ## 21. KPI "Resultado líquido acumulado no ano" no DRE (sessão 2026-08-04, pedido do usuário GP)
 
 Ao lado da caixa "Resultado líquido" (do mês), no topo do DRE, uma caixa **"Acum. no ano (AAAA)"** com o

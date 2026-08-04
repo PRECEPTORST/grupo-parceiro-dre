@@ -73,16 +73,27 @@ export function DrePage() {
   )
 
   // Resultado líquido ACUMULADO no ano (YTD): soma o resultado de todos os meses
-  // do mesmo ano até o selecionado (o mês corrente entra parcial, até hoje).
+  // do mesmo ano até o selecionado (o mês corrente entra parcial, até hoje). Mede
+  // também a diferença contra o total INFORMADO na origem (resultadoDeclarado) —
+  // quando a planilha do cliente tem ajuste manual nos subtotais, os dois divergem.
   const acumuladoAno = useMemo(() => {
     const ano = competencia.slice(0, 4)
     const meses = competencias.filter((c) => c.slice(0, 4) === ano && c <= competencia)
-    const total = meses.reduce((s, c) => {
+    let total = 0
+    let difDeclarado = 0
+    const mesesComDif: string[] = []
+    for (const c of meses) {
       const ate = c === hoje.slice(0, 7) ? hoje : undefined
-      return s + montarDre(c, estado.lancamentos, mapa, undefined, ate).realizado.resultadoLiquido
-    }, 0)
-    return { total, ano, nMeses: meses.length }
-  }, [competencias, competencia, estado.lancamentos, mapa, hoje])
+      const rl = montarDre(c, estado.lancamentos, mapa, undefined, ate).realizado.resultadoLiquido
+      total += rl
+      const decl = estado.resultadoDeclarado?.[c]
+      if (decl != null && Math.abs(rl - decl) > 1) {
+        difDeclarado += rl - decl
+        mesesComDif.push(c)
+      }
+    }
+    return { total, ano, nMeses: meses.length, difDeclarado, mesesComDif }
+  }, [competencias, competencia, estado.lancamentos, estado.resultadoDeclarado, mapa, hoje])
 
   const temOrcamento = !!orcamento
   const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
@@ -181,6 +192,19 @@ export function DrePage() {
               destaque
             />
           </div>
+
+          {acumuladoAno.mesesComDif.length > 0 && (
+            <Card className="mb-4 animate-rise border-gold/30 bg-gold/5">
+              <p className="text-sm text-gold-deep">
+                ℹ️ Este resultado pode divergir da sua planilha em{' '}
+                <strong>{formatBRL(Math.abs(acumuladoAno.difDeclarado))}</strong> no acumulado (
+                {acumuladoAno.mesesComDif.map(rotuloCompetencia).join(', ')}). É proposital: aqui o
+                total é a <strong>soma das contas</strong>, enquanto na planilha de origem os subtotais
+                têm ajustes manuais que não fecham com elas. A aba{' '}
+                <strong>Confiabilidade</strong> detalha essa diferença nos achados de auditoria.
+              </p>
+            </Card>
+          )}
 
           {dre.naoClassificado > 0 && (
             <Card className="mb-4 animate-rise border-warn/40 bg-warn/5">
