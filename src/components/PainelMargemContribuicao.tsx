@@ -1,6 +1,9 @@
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { Card } from './ui'
 import { formatBRL, formatPct } from '../lib/format'
+import { useDre } from '../context/DreContext'
+import { useAuth } from '../context/AuthContext'
+import { podeAdministrar } from '../lib/permissoes'
 import type { PontoMC } from '../lib/margemContribuicao'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -38,16 +41,41 @@ export function PainelMargemContribuicao({
   serie: PontoMC[]
   competencia: string
 }) {
+  const { estado, salvarMcIncluirComerciais } = useDre()
+  const { usuario } = useAuth()
+  const podeEditar = podeAdministrar(usuario?.papel)
+  const incluir = estado.mcIncluirComerciais ?? false
+
   const atual = serie.find((p) => p.competencia === competencia) ?? serie[serie.length - 1]
   const dados = serie.map((p) => ({ rotulo: rotuloComp(p.competencia), mc: p.mc, mcPct: p.mcPct ?? 0 }))
 
   return (
     <Card className="animate-rise">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
-          Margem de contribuição
-        </h2>
-        <span className="text-[11px] text-faint">receita líquida − custo · {atual ? rotuloComp(atual.competencia) : ''}</span>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
+            Margem de contribuição
+          </h2>
+          <span className="text-[11px] text-faint">
+            receita − custo{incluir ? ' − desp. comerciais' : ''} · {atual ? rotuloComp(atual.competencia) : ''}
+          </span>
+        </div>
+        {podeEditar && (
+          <div className="inline-flex rounded-lg border border-line p-0.5 text-[11px] font-semibold">
+            <button
+              onClick={() => salvarMcIncluirComerciais(false)}
+              className={`rounded-md px-2 py-1 transition-colors ${!incluir ? 'bg-green text-white' : 'text-muted hover:bg-cream'}`}
+            >
+              Só CPV
+            </button>
+            <button
+              onClick={() => salvarMcIncluirComerciais(true)}
+              className={`rounded-md px-2 py-1 transition-colors ${incluir ? 'bg-green text-white' : 'text-muted hover:bg-cream'}`}
+            >
+              CPV + comerciais
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3">

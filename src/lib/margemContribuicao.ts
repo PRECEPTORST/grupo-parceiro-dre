@@ -1,10 +1,10 @@
 // Margem de contribuição — DETERMINÍSTICA.
 //
-// Definição adotada com o cliente (Grupo Parceiro): margem de contribuição =
-// RECEITA LÍQUIDA − CUSTO DO PRODUTO (CPV). Numericamente é o próprio lucro bruto
-// do DRE; exposta aqui com o nome "margem de contribuição" (+ % da receita) para
-// os painéis. Se um dia entrarem outros custos variáveis (comissão, frete de
-// venda), é só somar a `custo` aqui — o resto (caixas e gráfico) segue igual.
+// Definição (Grupo Parceiro): margem de contribuição = RECEITA LÍQUIDA − CUSTOS
+// VARIÁVEIS. Os custos variáveis são o CUSTO DO PRODUTO (CPV) e, OPCIONALMENTE, as
+// DESPESAS COMERCIAIS (comissão, frete de venda, marketing) — controlado por
+// `incluirComerciais`. Só CPV (default) = o próprio lucro bruto do DRE. A opção é
+// persistida em `EstadoDre.mcIncluirComerciais` e vale no painel e no DRE.
 
 import { montarDre } from './dre'
 import type { LancamentoCanonico, MapaClassificacao } from './tipos'
@@ -18,18 +18,25 @@ export interface PontoMC {
   mcPct: number | null
 }
 
-/** Série da margem de contribuição por competência, em ordem cronológica. */
+/**
+ * Série da margem de contribuição por competência, em ordem cronológica.
+ * `incluirComerciais` = subtrai também as despesas comerciais (custo variável).
+ */
 export function serieMargemContribuicao(
   competencias: string[],
   lancamentos: LancamentoCanonico[],
   mapa: MapaClassificacao,
+  incluirComerciais = false,
 ): PontoMC[] {
   return [...competencias]
     .sort()
     .map((competencia) => {
       const d = montarDre(competencia, lancamentos, mapa)
       const receitaLiquida = d.realizado.receitaLiquida
-      const mc = d.realizado.lucroBruto // receita líquida − CPV
+      const comerciais = incluirComerciais
+        ? (d.linhas.find((l) => l.linha === 'despesas_comerciais')?.realizado ?? 0)
+        : 0
+      const mc = d.realizado.lucroBruto - comerciais // receita líquida − CPV [− comerciais]
       return {
         competencia,
         receitaLiquida,

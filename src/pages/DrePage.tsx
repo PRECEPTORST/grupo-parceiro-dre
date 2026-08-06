@@ -98,8 +98,8 @@ export function DrePage() {
   }, [competencias, competencia, estado.lancamentos, estado.resultadoDeclarado, mapa, hoje])
 
   const serieMC = useMemo(
-    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa),
-    [competencias, estado.lancamentos, mapa],
+    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais ?? false),
+    [competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais],
   )
 
   const temOrcamento = !!orcamento

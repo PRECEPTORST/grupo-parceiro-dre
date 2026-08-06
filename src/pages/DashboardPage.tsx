@@ -91,8 +91,8 @@ export function DashboardPage() {
   )
 
   const serieMC = useMemo(
-    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa),
-    [competencias, estado.lancamentos, mapa],
+    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais ?? false),
+    [competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais],
   )
 
   const comparativo = [

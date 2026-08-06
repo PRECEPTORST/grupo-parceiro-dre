@@ -322,6 +322,12 @@ export interface EstadoDre {
   /** Sacas vendidas por competência ('YYYY-MM') e grão — informadas manualmente. */
   sacas?: Record<string, Partial<Record<Grao, number>>>
   /**
+   * Margem de contribuição: incluir as DESPESAS COMERCIAIS (comissão, frete de
+   * venda, marketing) como custo variável, além do CPV. Ausente/false = só CPV
+   * (= lucro bruto). Aplica no painel e no DRE. Definição escolhida pelo cliente.
+   */
+  mcIncluirComerciais?: boolean
+  /**
    * Resultado líquido INFORMADO na origem por competência ('YYYY-MM' → R$), quando
    * os dados vêm de uma DRE já fechada (ex.: importação da DRE gerencial do cliente).
    * A auditoria compara a soma das nossas contas com este total: se divergir, houve

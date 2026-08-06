@@ -364,7 +364,12 @@ há sobreposição intencional com a caixa "Lucro bruto" do Dashboard; se um dia
   dourado) do mês selecionado + gráfico de evolução (Area de `mcPct` em %, tooltip mostra R$ e %; Recharts,
   `isAnimationActive={false}`). Renderizado no `DashboardPage` (após os KPIs secundários) e no `DrePage`
   (após os KPIs/nota de divergência). Verificado no `?demo` (Dashboard ligado temporariamente): fev 50% →
-  mar/mai 100%. **89 testes.**
+  mar/mai 100%.
+- **OPÇÃO da definição (2026-08-04):** toggle no cabeçalho do painel "Só CPV" ↔ "CPV + comerciais" (só
+  `podeEditar`). Persistido em `EstadoDre.mcIncluirComerciais` (aplica no painel E no DRE, consistente).
+  `serieMargemContribuicao(..., incluirComerciais)` subtrai também `despesas_comerciais` quando ligado.
+  Subtítulo reflete a definição. Verificado: mai 200k/100% (só CPV) ↔ 150k/75% (CPV+comerciais, −50k comissão),
+  persistindo. **90 testes.**
 
 ## 22. Nota de divergência vs planilha de origem no DRE (sessão 2026-08-04, pedido do usuário GP)
 

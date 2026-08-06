@@ -47,4 +47,17 @@ describe('serieMargemContribuicao', () => {
     const so = serieMargemContribuicao(['2026-03'], [L('x', '2026-03-31', 'CPV', 100)], mapa)
     expect(so[0].mcPct).toBeNull()
   })
+
+  it('incluirComerciais subtrai também as despesas comerciais', () => {
+    const comCom = [
+      L('r', '2026-01-31', 'REC', 1000),
+      L('c', '2026-01-31', 'CPV', 400),
+      L('com', '2026-01-31', 'COM', 100),
+    ]
+    const m2: MapaClassificacao = { ...mapa, COM: 'despesas_comerciais' }
+    // Só CPV: 1000 − 400 = 600.
+    expect(serieMargemContribuicao(['2026-01'], comCom, m2, false)[0].mc).toBe(600)
+    // CPV + comerciais: 1000 − 400 − 100 = 500.
+    expect(serieMargemContribuicao(['2026-01'], comCom, m2, true)[0].mc).toBe(500)
+  })
 })

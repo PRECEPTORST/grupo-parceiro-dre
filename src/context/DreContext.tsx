@@ -40,6 +40,8 @@ interface DreContextValue {
   salvarSacasLote: (sacas: Record<string, Partial<Record<Grao, number>>>) => void
   /** Atualiza as regras de tributos automáticos do orçamento. */
   salvarImpostos: (regras: RegraImposto[]) => void
+  /** Define se a margem de contribuição inclui as despesas comerciais (além do CPV). */
+  salvarMcIncluirComerciais: (incluir: boolean) => void
   /**
    * Importa uma DRE gerencial já parseada: SUBSTITUI todos os lançamentos, MESCLA
    * as classificações (memoriza) e grava o resultado declarado por competência.
@@ -178,6 +180,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarImpostos = (regras: RegraImposto[]) =>
       setEstado((s) => ({ ...s, impostos: regras }))
 
+    const salvarMcIncluirComerciais = (incluir: boolean) =>
+      setEstado((s) => ({ ...s, mcIncluirComerciais: incluir }))
+
     const importarDreGerencial: DreContextValue['importarDreGerencial'] = (dados) =>
       setEstado((s) => {
         // Classificações: mescla por contaSafragold (memoriza; a importada vence).
@@ -200,6 +205,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarSacas,
       salvarSacasLote,
       salvarImpostos,
+      salvarMcIncluirComerciais,
       importarDreGerencial,
       sincronizarSafragold,
       statusSync,
