@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Card, Kicker, Select, NumInput } from '../components/ui'
 import { SacasModal } from '../components/SacasModal'
+import { PainelMargemContribuicao } from '../components/PainelMargemContribuicao'
+import { serieMargemContribuicao } from '../lib/margemContribuicao'
 import { formatBRL, formatPct, formatDataBR, formatNum } from '../lib/format'
 import {
   montarDre,
@@ -94,6 +96,11 @@ export function DrePage() {
     }
     return { total, ano, nMeses: meses.length, difDeclarado, mesesComDif }
   }, [competencias, competencia, estado.lancamentos, estado.resultadoDeclarado, mapa, hoje])
+
+  const serieMC = useMemo(
+    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa),
+    [competencias, estado.lancamentos, mapa],
+  )
 
   const temOrcamento = !!orcamento
   const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
@@ -205,6 +212,10 @@ export function DrePage() {
               </p>
             </Card>
           )}
+
+          <div className="mb-5">
+            <PainelMargemContribuicao serie={serieMC} competencia={competencia} />
+          </div>
 
           {dre.naoClassificado > 0 && (
             <Card className="mb-4 animate-rise border-warn/40 bg-warn/5">

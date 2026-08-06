@@ -23,6 +23,8 @@ import {
 } from '../lib/dre'
 import { mapaEfetivo } from '../lib/planoContas'
 import { orcamentoAprovado } from '../lib/tipos'
+import { serieMargemContribuicao } from '../lib/margemContribuicao'
+import { PainelMargemContribuicao } from '../components/PainelMargemContribuicao'
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -86,6 +88,11 @@ export function DashboardPage() {
         }
       }),
     [competencias, estado.lancamentos, estado.orcamentos, mapa],
+  )
+
+  const serieMC = useMemo(
+    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa),
+    [competencias, estado.lancamentos, mapa],
   )
 
   const comparativo = [
@@ -191,6 +198,10 @@ export function DashboardPage() {
         <Kpi i={0} rotulo="Receita líquida" valor={dre.realizado.receitaLiquida} orcado={dre.orcado.receitaLiquida} temOrcamento={temOrcamento} />
         <Kpi i={1} rotulo="Lucro bruto" valor={dre.realizado.lucroBruto} orcado={dre.orcado.lucroBruto} margemBase={dre.realizado.receitaLiquida} temOrcamento={temOrcamento} />
         <Kpi i={2} rotulo="EBITDA" valor={dre.realizado.ebitda} orcado={dre.orcado.ebitda} margemBase={dre.realizado.receitaLiquida} temOrcamento={temOrcamento} />
+      </div>
+
+      <div className="mb-5">
+        <PainelMargemContribuicao serie={serieMC} competencia={competencia} />
       </div>
 
       {dre.naoClassificado > 0 && (

@@ -351,6 +351,21 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 23. Painel de MARGEM DE CONTRIBUIÇÃO (Dashboard + DRE) (sessão 2026-08-04, pedido do usuário GP)
+
+Pedido: gráfico de evolução da margem de contribuição na tela inicial E no DRE + (no painel) uma caixa com
+o valor e outra com a %. **Definição adotada com o cliente: MC = Receita líquida − Custo do produto (CPV)**
+— numericamente é o próprio LUCRO BRUTO do DRE, exposto com o nome "margem de contribuição" + %. (⚠️ Por isso
+há sobreposição intencional com a caixa "Lucro bruto" do Dashboard; se um dia entrarem outros custos variáveis
+— comissão, frete de venda — é só somar em `custo` no `serieMargemContribuicao`.)
+- `src/lib/margemContribuicao.ts` (`serieMargemContribuicao`, `PontoMC`; 4 testes): série por competência
+  com `mc` (=lucroBruto) e `mcPct` (=mc/receitaLiquida).
+- `src/components/PainelMargemContribuicao.tsx`: card reutilizável com 2 caixas (VALOR R$ verde, % DA RECEITA
+  dourado) do mês selecionado + gráfico de evolução (Area de `mcPct` em %, tooltip mostra R$ e %; Recharts,
+  `isAnimationActive={false}`). Renderizado no `DashboardPage` (após os KPIs secundários) e no `DrePage`
+  (após os KPIs/nota de divergência). Verificado no `?demo` (Dashboard ligado temporariamente): fev 50% →
+  mar/mai 100%. **89 testes.**
+
 ## 22. Nota de divergência vs planilha de origem no DRE (sessão 2026-08-04, pedido do usuário GP)
 
 Abaixo dos KPIs do DRE, um card âmbar (info) aparece **só quando** o resultado somado das contas diverge
