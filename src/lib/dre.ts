@@ -56,6 +56,12 @@ export interface Subtotais {
   resultadoLiquido: number
   /** Resultado líquido menos os investimentos (capex) — visão da planilha do cliente. */
   resultadoAposInvestimentos: number
+  /**
+   * "Total de despesas" (definição do cliente): despesas administrativas +
+   * comerciais + despesa financeira − receita financeira + IRPJ/CSLL. NÃO inclui
+   * depreciação, deduções nem CPV.
+   */
+  totalDespesas: number
 }
 
 export interface DreMensal {
@@ -84,6 +90,13 @@ function calcularSubtotais(v: Record<LinhaDRE, number>): Subtotais {
   const resultadoAntesIr = arredondar(resultadoOperacional + resultadoFinanceiro)
   const resultadoLiquido = arredondar(resultadoAntesIr - v.impostos_lucro)
   const resultadoAposInvestimentos = arredondar(resultadoLiquido - v.investimentos)
+  const totalDespesas = arredondar(
+    v.despesas_administrativas +
+      v.despesas_comerciais +
+      v.despesa_financeira -
+      v.receita_financeira +
+      v.impostos_lucro,
+  )
   return {
     receitaLiquida,
     lucroBruto,
@@ -92,6 +105,7 @@ function calcularSubtotais(v: Record<LinhaDRE, number>): Subtotais {
     resultadoAntesIr,
     resultadoLiquido,
     resultadoAposInvestimentos,
+    totalDespesas,
   }
 }
 

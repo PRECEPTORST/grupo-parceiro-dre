@@ -50,6 +50,8 @@ describe('montarDre — analítico', () => {
     expect(dre.realizado.resultadoLiquido).toBe(100_000)
     // Sem investimentos: resultado após investimentos = resultado líquido.
     expect(dre.realizado.resultadoAposInvestimentos).toBe(100_000)
+    // Total de despesas = adm(90k) + comercial(0) + desp.fin(30k) − rec.fin(0) + IRPJ/CSLL(0).
+    expect(dre.realizado.totalDespesas).toBe(120_000)
   })
 
   it('investimentos ficam ABAIXO do resultado — não afetam o operacional', () => {

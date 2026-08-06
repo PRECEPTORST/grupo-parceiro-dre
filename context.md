@@ -351,6 +351,14 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 24. Quadro "Total de despesas" no DRE (sessão 2026-08-04, pedido do cliente)
+
+Card no DRE (logo após a tabela analítica) somando, pela fórmula EXPLÍCITA do cliente: **despesas
+administrativas + comerciais + despesa financeira − receita financeira + IRPJ/CSLL**. ⚠️ Por definição
+dele, NÃO inclui depreciação, deduções nem CPV. Determinístico em `Subtotais.totalDespesas` (`dre.ts`).
+`QuadroDespesas` em `DrePage` mostra as 5 linhas (realizado + orçado quando há orçamento) e o total.
+Verificado no `?demo`: adm 40 + comercial 10 + desp.fin 8 − rec.fin 3 + IRPJ/CSLL 7 = **R$ 62.000**. **90 testes.**
+
 ## 23. Painel de MARGEM DE CONTRIBUIÇÃO (Dashboard + DRE) (sessão 2026-08-04, pedido do usuário GP)
 
 Pedido: gráfico de evolução da margem de contribuição na tela inicial E no DRE + (no painel) uma caixa com
