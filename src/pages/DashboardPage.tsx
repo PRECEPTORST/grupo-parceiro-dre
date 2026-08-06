@@ -25,6 +25,7 @@ import { mapaEfetivo } from '../lib/planoContas'
 import { orcamentoAprovado } from '../lib/tipos'
 import { serieMargemContribuicao } from '../lib/margemContribuicao'
 import { PainelMargemContribuicao } from '../components/PainelMargemContribuicao'
+import { QuadroDespesas } from '../components/QuadroDespesas'
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -202,6 +203,10 @@ export function DashboardPage() {
 
       <div className="mb-5">
         <PainelMargemContribuicao serie={serieMC} competencia={competencia} />
+      </div>
+
+      <div className="mb-5">
+        <QuadroDespesas dre={dre} temOrcamento={temOrcamento} />
       </div>
 
       {dre.naoClassificado > 0 && (
