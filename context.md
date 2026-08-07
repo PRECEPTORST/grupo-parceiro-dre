@@ -351,6 +351,13 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 25. Análise vertical no DRE — % do faturamento em cada linha (sessão 2026-08-04, pedido do cliente)
+
+Coluna **"% Fat."** na tabela do DRE, em CADA linha, conta e subtotal = valor ÷ **faturamento (receita
+bruta realizada)** × 100. Base = `dre.linhas.find(receita_bruta).realizado`, passada ao `LinhaGrupo`
+(`pctFat(v)`). Verificado no `?demo` (fev): receita bruta 100%, lucro bruto 50% (300k/600k), deduções 0%.
+⚠️ Base é receita BRUTA (faturamento); se o cliente quiser sobre a líquida, trocar o denominador. **90 testes.**
+
 ## 24. Quadro "Total de despesas" no DRE (sessão 2026-08-04, pedido do cliente)
 
 Card no DRE (logo após a tabela analítica) somando, pela fórmula EXPLÍCITA do cliente: **despesas

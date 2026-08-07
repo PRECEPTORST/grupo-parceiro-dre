@@ -148,6 +148,9 @@ export function DrePage() {
   const alternarTodas = () =>
     setRecolhidas(todasRecolhidas ? new Set() : new Set(dre.linhas.map((l) => l.linha)))
 
+  // Faturamento = receita bruta realizada — base da análise vertical (% em cada linha).
+  const faturamento = dre.linhas.find((l) => l.linha === 'receita_bruta')?.realizado ?? 0
+
   const semDados = estado.lancamentos.length === 0
 
   return (
@@ -261,6 +264,7 @@ export function DrePage() {
                   <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
                     <th className="py-2 pl-5 pr-4 font-semibold">Conta</th>
                     <th className="py-2 px-4 text-right font-semibold">Realizado</th>
+                    <th className="py-2 px-3 text-right font-semibold">% Fat.</th>
                     {temOrcamento && <th className="py-2 px-4 text-right font-semibold">Orçado</th>}
                     {temOrcamento && (
                       <th className="py-2 pr-5 pl-4 text-right font-semibold">Desvio</th>
@@ -273,6 +277,7 @@ export function DrePage() {
                       key={l.linha}
                       linha={l}
                       temOrcamento={temOrcamento}
+                      faturamento={faturamento}
                       recolhida={recolhidas.has(l.linha)}
                       onToggle={() => toggle(l.linha)}
                       subtotais={SUBTOTAIS_APOS[l.linha]}
@@ -561,6 +566,7 @@ function StatCard({
 function LinhaGrupo({
   linha,
   temOrcamento,
+  faturamento,
   recolhida,
   onToggle,
   subtotais,
@@ -569,6 +575,7 @@ function LinhaGrupo({
 }: {
   linha: LinhaResultado
   temOrcamento: boolean
+  faturamento: number
   recolhida: boolean
   onToggle: () => void
   subtotais?: { chave: keyof Subtotais; rotulo: string; forte?: boolean }[]
@@ -578,6 +585,7 @@ function LinhaGrupo({
   const temContas = linha.contas.length > 0
   const desvio = linha.realizado - linha.orcado
   const pct = linha.orcado !== 0 ? (desvio / linha.orcado) * 100 : null
+  const pctFat = (v: number) => (faturamento > 0 ? formatPct((v / faturamento) * 100) : '—')
 
   return (
     <>
@@ -604,6 +612,7 @@ function LinhaGrupo({
         <td className="py-2.5 px-4 text-right font-medium tabular-nums text-ink">
           {formatBRL(linha.realizado)}
         </td>
+        <td className="py-2.5 px-3 text-right tabular-nums text-faint">{pctFat(linha.realizado)}</td>
         {temOrcamento && (
           <td className="py-2.5 px-4 text-right tabular-nums text-muted">
             {linha.orcado ? formatBRL(linha.orcado) : '—'}
@@ -638,6 +647,7 @@ function LinhaGrupo({
               <td className="py-1.5 px-4 text-right text-xs tabular-nums text-muted">
                 {formatBRL(c.realizado)}
               </td>
+              <td className="py-1.5 px-3 text-right text-xs tabular-nums text-faint">{pctFat(c.realizado)}</td>
               {temOrcamento && (
                 <td className="py-1.5 px-4 text-right text-xs tabular-nums text-faint">
                   {c.orcado ? formatBRL(c.orcado) : '—'}
@@ -672,6 +682,9 @@ function LinhaGrupo({
               className={`py-2 px-4 text-right font-semibold tabular-nums ${s.forte ? 'text-green' : 'text-ink'}`}
             >
               {formatBRL(r)}
+            </td>
+            <td className={`py-2 px-3 text-right tabular-nums ${s.forte ? 'text-green/80' : 'text-faint'}`}>
+              {pctFat(r)}
             </td>
             {temOrcamento && (
               <td className="py-2 px-4 text-right font-medium tabular-nums text-muted">
