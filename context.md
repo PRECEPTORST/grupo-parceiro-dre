@@ -255,38 +255,48 @@ como o cliente chamava; a plataforma real é a Enoki.)
 - **Ações de IA/backend não rodam no modo demo** (precisam de sessão real): Classificar, Sincronizar,
   Sugerir, Insights, Gerar resumo só funcionam na produção logado.
 
-## 13. Estado atual (2026-07-16)
+## 13. Estado atual (2026-08-10)
 
 | Área | Status |
 |---|---|
 | Identidade visual + layout (menu lateral) | ✅ Publicado |
 | Dashboard (KPIs, gráficos) + **insights AUTOMÁTICOS** + run-rate | ✅ |
 | DRE analítico + até a data de hoje | ✅ |
+| **Análise vertical: % do faturamento em cada linha do DRE** (§25) | ✅ |
 | DRE por cereal + resultado por saca + **meta × realizado (volume/preço/margem)** | ✅ |
 | **Orçamento por periodicidade** (mensal→anual, grade mês a mês) | ✅ |
-| **Receita de grão por sacas × preço** (valor calculado) | ✅ |
-| **Margem bruta/saca → preço de compra + custo de aquisição** (grão) | ✅ |
+| **Receita de grão por sacas × preço** + margem/saca → preço de compra | ✅ |
 | **Impostos automáticos** (estimativa % venda/compra — só referência no Orçamento) | ✅ |
 | Orçamento por conta (+ IA + importar planilha/doc) | ✅ |
 | Papel sócio + aprovação de orçamento (4 papéis) | ✅ |
 | Fluxo de caixa mensal + diário (Sprint 2) | ✅ |
 | Confiabilidade/materialidade (Sprint 2) | ✅ |
-| Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
-| **Sincronização Safragold automática** ao abrir | ✅ |
 | **Achados de auditoria** (motor estrutural + card na Confiabilidade — §17) | ✅ |
+| Plano de contas de grãos (+ PDF p/ aprovação) | ✅ |
 | **Importar DRE de planilha** (upload .xlsx + IA memoriza + preview — §18) | ✅ |
+| **Linha "Investimentos" (capex) abaixo do resultado** (§19) | ✅ |
+| **Rotina de lançar sacas** por cereal (grade mês × grão — §20) | ✅ |
+| **Resultado líquido acumulado no ano** + nota de divergência (§21, §22) | ✅ |
+| **Painel de margem de contribuição** (valor + % + gráfico, opção CPV/±comerciais — §23) | ✅ |
+| **Quadro "Total de despesas"** (DRE + painel inicial — §24) | ✅ |
+| **Sincronização Safragold** ao abrir → hoje devolve `[]` (anti-poluição, §16) | ✅ |
 | Modo de verificação local `?demo` (dev) | ✅ |
-| Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada — ver §16) |
-| **Integração Enoki (dados reais)** | ⏳ Scraping em reconhecimento |
-| Sprint 3 (alertas WhatsApp) | ⬜ Próximo |
+| Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada via app — §16/§18) |
+| **Integração Enoki (dados reais automáticos)** | ⏳ Scraping em reconhecimento (nunca rodou) |
+| Sprint 3 (alertas WhatsApp) | ⬜ Próximo no roadmap |
 
-**Git:** branch `main`, último commit **`74ff0e6`** ("Orçamento de grão: margem bruta/saca → preço de
-compra e custo"). Sessão 2026-07-16 (todos publicados em prod via CLI): `99c624a` insights automáticos,
-`3d8fe9a` sync Safragold automático, `3891891` orçamento por periodicidade, `1fd9dd4` receita de grão
-sacas×preço + meta×realizado, `0e1c8dd` modo `?demo`, `bbca565` context.md, `74ff0e6` margem/custo por
-grão + meta×realizado de margem/saca + impostos automáticos no orçamento. GitHub `Luvas-prog/grupo-
-parceiro-dre` (privado). **64 testes** passando. No working tree:
-`scripts/enoki-scrape.mjs` (novo, não commitado) + `.gitignore` (enoki-out). Layout descartado em `ce8f743`.
+**Git:** branch `main`, último commit **`b030b4b`** ("DRE: coluna '% Fat.' (análise vertical)"). GitHub
+`Luvas-prog/grupo-parceiro-dre` (privado). **90 testes** passando. Deploy sempre via
+`npx vercel deploy --prod --yes`; produção estável em https://grupo-parceiro-dre.vercel.app.
+No working tree (não commitado, de propósito): `scripts/enoki-scrape.mjs` + `scripts/verificar-blob.mjs`
+(utilitário: lê o estado do Blob) + `.gitignore` (enoki-out).
+
+**Sessão 2026-08-04 (tudo em prod, testado, seções 16–25):** importação dos dados reais jan–jun + fim dos
+simulados (§16), motor+card de auditoria (§17), rotina de importar .xlsx no app (§18), linha Investimentos
+(§19), rotina de lançar sacas em grade (§20), resultado acumulado no ano + nota de divergência (§21/§22),
+painel de margem de contribuição (§23), quadro Total de despesas (§24), análise vertical %Fat. no DRE (§25).
+⚠️ **Segredos:** nenhuma senha é recuperável (o app guarda só HASH); redefinição de usuário é por outro
+admin/sócio na tela Usuários. Chaves na Vercel são "Sensitive" (não revelam valor).
 
 **FEITO nesta sessão (2026-07-16, cont.):** (1) Painel **Meta × realizado** (DRE por cereal) compara
 também **margem/saca orçada × realizada** — margem ORÇADA = spread venda − compra (`margemSaca`); margem
