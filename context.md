@@ -361,6 +361,44 @@ diferente do card de confiabilidade). Verificado visual via `?demo` (Confiabilid
 temporariamente e revertida). ⚠️ Adicionada config `dre` (porta 5174) no `launch.json` da SESSÃO
 preceptor-pricing para o preview servir ESTE projeto — ver armadilha na §12.
 
+## 26. API Enoki (Safra Cloud) + Fluxo de caixa REAL (sessão 2026-08-18)
+
+**Achado central:** a "API do Enoki" que o cliente conseguiu é a **API Safra Cloud "Integração ERP"**
+(a MESMA que o Concili usa). Base homolog.: `http://api.homologacao.parceiro.safracloud.com.br`,
+namespace `/api/Customizados/v1/ParceiroDoGrao`, auth header **`X-Api-Key`**. Manual em
+`~/Downloads/manual-api-enoki-safra.md.txt`. **É FINANCEIRA, não contábil** — Swagger confirma: só
+`LancamentosFinanceiros`(recebimentos)/`LancamentosFinanceirosPagar`(pagamentos), `NfSaida`,
+`OrdensCarregamento`, `Contratos`, `ContasBancarias`, `Parceiros`, `Produtos`, `Empresas`,
+`FormasPagamento`. **NÃO tem razão/balancete contábil** (conta contábil + débito/crédito) → **não dá pra
+alimentar o DRE por competência** (que bate com a planilha). Campo `centroCusto` é semântico ("RECEITA
+SOJA", "COMPRA SORGO", "SECAGEM MILHO", "SEM CC").
+
+⚠️ **Segurança:** a `X-Api-Key` foi colada no chat → **rotacionar**. NUNCA está em arquivo do repo (só
+usada inline em teste; vai só na Vercel/`.env.local`).
+
+**PENDENTE — cliente espera "DRE aparecer sozinho".** Como a API não tem contábil, o Luciano vai
+perguntar ao Safra/Enoki se existe **export de balancete/razão** (msg pronta enviada). Se SIM → automatiza
+o DRE de competência. Se NÃO → decidir entre DRE de caixa (regime de caixa, difere da planilha) ou seguir
+com o import manual (§18).
+
+**ENTREGUE nesta sessão — Fluxo de caixa REAL:**
+- `src/lib/enoki.ts` (`paraMovimento`/`normalizarMovimentos`/`numeroEnoki`; 7 testes): cada título vira
+  `MovimentoCaixa` — quitado → dataQuitacao+valorPago; aberto → dataVencimento+valor. Recebimento=entrada,
+  pagamento=saida. Exclui lote de migração (dataQuitacao=2026-01-01), zeros, datas inválidas.
+- `api/enoki-caixa.ts`: puxa recebimentos+pagamentos (paginação `desdeId`+`top=200`, backoff 429, janelas
+  ≤90 dias, `MAX_PAGINAS=40`), gate por env. Config: **`ENOKI_BASE_URL`, `ENOKI_API_KEY`, `ENOKI_EMPRESAS`
+  (csv, default "1")**. `maxDuration:120` no vercel.json. Duplica a normalização (padrão do repo: api não
+  importa de src/).
+- `CaixaPage`: busca `/api/enoki-caixa?de&ate` (janela = competenciaSaldo → horizonte), passa
+  `movimentosReais` p/ `projetarCaixa`/`projetarCaixaDiario` (o **seam `MovimentoCaixa` já existia** no
+  motor `caixa.ts`!). Badge de status (real/estimativa/erro) + botão Atualizar. Degrada gracioso p/
+  estimativa quando não configurada. **97 testes.**
+- **Validado contra a homologação real:** pipeline completo (paginação+janelas+normalização) → 2.121
+  movimentos numa janela de teste, paginação confirmada (lote de 682/1046 > 200). Front verificado no
+  `?demo` (fallback quando endpoint ausente).
+- ⏳ **Para ATIVAR em prod:** setar `ENOKI_BASE_URL`+`ENOKI_API_KEY`(rotacionada)+`ENOKI_EMPRESAS` na
+  Vercel. Sem isso, o Caixa segue na estimativa (comportamento atual).
+
 ## 25. Análise vertical no DRE — % do faturamento em cada linha (sessão 2026-08-04, pedido do cliente)
 
 Coluna **"% Fat."** na tabela do DRE, em CADA linha, conta e subtotal = valor ÷ **faturamento (receita

@@ -11,6 +11,9 @@
     },
     "api/safragold-sync.ts": {
       "maxDuration": 60
+    },
+    "api/enoki-caixa.ts": {
+      "maxDuration": 120
     }
   }
 }

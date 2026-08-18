@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -24,7 +24,7 @@ import {
   type EventoCaixa,
   type ProjecaoDiaria,
 } from '../lib/caixa'
-import { premissasCaixaPadrao, type PremissasCaixa, type MetodoProjecaoCaixa } from '../lib/tipos'
+import { premissasCaixaPadrao, type PremissasCaixa, type MetodoProjecaoCaixa, type MovimentoCaixa } from '../lib/tipos'
 
 const CORES = { verde: '#0f7a49', dourado: '#cd8d05', vermelho: '#c0492f' }
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -69,9 +69,53 @@ export function CaixaPage() {
   const [premissas, setPremissas] = useState<PremissasCaixa>(() => salvas ?? premissasCaixaPadrao())
 
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
+
+  // Movimentos REAIS da Enoki (contas a pagar/receber). Quando disponíveis,
+  // substituem a estimativa por prazo no motor de caixa (seam `movimentosReais`).
+  const [movimentos, setMovimentos] = useState<MovimentoCaixa[] | null>(null)
+  const [metaEnoki, setMetaEnoki] = useState<{ empresas: string[]; entradas: number; saidas: number; homologacao: boolean } | null>(null)
+  const [statusEnoki, setStatusEnoki] = useState<'carregando' | 'reais' | 'nao_configurado' | 'erro' | 'vazio'>('carregando')
+  const [erroEnoki, setErroEnoki] = useState<string | null>(null)
+
+  const janela = useMemo(() => {
+    const de = `${premissas.competenciaSaldo}-01`
+    const ate = `${addMeses(premissas.competenciaSaldo, Math.max(1, premissas.horizonteMeses))}-28`
+    return { de, ate }
+  }, [premissas.competenciaSaldo, premissas.horizonteMeses])
+
+  const buscarEnoki = useCallback(async () => {
+    setStatusEnoki('carregando')
+    setErroEnoki(null)
+    try {
+      const r = await fetch(`/api/enoki-caixa?de=${janela.de}&ate=${janela.ate}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.erro || `Erro ${r.status}`)
+      if (!d.configurado) {
+        setMovimentos(null)
+        setMetaEnoki(null)
+        setStatusEnoki('nao_configurado')
+        return
+      }
+      const movs = (d.movimentos ?? []) as MovimentoCaixa[]
+      setMovimentos(movs)
+      setMetaEnoki(d.meta ?? null)
+      setStatusEnoki(movs.length ? 'reais' : 'vazio')
+    } catch (e) {
+      setMovimentos(null)
+      setStatusEnoki('erro')
+      setErroEnoki(e instanceof Error ? e.message : String(e))
+    }
+  }, [janela])
+
+  useEffect(() => {
+    void buscarEnoki()
+  }, [buscarEnoki])
+
+  const movReais = movimentos && movimentos.length ? movimentos : undefined
+
   const projecao = useMemo(
-    () => projetarCaixa(estado.lancamentos, mapa, estado.orcamentos, premissas),
-    [estado.lancamentos, mapa, estado.orcamentos, premissas],
+    () => projetarCaixa(estado.lancamentos, mapa, estado.orcamentos, premissas, movReais),
+    [estado.lancamentos, mapa, estado.orcamentos, premissas, movReais],
   )
 
   // Detalhe diário de um mês do horizonte.
@@ -81,8 +125,8 @@ export function CaixaPage() {
     ? mesDetalhe
     : (mesesHorizonte[0] ?? premissas.competenciaSaldo)
   const diario = useMemo(
-    () => projetarCaixaDiario(mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas),
-    [mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas],
+    () => projetarCaixaDiario(mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas, movReais),
+    [mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas, movReais],
   )
 
   const set = <K extends keyof PremissasCaixa>(chave: K, valor: PremissasCaixa[K]) =>
@@ -129,6 +173,37 @@ export function CaixaPage() {
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
       <Cabecalho />
+
+      {/* Fonte dos dados: Enoki (real) × estimativa por prazo */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+        {statusEnoki === 'carregando' && (
+          <span className="rounded-full bg-cream px-3 py-1 text-muted">⏳ Buscando contas a pagar/receber na Enoki…</span>
+        )}
+        {statusEnoki === 'reais' && metaEnoki && (
+          <span className="rounded-full bg-green/10 px-3 py-1 font-medium text-green-deep">
+            ● Fluxo com dados REAIS da Enoki — {metaEnoki.entradas} a receber / {metaEnoki.saidas} a pagar
+            {metaEnoki.homologacao && ' · homologação'}
+          </span>
+        )}
+        {statusEnoki === 'vazio' && (
+          <span className="rounded-full bg-cream px-3 py-1 text-muted">
+            Enoki conectada, mas sem títulos na janela — usando estimativa por prazo.
+          </span>
+        )}
+        {statusEnoki === 'nao_configurado' && (
+          <span className="rounded-full bg-cream px-3 py-1 text-muted">
+            Estimativa por prazo (Enoki não configurada). Projeção derivada do DRE.
+          </span>
+        )}
+        {statusEnoki === 'erro' && (
+          <span className="rounded-full bg-danger/10 px-3 py-1 text-danger">⚠ Enoki indisponível: {erroEnoki} — usando estimativa.</span>
+        )}
+        {statusEnoki !== 'carregando' && (
+          <button onClick={() => void buscarEnoki()} className="rounded-full border border-line px-3 py-1 font-medium text-muted hover:bg-cream hover:text-ink">
+            ↻ Atualizar
+          </button>
+        )}
+      </div>
 
       {/* HERO — saldo projetado ao fim do horizonte */}
       <div className="mb-4 animate-rise overflow-hidden rounded-2xl border border-green/20 bg-gradient-to-br from-green/[0.07] via-surface to-surface shadow-[0_1px_2px_rgba(35,40,31,0.04),0_16px_40px_-24px_rgba(15,122,73,0.35)]">
