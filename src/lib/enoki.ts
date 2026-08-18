@@ -41,7 +41,7 @@ export function paraMovimento(b: any, tipo: 'entrada' | 'saida', idx = 0): Movim
   const cc = String(b.centroCusto ?? '').trim()
   const descricao = [parceiro, cc || String(b.descricao ?? '')].filter(Boolean).join(' · ').slice(0, 120)
   const id = `enoki-${tipo === 'entrada' ? 'r' : 'p'}-${b.idItemLancamento ?? b.idLancamento ?? idx}`
-  return { id, data, tipo, valor, descricao: descricao || undefined }
+  return { id, data, tipo, valor, descricao: descricao || undefined, centroCusto: cc || undefined }
 }
 
 /** Normaliza um lote cru (de um endpoint) em MovimentoCaixa[], deduplicando por id. */

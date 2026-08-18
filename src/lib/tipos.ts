@@ -285,6 +285,8 @@ export interface MovimentoCaixa {
   /** Valor em reais, positivo. */
   valor: number
   descricao?: string
+  /** Centro de custo do ERP (ex.: "RECEITA SOJA", "COMPRA MILHO") — base do resultado por grão. */
+  centroCusto?: string
 }
 
 // ---------------------------------------------------------------------------

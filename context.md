@@ -405,6 +405,12 @@ com o import manual (§18).
   (`mensal.usouReais` gate). +2 asserts em caixa.test (98 testes).
 - ✅ **5 empresas (2026-08-18):** `ENOKI_EMPRESAS`=`1,2,3,4,5` (consolida o grupo). Medido: 5 empresas na
   janela = 10,9s / 33 requests (empresa 1 concentra; 4/5 vazias na homologação). Bem dentro dos 120s.
+- ✅ **Resultado de caixa por grão (2026-08-18):** `src/lib/resultadoGrao.ts` (`resultadoCaixaPorGrao`,
+  `graoDeCentroCusto`, `naturezaDeCentroCusto`; 6 testes) usa o `centroCusto` (agora carregado em
+  `MovimentoCaixa.centroCusto` — enoki.ts + endpoint) para montar, em REGIME DE CAIXA, receita − compra −
+  custos diretos por cereal. Sinal vem do tipo (entrada+/saída−), balde do centro de custo (estorno reduz).
+  Card na `CaixaPage` (só quando há grão). Validado real: soja −9,6M (comprando), milho +8,2M (vendendo),
+  total −1,5M; overhead sem grão fora. É margem de TRADING em caixa, NÃO o DRE por competência. **104 testes.**
 - ⏳ **Envs (registro):** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS` **setadas** na Vercel
   (2026-08-18, ambas "Sensitive"/write-only). **Falta só `ENOKI_API_KEY`** (rotacionada — o Luciano seta) +
   redeploy. Sem a chave, `enokiConfigurado()`=false → endpoint devolve `{configurado:false}` e o Caixa

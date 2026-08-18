@@ -25,6 +25,7 @@ import {
   type ProjecaoDiaria,
 } from '../lib/caixa'
 import { premissasCaixaPadrao, type PremissasCaixa, type MetodoProjecaoCaixa, type MovimentoCaixa } from '../lib/tipos'
+import { resultadoCaixaPorGrao } from '../lib/resultadoGrao'
 
 const CORES = { verde: '#0f7a49', dourado: '#cd8d05', vermelho: '#c0492f' }
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -112,6 +113,9 @@ export function CaixaPage() {
   }, [buscarEnoki])
 
   const movReais = movimentos && movimentos.length ? movimentos : undefined
+
+  // Resultado de caixa por grão (regime de caixa) — a partir dos movimentos reais.
+  const resGrao = useMemo(() => resultadoCaixaPorGrao(movimentos ?? []), [movimentos])
 
   const projecao = useMemo(
     () => projetarCaixa(estado.lancamentos, mapa, estado.orcamentos, premissas, movReais),
@@ -243,6 +247,60 @@ export function CaixaPage() {
             <strong>Alerta de liquidez.</strong> Pela projeção atual, o caixa fica{' '}
             <strong>negativo em {rotuloCompetencia(projecao.primeiroMesNegativo)}</strong>. Antecipe
             recebimentos, alongue pagamentos ou reforce capital de giro.
+          </p>
+        </Card>
+      )}
+
+      {/* Resultado de caixa por grão (dados reais da Enoki) */}
+      {resGrao.graos.length > 0 && (
+        <Card className="mb-4 animate-rise overflow-hidden p-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+            <span className="font-head text-sm font-semibold uppercase tracking-wider text-muted">
+              Resultado de caixa por cereal
+            </span>
+            <span className="text-[11px] text-faint">
+              regime de caixa · {rotuloCompetencia(janela.de.slice(0, 7))}–{rotuloCompetencia(janela.ate.slice(0, 7))}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+                  <th className="py-2 pl-5 pr-4 font-semibold">Cereal</th>
+                  <th className="py-2 px-4 text-right font-semibold">Receita</th>
+                  <th className="py-2 px-4 text-right font-semibold">(−) Compra</th>
+                  <th className="py-2 px-4 text-right font-semibold">(−) Custos</th>
+                  <th className="py-2 pr-5 pl-4 text-right font-semibold">= Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resGrao.graos.map((g) => (
+                  <tr key={g.grao} className="border-b border-line/50">
+                    <td className="py-2 pl-5 pr-4 font-medium text-ink">{g.rotulo}</td>
+                    <td className="py-2 px-4 text-right tabular-nums text-ink">{formatBRL(g.receita)}</td>
+                    <td className="py-2 px-4 text-right tabular-nums text-muted">{formatBRL(g.compra)}</td>
+                    <td className="py-2 px-4 text-right tabular-nums text-muted">{formatBRL(g.custos)}</td>
+                    <td className={`py-2 pr-5 pl-4 text-right font-semibold tabular-nums ${g.resultado < 0 ? 'text-danger' : 'text-green'}`}>
+                      {formatBRL(g.resultado)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-cream/70 border-t-2 border-line font-semibold">
+                  <td className="py-2.5 pl-5 pr-4 font-head uppercase tracking-wide text-ink">Total</td>
+                  <td className="py-2.5 px-4 text-right font-head tabular-nums text-ink">{formatBRL(resGrao.total.receita)}</td>
+                  <td className="py-2.5 px-4 text-right font-head tabular-nums text-muted">{formatBRL(resGrao.total.compra)}</td>
+                  <td className="py-2.5 px-4 text-right font-head tabular-nums text-muted">{formatBRL(resGrao.total.custos)}</td>
+                  <td className={`py-2.5 pr-5 pl-4 text-right font-head tabular-nums ${resGrao.total.resultado < 0 ? 'text-danger' : 'text-green'}`}>
+                    {formatBRL(resGrao.total.resultado)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="px-5 py-2.5 text-[11px] text-faint">
+            Receita recebida − compra − custos diretos (secagem, classificação, frete, armazenagem) por grão,
+            em regime de caixa. Overhead sem grão ({formatBRL(resGrao.semGrao)}: frete geral, administrativo…)
+            fica de fora. É a margem de trading em caixa — não o DRE por competência.
           </p>
         </Card>
       )}

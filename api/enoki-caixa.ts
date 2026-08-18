@@ -24,6 +24,7 @@ interface MovimentoCaixa {
   tipo: 'entrada' | 'saida'
   valor: number
   descricao?: string
+  centroCusto?: string
 }
 
 function enokiConfigurado(): boolean {
@@ -55,7 +56,7 @@ function paraMovimento(b: any, tipo: 'entrada' | 'saida', idx: number): Moviment
   const cc = String(b.centroCusto ?? '').trim()
   const descricao = [parceiro, cc || String(b.descricao ?? '')].filter(Boolean).join(' · ').slice(0, 120)
   const id = `enoki-${tipo === 'entrada' ? 'r' : 'p'}-${b.idItemLancamento ?? b.idLancamento ?? idx}`
-  return { id, data, tipo, valor, descricao: descricao || undefined }
+  return { id, data, tipo, valor, descricao: descricao || undefined, centroCusto: cc || undefined }
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
