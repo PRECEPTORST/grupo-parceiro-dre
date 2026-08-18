@@ -403,7 +403,9 @@ com o import manual (§18).
   (~R$40M/mês de receita em competência) vazava e inflava o saldo (dava +R$121M em vez de ~−R$4,4M). Fix:
   **com dados reais, a projeção usa SÓ os títulos reais** (mês sem título = R$0), mensal e diário
   (`mensal.usouReais` gate). +2 asserts em caixa.test (98 testes).
-- ⏳ **Envs (registro):** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS`=1 **setadas** na Vercel
+- ✅ **5 empresas (2026-08-18):** `ENOKI_EMPRESAS`=`1,2,3,4,5` (consolida o grupo). Medido: 5 empresas na
+  janela = 10,9s / 33 requests (empresa 1 concentra; 4/5 vazias na homologação). Bem dentro dos 120s.
+- ⏳ **Envs (registro):** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS` **setadas** na Vercel
   (2026-08-18, ambas "Sensitive"/write-only). **Falta só `ENOKI_API_KEY`** (rotacionada — o Luciano seta) +
   redeploy. Sem a chave, `enokiConfigurado()`=false → endpoint devolve `{configurado:false}` e o Caixa
   segue na estimativa. Quando setar a chave: `npx vercel deploy --prod --yes` e abrir Caixa logado.
