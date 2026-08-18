@@ -397,7 +397,13 @@ com o import manual (§18).
 - **Validado contra a homologação real:** pipeline completo (paginação+janelas+normalização) → 2.121
   movimentos numa janela de teste, paginação confirmada (lote de 682/1046 > 200). Front verificado no
   `?demo` (fallback quando endpoint ausente).
-- ⏳ **Para ATIVAR em prod:** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS`=1 **JÁ setadas** na Vercel
+- ✅ **ATIVADA em prod (2026-08-18):** as 3 envs setadas, badge "● Fluxo com dados REAIS da Enoki" confirmado
+  logado (homologação, empresa 1: 381 a receber / 520 a pagar). ⚠️ **BUG achado e corrigido na hora:** o seam
+  do `caixa.ts` misturava real + estimativa por tipo/mês → nos meses sem recebimento real, a estimativa do DRE
+  (~R$40M/mês de receita em competência) vazava e inflava o saldo (dava +R$121M em vez de ~−R$4,4M). Fix:
+  **com dados reais, a projeção usa SÓ os títulos reais** (mês sem título = R$0), mensal e diário
+  (`mensal.usouReais` gate). +2 asserts em caixa.test (98 testes).
+- ⏳ **Envs (registro):** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS`=1 **setadas** na Vercel
   (2026-08-18, ambas "Sensitive"/write-only). **Falta só `ENOKI_API_KEY`** (rotacionada — o Luciano seta) +
   redeploy. Sem a chave, `enokiConfigurado()`=false → endpoint devolve `{configurado:false}` e o Caixa
   segue na estimativa. Quando setar a chave: `npx vercel deploy --prod --yes` e abrir Caixa logado.

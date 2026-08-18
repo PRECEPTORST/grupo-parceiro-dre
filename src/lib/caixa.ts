@@ -284,7 +284,11 @@ export function projetarCaixa(
     alvo.set(mes, (alvo.get(mes) ?? 0) + e.valor)
   }
 
-  // Seam do Enoki: real substitui a estimativa nos meses/tipos que cobrir.
+  // Seam do Enoki: quando há títulos reais (contas a pagar/receber) na janela, a
+  // projeção passa a ser PURAMENTE os reais — NÃO mistura com a estimativa por
+  // prazo (que deriva do DRE em COMPETÊNCIA, não caixa). Mês sem título agendado
+  // fica em R$ 0 (não há caixa previsto nele). Misturar os dois inflava o saldo
+  // (a estimativa de receita ~R$40M/mês vazava nos meses sem recebimento real).
   let usouReais = false
   if (movimentosReais && movimentosReais.length) {
     const realEnt = new Map<string, number>()
@@ -296,8 +300,13 @@ export function projetarCaixa(
       alvo.set(mes, (alvo.get(mes) ?? 0) + Math.abs(m.valor))
       usouReais = true
     }
-    for (const [mes, v] of realEnt) entradasMes.set(mes, v)
-    for (const [mes, v] of realSai) saidasMes.set(mes, v)
+    if (usouReais) {
+      for (let i = 0; i < Math.max(1, premissas.horizonteMeses); i++) {
+        const mes = addMeses(primeiroMes, i)
+        entradasMes.set(mes, realEnt.get(mes) ?? 0)
+        saidasMes.set(mes, realSai.get(mes) ?? 0)
+      }
+    }
   }
 
   const meses: MesFluxo[] = []
@@ -374,30 +383,28 @@ export function projetarCaixaDiario(
   const info = mensal.meses.find((m) => m.competencia === mes)
   const saldoAbertura = info ? info.saldoInicial : premissas.saldoInicial
 
-  // Eventos do mês. Enoki: real substitui a estimativa, por tipo, no mês.
+  // Eventos do mês. Enoki: se a projeção mensal está em modo REAL (há títulos
+  // reais na janela), este mês usa SÓ os títulos reais — a estimativa por prazo
+  // (derivada do DRE) não entra (senão infla os dias sem recebimento real).
   let eventosMes = construirEventos(lancamentos, mapa, orcamentos, premissas).filter(
     (e) => e.data.slice(0, 7) === mes,
   )
-  if (movimentosReais && movimentosReais.length) {
-    const reaisMes = movimentosReais.filter((m) => competenciaDe(m.data) === mes)
-    if (reaisMes.length) {
-      const tiposCobertos = new Set(reaisMes.map((m) => m.tipo))
-      eventosMes = eventosMes.filter((e) => !tiposCobertos.has(e.tipo))
-      for (const m of reaisMes) {
-        const data = m.data.slice(0, 10)
-        eventosMes.push({
-          data,
-          tipo: m.tipo,
-          valor: Math.abs(m.valor),
-          origem: {
-            rotulo: m.descricao ?? (m.tipo === 'entrada' ? 'Recebimento' : 'Pagamento'),
-            descricao: m.descricao,
-            dataOrigem: data,
-            projetado: false,
-          },
-        })
+  if (mensal.usouReais) {
+    const reaisMes = (movimentosReais ?? []).filter((m) => competenciaDe(m.data) === mes)
+    eventosMes = reaisMes.map((m) => {
+      const data = m.data.slice(0, 10)
+      return {
+        data,
+        tipo: m.tipo,
+        valor: Math.abs(m.valor),
+        origem: {
+          rotulo: m.descricao ?? (m.tipo === 'entrada' ? 'Recebimento' : 'Pagamento'),
+          descricao: m.descricao,
+          dataOrigem: data,
+          projetado: false,
+        },
       }
-    }
+    })
   }
 
   // Agrupa os eventos por dia.

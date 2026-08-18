@@ -129,6 +129,36 @@ describe('projetarCaixa — seam do Enoki (movimentos reais)', () => {
     expect(jul.entradas).toBe(320_000) // real (320k) no lugar da estimativa (500k)
     expect(proj.usouReais).toBe(true)
   })
+
+  it('modo real: mês sem título real fica ZERADO (não vaza a estimativa do DRE)', () => {
+    // Histórico com receita alta → a estimativa por prazo projetaria ~1M/mês.
+    const lancamentos = [
+      lanc('h1', '2026-04-10', '3.1.01', 1_000_000),
+      lanc('h2', '2026-05-10', '3.1.01', 1_000_000),
+      lanc('h3', '2026-06-10', '3.1.01', 1_000_000),
+    ]
+    // Reais só cobrem jul (entrada) e ago (saída). Set não tem nenhum título.
+    const reais: MovimentoCaixa[] = [
+      { id: 'e1', data: '2026-07-15', tipo: 'entrada', valor: 200_000 },
+      { id: 's1', data: '2026-08-15', tipo: 'saida', valor: 50_000 },
+    ]
+    const p = premissas({ competenciaSaldo: '2026-07', horizonteMeses: 3, metodoProjecao: 'historico', saldoInicial: 0 })
+    const proj = projetarCaixa(lancamentos, mapa, [], p, reais)
+    const jul = proj.meses.find((m) => m.competencia === '2026-07')!
+    const ago = proj.meses.find((m) => m.competencia === '2026-08')!
+    const set = proj.meses.find((m) => m.competencia === '2026-09')!
+    expect(jul.entradas).toBe(200_000)
+    expect(jul.saidas).toBe(0)
+    expect(ago.entradas).toBe(0) // era o bug: a estimativa (~1M) vazava aqui
+    expect(ago.saidas).toBe(50_000)
+    expect(set.entradas).toBe(0)
+    expect(set.saidas).toBe(0)
+    expect(proj.saldoFinalHorizonte).toBe(150_000) // 0 + 200k − 50k, não milhões
+
+    // O diário também: set não tem eventos (não herda a estimativa).
+    const diarioSet = projetarCaixaDiario('2026-09', lancamentos, mapa, [], p, reais)
+    expect(diarioSet.dias.every((d) => d.entradas === 0 && d.saidas === 0)).toBe(true)
+  })
 })
 
 describe('addDiasISO', () => {
