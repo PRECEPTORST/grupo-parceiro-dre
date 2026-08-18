@@ -396,8 +396,10 @@ com o import manual (§18).
 - **Validado contra a homologação real:** pipeline completo (paginação+janelas+normalização) → 2.121
   movimentos numa janela de teste, paginação confirmada (lote de 682/1046 > 200). Front verificado no
   `?demo` (fallback quando endpoint ausente).
-- ⏳ **Para ATIVAR em prod:** setar `ENOKI_BASE_URL`+`ENOKI_API_KEY`(rotacionada)+`ENOKI_EMPRESAS` na
-  Vercel. Sem isso, o Caixa segue na estimativa (comportamento atual).
+- ⏳ **Para ATIVAR em prod:** `ENOKI_BASE_URL` (homologação) e `ENOKI_EMPRESAS`=1 **JÁ setadas** na Vercel
+  (2026-08-18, ambas "Sensitive"/write-only). **Falta só `ENOKI_API_KEY`** (rotacionada — o Luciano seta) +
+  redeploy. Sem a chave, `enokiConfigurado()`=false → endpoint devolve `{configurado:false}` e o Caixa
+  segue na estimativa. Quando setar a chave: `npx vercel deploy --prod --yes` e abrir Caixa logado.
 
 ## 25. Análise vertical no DRE — % do faturamento em cada linha (sessão 2026-08-04, pedido do cliente)
 
