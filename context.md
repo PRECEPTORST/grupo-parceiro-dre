@@ -255,7 +255,7 @@ como o cliente chamava; a plataforma real é a Enoki.)
 - **Ações de IA/backend não rodam no modo demo** (precisam de sessão real): Classificar, Sincronizar,
   Sugerir, Insights, Gerar resumo só funcionam na produção logado.
 
-## 13. Estado atual (2026-08-10)
+## 13. Estado atual (2026-08-18)
 
 | Área | Status |
 |---|---|
@@ -279,17 +279,26 @@ como o cliente chamava; a plataforma real é a Enoki.)
 | **Resultado líquido acumulado no ano** + nota de divergência (§21, §22) | ✅ |
 | **Painel de margem de contribuição** (valor + % + gráfico, opção CPV/±comerciais — §23) | ✅ |
 | **Quadro "Total de despesas"** (DRE + painel inicial — §24) | ✅ |
-| **Sincronização Safragold** ao abrir → hoje devolve `[]` (anti-poluição, §16) | ✅ |
 | Modo de verificação local `?demo` (dev) | ✅ |
-| Dados | 🟢 **Reais jan–jun/2026** (DRE gerencial do cliente importada via app — §16/§18) |
-| **Integração Enoki (dados reais automáticos)** | ⏳ Scraping em reconhecimento (nunca rodou) |
+| Dados do DRE | 🟢 **Reais jan–jul/2026** (DRE gerencial importada via app — §16/§18; reimport agrega mês novo) |
+| **API Enoki (Safra Cloud) — FLUXO DE CAIXA real** | ✅ No ar em prod (5 empresas, homologação — §26) |
+| **Resultado de caixa por grão** (da API, por centro de custo) | ✅ Card na aba Caixa (§26) |
+| **DRE por competência automático** | ⏳ API é financeira, não contábil → aguardando Safra sobre export de balancete (§26) |
 | Sprint 3 (alertas WhatsApp) | ⬜ Próximo no roadmap |
 
-**Git:** branch `main`, último commit **`b030b4b`** ("DRE: coluna '% Fat.' (análise vertical)"). GitHub
-`Luvas-prog/grupo-parceiro-dre` (privado). **90 testes** passando. Deploy sempre via
+**Git:** branch `main`, último commit **`4aa092a`** ("Resultado de caixa por grão"). GitHub
+`Luvas-prog/grupo-parceiro-dre` (privado). **104 testes** passando. Deploy sempre via
 `npx vercel deploy --prod --yes`; produção estável em https://grupo-parceiro-dre.vercel.app.
-No working tree (não commitado, de propósito): `scripts/enoki-scrape.mjs` + `scripts/verificar-blob.mjs`
-(utilitário: lê o estado do Blob) + `.gitignore` (enoki-out).
+No working tree (não commitado, de propósito): `scripts/enoki-scrape.mjs` (scraping recon, obsoleto — a API
+já existe) + `scripts/verificar-blob.mjs` + `scripts/resetar-senha.mjs` (redefine senha de usuário: `node
+scripts/resetar-senha.mjs <login>`) + `.gitignore`.
+
+**Sessão 2026-08-18 (Enoki — seção 26):** API Safra Cloud "Integração ERP" é FINANCEIRA (contas a pagar/
+receber), a mesma do Concili, SEM contábil → não alimenta o DRE por competência. Entregue: fluxo de caixa
+REAL (endpoint `api/enoki-caixa.ts` + seam `movimentosReais`) e resultado de caixa por grão. Bug do seam
+corrigido (misturava real + estimativa do DRE → +R$121M fantasma; agora usa só o real). Envs `ENOKI_*`
+setadas na Vercel (homologação, 5 empresas). Usuários do app: **Juliano**/**Daiane** (admin), **Luciano**
+(sócio). ⚠️ Falta pro DRE automático: URL de PRODUÇÃO da API + export contábil (Luciano perguntou ao Safra).
 
 **Sessão 2026-08-04 (tudo em prod, testado, seções 16–25):** importação dos dados reais jan–jun + fim dos
 simulados (§16), motor+card de auditoria (§17), rotina de importar .xlsx no app (§18), linha Investimentos
