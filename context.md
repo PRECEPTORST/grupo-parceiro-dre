@@ -373,8 +373,9 @@ namespace `/api/Customizados/v1/ParceiroDoGrao`, auth header **`X-Api-Key`**. Ma
 alimentar o DRE por competência** (que bate com a planilha). Campo `centroCusto` é semântico ("RECEITA
 SOJA", "COMPRA SORGO", "SECAGEM MILHO", "SEM CC").
 
-⚠️ **Segurança:** a `X-Api-Key` foi colada no chat → **rotacionar**. NUNCA está em arquivo do repo (só
-usada inline em teste; vai só na Vercel/`.env.local`).
+⚠️ **Segurança:** a `X-Api-Key` foi colada no chat. **Decisão do Luciano (2026-08-18): NÃO rotacionar**
+(é homologação, controle dele). NUNCA está em arquivo do repo (só usada inline em teste; na Vercel a chave
+é setada pelo Luciano — eu não insiro segredos em serviços, regra do CLAUDE.md).
 
 **PENDENTE — cliente espera "DRE aparecer sozinho".** Como a API não tem contábil, o Luciano vai
 perguntar ao Safra/Enoki se existe **export de balancete/razão** (msg pronta enviada). Se SIM → automatiza
