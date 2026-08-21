@@ -9,7 +9,14 @@ import {
   type ReactNode,
 } from 'react'
 import { carregarEstado, salvarEstado, type EstadoDre } from '../lib/storage'
-import { carregarNuvem, salvarNuvem } from '../lib/nuvem'
+import {
+  carregarNuvem,
+  salvarNuvem,
+  carregarEnokiNuvem,
+  salvarEnokiNuvem,
+  juntarFatiaEnoki,
+  type FatiaEnoki,
+} from '../lib/nuvem'
 import type {
   Classificacao,
   LancamentoCanonico,
@@ -137,10 +144,16 @@ export function DreProvider({ children }: { children: ReactNode }) {
     setStatusSync('carregando')
     setErroSync(null)
     try {
-      const nuvem = await carregarNuvem()
+      // As duas metades vêm juntas: o documento leve e a fatia pesada da Enoki.
+      // A fatia pode falhar sem derrubar o app (ex.: ainda não existe).
+      const [nuvem, enoki] = await Promise.all([
+        carregarNuvem(),
+        carregarEnokiNuvem().catch(() => null),
+      ])
       if (nuvem) {
-        setEstado(nuvem)
-        salvarEstado(nuvem)
+        const completo = juntarFatiaEnoki(nuvem, enoki)
+        setEstado(completo)
+        salvarEstado(completo)
       } else if (!soLeituraRef.current) {
         // Nuvem vazia: semeia — mas só quem pode gravar.
         await salvarNuvem(estadoRef.current)
@@ -194,22 +207,24 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const dentroDaJanela = (data: string) =>
       !janela.de || !janela.ate || (data >= janela.de && data <= janela.ate)
 
-    setEstado((s) => {
-      const anterioresForaDaJanela = opcoes.incremental
-        ? (s.lancamentosEnoki ?? []).filter((l) => !dentroDaJanela(l.data))
-        : []
-      const sacasAnteriores = opcoes.incremental ? { ...(s.sacasEnoki ?? {}) } : {}
-      if (opcoes.incremental) {
-        for (const competencia of Object.keys(sacasAnteriores)) {
-          // A competência coberta pela janela é recalculada pela carga nova.
-          if (dentroDaJanela(`${competencia}-01`) || dentroDaJanela(`${competencia}-28`)) {
-            delete sacasAnteriores[competencia]
-          }
+    // A fatia é montada AQUI, a partir do estado corrente, e não dentro do
+    // setEstado: ela precisa existir como valor para ser gravada no documento
+    // próprio logo em seguida (o ref do estado só atualiza depois do render).
+    const anterior = estadoRef.current
+    const anterioresForaDaJanela = opcoes.incremental
+      ? (anterior.lancamentosEnoki ?? []).filter((l) => !dentroDaJanela(l.data))
+      : []
+    const sacasAnteriores = opcoes.incremental ? { ...(anterior.sacasEnoki ?? {}) } : {}
+    if (opcoes.incremental) {
+      for (const competencia of Object.keys(sacasAnteriores)) {
+        // A competência coberta pela janela é recalculada pela carga nova.
+        if (dentroDaJanela(`${competencia}-01`) || dentroDaJanela(`${competencia}-28`)) {
+          delete sacasAnteriores[competencia]
         }
       }
+    }
 
-      return {
-      ...s,
+    const fatia: FatiaEnoki = {
       lancamentosEnoki: [...anterioresForaDaJanela, ...r.lancamentos],
       sacasEnoki: { ...sacasAnteriores, ...r.sacas },
       enokiSync: {
@@ -241,8 +256,17 @@ export function DreProvider({ children }: { children: ReactNode }) {
           porCompetencia: r.gapContratos.gapPorCompetencia,
         },
       },
-      }
+    }
+
+    setEstado((s) => ({ ...s, ...fatia }))
+
+    // Gravada SÓ aqui, em documento próprio — não a cada alteração do estado,
+    // senão editar um valor no orçamento reenviaria megabytes.
+    void salvarEnokiNuvem({ ...anterior, ...fatia }).catch((e) => {
+      setErroSync(e instanceof Error ? e.message : String(e))
+      setStatusSync('erro')
     })
+
     return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo, residuos: r.residuos.length }
   }, [])
 

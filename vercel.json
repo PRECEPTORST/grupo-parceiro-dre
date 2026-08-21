@@ -20,6 +20,9 @@
     },
     "api/enoki-cron.ts": {
       "maxDuration": 120
+    },
+    "api/estado-enoki.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
