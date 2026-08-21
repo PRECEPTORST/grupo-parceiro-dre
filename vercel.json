@@ -17,6 +17,15 @@
     },
     "api/enoki-dre.ts": {
       "maxDuration": 120
+    },
+    "api/enoki-cron.ts": {
+      "maxDuration": 120
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/enoki-cron",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

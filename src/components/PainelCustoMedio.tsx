@@ -11,6 +11,8 @@ import { useDre } from '../context/DreContext'
 import { Botao, Card, Kicker } from './ui'
 import { formatBRL, formatNum } from '../lib/format'
 import { custoMedioMovel, montarMovimentosEstoque, ajusteEstoque } from '../lib/custoMedio'
+import { resumoGraos } from '../lib/graos'
+import { mapaEfetivo } from '../lib/planoContas'
 import { EstoqueModal } from './EstoqueModal'
 import { competenciasDisponiveis } from '../lib/dre'
 
@@ -33,6 +35,17 @@ export function PainelCustoMedio({
   }, [competencias, lancamentos, sacas, sacasCompradas, estado.estoqueAbertura])
 
   const posicoes = rel.posicoes.filter((p) => p.competencia === competencia)
+
+  // Item 3.4: margem por grão POR COMPETÊNCIA usando o CPV do estoque, não o das
+  // compras do mês. É a única versão da margem por cereal que não é distorcida
+  // por formar ou consumir estoque.
+  const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
+  const porGrao = useMemo(
+    () => resumoGraos(competencia, lancamentos, mapa, sacas[competencia] ?? {}),
+    [competencia, lancamentos, mapa, sacas],
+  )
+  const receitaLiquidaDe = (grao: string) =>
+    porGrao.graos.find((g) => g.grao === grao)?.receitaLiquida ?? 0
   const temVolumeComprado = posicoes.some((p) => p.sacasCompradas > 0 || p.sacasIniciais > 0)
   const ajuste = ajusteEstoque(rel, competencia)
   const alerta = rel.competenciasComAlerta.includes(competencia)
@@ -46,7 +59,8 @@ export function PainelCustoMedio({
           <p className="mt-1 max-w-2xl text-sm text-muted">
             O CPV do DRE hoje é o que foi <strong className="text-ink">comprado</strong> no mês.
             Aqui está o custo do que foi <strong className="text-ink">vendido</strong> — a diferença
-            é o estoque formado ou consumido.
+            é o estoque formado ou consumido. A coluna de margem é a única por cereal que não sofre
+            distorção de estoque.
           </p>
         </div>
         {podeEditar && (
@@ -130,6 +144,7 @@ export function PainelCustoMedio({
                   <th className="py-2 px-3 text-right font-semibold">R$/saca médio</th>
                   <th className="py-2 px-3 text-right font-semibold">Vendido</th>
                   <th className="py-2 px-3 text-right font-semibold">CPV</th>
+                  <th className="py-2 px-3 text-right font-semibold">Margem</th>
                   <th className="py-2 pl-3 text-right font-semibold">Estoque final</th>
                 </tr>
               </thead>
@@ -158,6 +173,28 @@ export function PainelCustoMedio({
                     </td>
                     <td className="py-2 px-3 text-right font-semibold tabular-nums text-ink">
                       {formatBRL(p.cpv)}
+                    </td>
+                    <td className="py-2 px-3 text-right tabular-nums">
+                      {(() => {
+                        const margem = receitaLiquidaDe(p.grao) - p.cpv
+                        const porSaca = p.sacasVendidas > 0 ? margem / p.sacasVendidas : null
+                        return (
+                          <>
+                            <span
+                              className={
+                                margem >= 0 ? 'font-semibold text-green-deep' : 'font-semibold text-danger'
+                              }
+                            >
+                              {formatBRL(margem)}
+                            </span>
+                            {porSaca != null && (
+                              <div className="text-[11px] text-faint">
+                                {formatBRL(porSaca)} / sc
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                     </td>
                     <td
                       className={`py-2 pl-3 text-right tabular-nums ${

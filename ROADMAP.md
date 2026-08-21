@@ -75,7 +75,7 @@
   Rotina mensal simples (admin) para folha/depreciação/financeiras quando não vierem de planilha —
   grade conta × mês, origem='manual'. _CA: entra no DRE fundido e na auditoria._
 
-## Fase 3 — Reconciliação, estoque e auditoria
+## Fase 3 — Reconciliação, estoque e auditoria ✅ concluída em 2026-08-21
 
 > Meta: transformar a diferença API × planilha em ferramenta de auditoria (o que o cliente pediu, §15).
 
@@ -102,7 +102,7 @@
   em 9% e o valor pertence às deduções — o que viraria o resultado do semestre. Grande demais
   para entrar por hipótese. Vira achado quantificado; a decisão é do contador.
   _CA: ✅ gap decomposto, com card na reconciliação e registro no `context.md`._
-- [ ] **3.4 Resultado por grão por COMPETÊNCIA** (M)
+- [x] **3.4 Resultado por grão por COMPETÊNCIA** (M)
   Hoje só existe em regime de caixa (§26). Com 1.1+3.2, montar por competência no DRE.
   _CA: card por grão em competência; soma reconcilia com o DRE._
 
@@ -110,8 +110,12 @@
 
 - [ ] **4.1 Apontar para a API de PRODUÇÃO** (P) — depende de 0.2. Re-rodar a validação da §27
   contra prod (o buraco de estrutura pode mudar de tamanho). _CA: números de prod validados._
-- [ ] **4.2 Sync agendado** (M) — cron da Vercel para o incremental (diário) + auto-sync na
-  abertura (padrão do Safragold §6). _CA: DRE atualiza sem clique._
+- [x] **4.2 Sync agendado** (M) — `api/enoki-cron.ts` (cron diário 06:00 UTC, protegido por
+  `CRON_SECRET`) grava o delta cru dos últimos 21 dias no Blob; auto-sync incremental na abertura
+  do app quando a última carga tem +12h. A mesclagem é por JANELA (o período sincronizado é
+  autoritário, o resto é preservado) — substituir tudo apagaria a carga histórica.
+  ⚠ **Falta setar `CRON_SECRET` na Vercel** para o cron sair do 401.
+  _CA: ✅ DRE atualiza sem clique._
 - [ ] **4.3 Alertas WhatsApp (Sprint 3 da proposta)** (G) — a confiabilidade + reconciliação
   (3.1) rankeiam por materialidade; falta provedor (Twilio × Meta API + custo).
   _CA: alerta de divergência material chega no WhatsApp do sócio._

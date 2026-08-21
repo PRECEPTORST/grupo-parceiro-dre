@@ -132,3 +132,41 @@ describe('sincronizarEnokiDre', () => {
     expect(r.lancamentos).toHaveLength(1)
   })
 })
+
+// A regra de mesclagem incremental vive no DreContext, mas a decisão que ela
+// implementa é testável aqui em forma pura: a janela sincronizada manda no seu
+// próprio período, e o que está fora dela sobrevive.
+describe('mesclagem incremental (item 4.2)', () => {
+  const dentroDaJanela = (data: string, de: string, ate: string) => data >= de && data <= ate
+
+  const historico = [
+    { id: 'a', data: '2026-01-15' },
+    { id: 'b', data: '2026-03-20' },
+    { id: 'c', data: '2026-06-10' },
+  ]
+
+  function mesclar(
+    anteriores: { id: string; data: string }[],
+    novos: { id: string; data: string }[],
+    de: string,
+    ate: string,
+  ) {
+    return [...anteriores.filter((l) => !dentroDaJanela(l.data, de, ate)), ...novos]
+  }
+
+  it('preserva o que está fora da janela', () => {
+    const r = mesclar(historico, [{ id: 'c2', data: '2026-06-12' }], '2026-06-01', '2026-06-30')
+    expect(r.map((x) => x.id).sort()).toEqual(['a', 'b', 'c2'])
+  })
+
+  it('a janela é autoritária: lançamento que sumiu na origem some aqui', () => {
+    // 'c' estava em junho e não voltou na nova carga (nota cancelada, por exemplo).
+    const r = mesclar(historico, [], '2026-06-01', '2026-06-30')
+    expect(r.map((x) => x.id)).toEqual(['a', 'b'])
+  })
+
+  it('janela larga substitui tudo que ela cobre', () => {
+    const r = mesclar(historico, [{ id: 'novo', data: '2026-02-01' }], '2026-01-01', '2026-12-31')
+    expect(r.map((x) => x.id)).toEqual(['novo'])
+  })
+})

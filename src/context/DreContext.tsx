@@ -90,6 +90,11 @@ interface DreContextValue {
     /** Regras a aplicar nesta carga. Ausente = as que estão no estado. Explícito
      *  porque logo após salvar regras o estado ainda não re-renderizou. */
     regras?: RegraEnoki[]
+    /**
+     * true = carga INCREMENTAL: preserva o que está fora da janela sincronizada.
+     * Sem isto uma janela curta apagaria a carga histórica inteira.
+     */
+    incremental?: boolean
   }) => Promise<{ configurado: boolean; lancamentos: number; completo: boolean; residuos: number }>
   /** Troca a fonte que o DRE exibe (planilha × Enoki). */
   salvarFonteDre: (fonte: FonteDre) => void
@@ -182,10 +187,31 @@ export function DreProvider({ children }: { children: ReactNode }) {
     })
     if (!r.configurado) return { configurado: false, lancamentos: 0, completo: true, residuos: 0 }
 
-    setEstado((s) => ({
+    // Numa carga incremental a janela sincronizada é AUTORITÁRIA sobre o próprio
+    // período (nota cancelada depois some corretamente), mas o que está fora dela
+    // é preservado. Substituir tudo apagaria meses já carregados.
+    const janela = { de: r.meta.de, ate: r.meta.ate }
+    const dentroDaJanela = (data: string) =>
+      !janela.de || !janela.ate || (data >= janela.de && data <= janela.ate)
+
+    setEstado((s) => {
+      const anterioresForaDaJanela = opcoes.incremental
+        ? (s.lancamentosEnoki ?? []).filter((l) => !dentroDaJanela(l.data))
+        : []
+      const sacasAnteriores = opcoes.incremental ? { ...(s.sacasEnoki ?? {}) } : {}
+      if (opcoes.incremental) {
+        for (const competencia of Object.keys(sacasAnteriores)) {
+          // A competência coberta pela janela é recalculada pela carga nova.
+          if (dentroDaJanela(`${competencia}-01`) || dentroDaJanela(`${competencia}-28`)) {
+            delete sacasAnteriores[competencia]
+          }
+        }
+      }
+
+      return {
       ...s,
-      lancamentosEnoki: r.lancamentos,
-      sacasEnoki: r.sacas,
+      lancamentosEnoki: [...anterioresForaDaJanela, ...r.lancamentos],
+      sacasEnoki: { ...sacasAnteriores, ...r.sacas },
       enokiSync: {
         atualizadoEm: r.meta.atualizadoEm,
         de: r.meta.de,
@@ -215,9 +241,35 @@ export function DreProvider({ children }: { children: ReactNode }) {
           porCompetencia: r.gapContratos.gapPorCompetencia,
         },
       },
-    }))
+      }
+    })
     return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo, residuos: r.residuos.length }
   }, [])
+
+  // Sincronização AUTOMÁTICA da Enoki ao abrir o app (item 4.2). Diferente da
+  // carga histórica (que o usuário dispara e acompanha), aqui é só o DELTA dos
+  // últimos dias — cabe numa invocação e é incremental, então não apaga o
+  // histórico. Só roda se a última carga já passou de meio dia, para não gastar
+  // requisição a cada refresh.
+  const autoEnoki = useRef(false)
+  useEffect(() => {
+    if (autoEnoki.current) return
+    if (statusSync !== 'sincronizado') return
+    if (!podeAdministrar(usuario?.papel)) return
+    const sync = estadoRef.current?.enokiSync
+    if (!sync?.lancamentos) return // sem carga inicial não há o que incrementar
+    const horas = (Date.now() - new Date(sync.atualizadoEm).getTime()) / 3_600_000
+    if (!Number.isFinite(horas) || horas < 12) return
+    autoEnoki.current = true
+    const hoje = new Date()
+    const de = new Date(hoje)
+    de.setDate(de.getDate() - 21)
+    void sincronizarEnoki({
+      de: de.toISOString().slice(0, 10),
+      ate: hoje.toISOString().slice(0, 10),
+      incremental: true,
+    }).catch(() => {})
+  }, [statusSync, usuario?.papel, sincronizarEnoki])
 
   // Sincroniza o Safragold AUTOMATICAMENTE uma vez por sessão, assim que a nuvem
   // termina de hidratar, para quem pode gravar (o merge dispara o save na nuvem).
