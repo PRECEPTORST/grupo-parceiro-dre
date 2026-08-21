@@ -71,6 +71,17 @@ const estado = {
       { chave: 'SICOOB - COOPERATIVA DE CREDITO', centroCusto: 'SEM CC', fluxo: 'saida' as const, quantidade: 38, valor: 812_000, amostras: ['Tarifa mensal de conta', 'Tarifa de TED'] },
       { chave: 'PREFEITURA MUNICIPAL', centroCusto: 'SEM CC', fluxo: 'saida' as const, quantidade: 6, valor: 141_000, amostras: ['ISS sobre serviço'] },
     ],
+    gapContratos: {
+      totalNf: 239_800_000,
+      totalTitulo: 217_900_000,
+      gapTotal: 21_900_000,
+      gapPct: 9.1,
+      razaoMediana: 0.9604,
+      contratos: 232,
+      distribuicao: { exato: 70, desconto_leve: 55, desconto_forte: 103, titulo_maior: 4 },
+      estrutural: true,
+      porCompetencia: {},
+    },
     descartes: [
       { motivo: 'receita_vem_da_nf', quantidade: 4017, valor: 218_300_000 },
       { motivo: 'nf_transferencia', quantidade: 401, valor: 18_290_000 },

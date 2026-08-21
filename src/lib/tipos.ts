@@ -485,6 +485,22 @@ export interface EnokiSyncMeta {
   }[]
   /** O que foi descartado e por quê (auditoria). */
   descartes: { motivo: string; quantidade: number; valor: number }[]
+  /**
+   * Resumo do confronto nota × título por contrato (item 3.3). Só o RESUMO —
+   * a lista completa de contratos não é persistida (são milhares e ela é
+   * recalculável a cada sincronização).
+   */
+  gapContratos?: {
+    totalNf: number
+    totalTitulo: number
+    gapTotal: number
+    gapPct: number
+    razaoMediana: number
+    contratos: number
+    distribuicao: Record<string, number>
+    estrutural: boolean
+    porCompetencia: Record<string, { nf: number; titulo: number; gap: number; pct: number }>
+  }
 }
 
 /** Fonte efetiva do DRE (ausente = 'planilha'). */

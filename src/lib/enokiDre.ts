@@ -36,6 +36,12 @@ import {
 } from './tipos'
 import { destinoDeCentroCusto, normalizarRotulo, SEM_CENTRO_CUSTO } from './centroCusto'
 import { naturezaDeCfop, type NaturezaCfop } from './cfop'
+import {
+  analisarGapContratos,
+  type NotaContrato,
+  type TituloContrato,
+  type RelatorioGapContratos,
+} from './gapContratos'
 import { numeroEnoki } from './enoki'
 
 /** Quilos por saca — padrão do agronegócio brasileiro. */
@@ -204,6 +210,11 @@ export interface ResiduoEnoki {
 
 export interface ResultadoEnokiDre {
   lancamentos: LancamentoCanonico[]
+  /**
+   * Confronto nota × título por contrato (item 3.3). Quantifica o desconto entre
+   * o que foi faturado e o que virou recebível — ~9% da receita nos dados reais.
+   */
+  gapContratos: RelatorioGapContratos
   /** Sacas VENDIDAS por competência ('YYYY-MM') e grão, extraídas das NFs. */
   sacas: Record<string, Partial<Record<Grao, number>>>
   descartes: ResumoDescarte[]
@@ -212,13 +223,24 @@ export interface ResultadoEnokiDre {
 
 interface Acumulador {
   lancamentos: LancamentoCanonico[]
+  /** Notas de venda com contrato, para o confronto do item 3.3. */
+  notasContrato: NotaContrato[]
+  /** Títulos de receita com contrato, o outro lado do confronto. */
+  titulosContrato: TituloContrato[]
   sacas: Record<string, Partial<Record<Grao, number>>>
   descartes: Map<MotivoDescarte, { quantidade: number; valor: number }>
   residuos: Map<string, ResiduoEnoki>
 }
 
 function novoAcumulador(): Acumulador {
-  return { lancamentos: [], sacas: {}, descartes: new Map(), residuos: new Map() }
+  return {
+    lancamentos: [],
+    notasContrato: [],
+    titulosContrato: [],
+    sacas: {},
+    descartes: new Map(),
+    residuos: new Map(),
+  }
 }
 
 function descartar(acc: Acumulador, motivo: MotivoDescarte, valor: number): void {
@@ -363,6 +385,13 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
         origem: 'enoki',
       })
 
+      if (natureza === 'venda') {
+        const idContrato = (nf?.contratosVinculados ?? [])[0]?.idContrato
+        if (idContrato != null) {
+          acc.notasContrato.push({ idContrato, competencia, valor, grao })
+        }
+      }
+
       // Sacas: só a VENDA soma; a devolução de venda devolve o volume.
       if (grao && natureza !== 'devolucao_compra') {
         const sacas = sacasDeItem(produto, item?.quantidade)
@@ -400,6 +429,16 @@ function processarTitulos(
     const parceiro = String(t?.parceiroNome ?? '').trim()
     const descricao = String(t?.descricao ?? '').trim()
     const historico = [parceiro, descricao].filter(Boolean).join(' · ').slice(0, 160)
+
+    // O título de receita de grão não vira lançamento (a receita vem da nota),
+    // mas o valor dele é justamente o outro lado do confronto do item 3.3.
+    if (fluxo === 'entrada' && t?.idContrato != null && /RECEITA/.test(normalizarRotulo(centroCusto))) {
+      acc.titulosContrato.push({
+        idContrato: t.idContrato,
+        competencia: data.slice(0, 7),
+        valor,
+      })
+    }
 
     const destino = destinoDeCentroCusto(centroCusto, fluxo)
     let conta: string
@@ -493,7 +532,13 @@ export function normalizarEnokiDre(
     .map((r) => ({ ...r, valor: Math.round(r.valor * 100) / 100 }))
     .sort((a, b) => b.valor - a.valor)
 
-  return { lancamentos, sacas, descartes, residuos }
+  return {
+    lancamentos,
+    sacas,
+    descartes,
+    residuos,
+    gapContratos: analisarGapContratos(acc.notasContrato, acc.titulosContrato),
+  }
 }
 
 /** Competências ('YYYY-MM') presentes num conjunto de lançamentos, ordenadas. */

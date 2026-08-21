@@ -91,9 +91,17 @@
   de compra** (vira item de Fase 0); se sim, troca-se só o alimentador.
   _CA: ✅ CPV mensal ≠ compras do mês quando há formação de estoque; alertas de estoque negativo e
   de volume-sem-valor._
-- [ ] **3.3 Investigar o gap NF × títulos (~R$37M)** (M)
-  Barter/adiantamentos/complementares? Vira regra do motor (explicado) ou achado permanente.
-  _CA: gap decomposto e documentado no `context.md`._
+- [x] **3.3 Investigar o gap NF × títulos** (M) — **DECOMPOSTO**
+  O gap caiu de ~R$ 37M para **R$ 21,9M (9,1%)** só com o CFOP (item 2.3): remessa e
+  transferência respondiam pela maior parte. O que sobra foi confrontado contrato a contrato
+  (`src/lib/gapContratos.ts`): em 232 contratos com nota E título, razão mediana **0,960** com
+  dispersão grande (p10 = 0,755) e 30% batendo exato. Alíquota daria razão constante → a
+  assinatura é de **desconto de classificação** (umidade/impureza/avariados). O gap se repete em
+  todo mês (5–12%) → estrutural, não pontual.
+  ⚠ **NÃO reclassificado automaticamente:** se for abatimento, a receita bruta está superavaliada
+  em 9% e o valor pertence às deduções — o que viraria o resultado do semestre. Grande demais
+  para entrar por hipótese. Vira achado quantificado; a decisão é do contador.
+  _CA: ✅ gap decomposto, com card na reconciliação e registro no `context.md`._
 - [ ] **3.4 Resultado por grão por COMPETÊNCIA** (M)
   Hoje só existe em regime de caixa (§26). Com 1.1+3.2, montar por competência no DRE.
   _CA: card por grão em competência; soma reconcilia com o DRE._

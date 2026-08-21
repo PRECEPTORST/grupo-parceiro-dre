@@ -12,6 +12,7 @@ import { formatBRL } from '../lib/format'
 import { mapaEfetivo } from '../lib/planoContas'
 import { reconciliar, type SeveridadeRec } from '../lib/reconciliacao'
 import { lancamentosPlanilha } from '../lib/tipos'
+import { ROTULO_FAIXA, type FaixaGap } from '../lib/gapContratos'
 
 const CORES: Record<SeveridadeRec, string> = {
   alta: 'border-danger/40 bg-danger/5 text-danger',
@@ -45,10 +46,12 @@ export function PainelReconciliacao() {
     [planilha, enoki, mapa],
   )
 
-  if (!rel) return null
+  const gap = estado.enokiSync?.gapContratos
+  if (!rel && !gap) return null
 
-  const mostrar = expandido ? rel.divergencias : rel.divergencias.slice(0, 6)
-  const altas = rel.divergencias.filter((d) => d.severidade === 'alta').length
+  const divergencias = rel?.divergencias ?? []
+  const mostrar = expandido ? divergencias : divergencias.slice(0, 6)
+  const altas = divergencias.filter((d) => d.severidade === 'alta').length
 
   const Comparacao = ({
     rotulo,
@@ -92,19 +95,63 @@ export function PainelReconciliacao() {
           </p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold tabular-nums text-ink">{rel.divergencias.length}</div>
+          <div className="text-2xl font-bold tabular-nums text-ink">{divergencias.length}</div>
           <div className="text-[11px] uppercase tracking-wide text-faint">
             divergências{altas > 0 && <span className="text-danger"> · {altas} alta(s)</span>}
           </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Comparacao rotulo="Receita bruta do período" dados={rel.receitaBruta} />
-        <Comparacao rotulo="Resultado líquido do período" dados={rel.resultadoLiquido} />
-      </div>
+      {rel && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Comparacao rotulo="Receita bruta do período" dados={rel.receitaBruta} />
+          <Comparacao rotulo="Resultado líquido do período" dados={rel.resultadoLiquido} />
+        </div>
+      )}
 
-      {(rel.competenciasSoEnoki.length > 0 || rel.competenciasSoPlanilha.length > 0) && (
+      {gap && gap.contratos > 0 && (
+        <div className="mt-4 rounded-lg border border-warn/40 bg-warn/5 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-sm font-bold text-ink">
+              Faturado × recebível, contrato a contrato
+            </h3>
+            <span className="text-sm font-bold tabular-nums text-gold-deep">
+              {formatBRL(gap.gapTotal)} ({gap.gapPct}%)
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-muted">
+            Em {gap.contratos.toLocaleString('pt-BR')} contratos com nota e título, o valor que virou
+            recebível é menor que o faturado. A razão mediana é{' '}
+            <strong className="text-ink">{gap.razaoMediana.toFixed(3)}</strong> e varia bastante
+            entre contratos — alíquota daria razão constante, então a assinatura é de{' '}
+            <strong className="text-ink">desconto de classificação</strong> (umidade, impureza,
+            avariados) abatido no faturamento.
+            {gap.estrutural && (
+              <>
+                {' '}
+                O gap se repete em quase todo mês, o que indica{' '}
+                <strong className="text-ink">regra do negócio</strong>, não evento isolado.
+              </>
+            )}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+            {(Object.keys(gap.distribuicao) as FaixaGap[])
+              .filter((f) => gap.distribuicao[f] > 0)
+              .map((f) => (
+                <span key={f}>
+                  {ROTULO_FAIXA[f]}: <strong className="text-ink">{gap.distribuicao[f]}</strong>
+                </span>
+              ))}
+          </div>
+          <p className="mt-2 border-l-2 border-warn pl-2 text-[11px] text-gold-deep">
+            <strong>Não foi reclassificado automaticamente.</strong> Se isto for abatimento, a
+            receita bruta está superavaliada nesse valor e ele pertence às deduções — o que muda o
+            resultado do período. Decisão do contador, com o número na mão.
+          </p>
+        </div>
+      )}
+
+      {rel && (rel.competenciasSoEnoki.length > 0 || rel.competenciasSoPlanilha.length > 0) && (
         <p className="mt-3 text-xs text-muted">
           Fora da comparação:
           {rel.competenciasSoEnoki.length > 0 && (
@@ -116,7 +163,7 @@ export function PainelReconciliacao() {
         </p>
       )}
 
-      {rel.divergencias.length === 0 ? (
+      {!rel ? null : divergencias.length === 0 ? (
         <p className="mt-4 rounded-lg border border-green/40 bg-green/5 p-3 text-sm text-green-deep">
           As duas fontes fecham em todas as linhas do período comum, dentro da materialidade.
         </p>
@@ -146,14 +193,14 @@ export function PainelReconciliacao() {
               </li>
             ))}
           </ul>
-          {rel.divergencias.length > 6 && (
+          {divergencias.length > 6 && (
             <button
               className="mt-3 text-xs font-semibold text-green underline-offset-2 hover:underline"
               onClick={() => setExpandido((v) => !v)}
             >
               {expandido
                 ? 'Mostrar só as 6 maiores'
-                : `Ver todas as ${rel.divergencias.length} divergências`}
+                : `Ver todas as ${divergencias.length} divergências`}
             </button>
           )}
         </>

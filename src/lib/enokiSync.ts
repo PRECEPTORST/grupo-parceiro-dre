@@ -8,6 +8,7 @@
 // A rede fica isolada em `buscar` (injetável) para o laço ser testável sem HTTP.
 
 import { normalizarEnokiDre, type ConfigEnokiDre, type ResultadoEnokiDre } from './enokiDre'
+import { analisarGapContratos } from './gapContratos'
 
 export interface ProgressoSync {
   /** 0..100 — fração das tarefas concluídas no servidor. */
@@ -114,7 +115,13 @@ export async function sincronizarEnokiDre(opcoes: OpcoesSyncEnoki = {}): Promise
 
   const normalizado = configurado
     ? normalizarEnokiDre({ nfs, pagar, receber }, opcoes.config)
-    : { lancamentos: [], sacas: {}, descartes: [], residuos: [] }
+    : {
+        lancamentos: [],
+        sacas: {},
+        descartes: [],
+        residuos: [],
+        gapContratos: analisarGapContratos([], []),
+      }
 
   return {
     ...normalizado,

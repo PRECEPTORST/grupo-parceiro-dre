@@ -128,6 +128,12 @@ function enxugarNf(nf: any) {
     valorTotalNf: nf?.valorTotalNf,
     destinatarioNome: nf?.destinatarioNome,
     destinatarioCpfCnpj: nf?.destinatarioCpfCnpj,
+    // Vínculo com o contrato: é o que permite confrontar o valor faturado com o
+    // título financeiro correspondente (item 3.3 do ROADMAP.md).
+    contratosVinculados: (nf?.contratosVinculados ?? []).map((c: any) => ({
+      idContrato: c?.idContrato,
+      numeroContrato: c?.numeroContrato,
+    })),
     itens: (nf?.itens ?? []).map((i: any) => ({
       idItem: i?.idItem,
       produto: i?.produto,
@@ -147,6 +153,7 @@ function enxugarTitulo(t: any) {
     parceiroNome: t?.parceiroNome,
     descricao: t?.descricao,
     centroCusto: t?.centroCusto,
+    idContrato: t?.idContrato,
   }
 }
 

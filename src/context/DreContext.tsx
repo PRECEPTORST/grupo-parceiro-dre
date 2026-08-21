@@ -32,6 +32,7 @@ import {
 import { mapaEfetivo } from '../lib/planoContas'
 import { configFusaoEfetiva, fundirLancamentos, type ResultadoFusao } from '../lib/fusao'
 import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
+import { gapEhEstrutural } from '../lib/gapContratos'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura, podeAdministrar } from '../lib/permissoes'
 
@@ -202,6 +203,17 @@ export function DreProvider({ children }: { children: ReactNode }) {
           amostras: x.amostras,
         })),
         descartes: r.descartes.map((d) => ({ motivo: d.motivo, quantidade: d.quantidade, valor: d.valor })),
+        gapContratos: {
+          totalNf: r.gapContratos.totalNf,
+          totalTitulo: r.gapContratos.totalTitulo,
+          gapTotal: r.gapContratos.gapTotal,
+          gapPct: r.gapContratos.gapPct,
+          razaoMediana: r.gapContratos.razaoMediana,
+          contratos: r.gapContratos.contratos.length,
+          distribuicao: r.gapContratos.distribuicao,
+          estrutural: gapEhEstrutural(r.gapContratos),
+          porCompetencia: r.gapContratos.gapPorCompetencia,
+        },
       },
     }))
     return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo, residuos: r.residuos.length }
