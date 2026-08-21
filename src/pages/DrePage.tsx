@@ -15,8 +15,9 @@ import {
   type Subtotais,
 } from '../lib/dre'
 import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
+import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
-import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
+import { orcamentoAprovado, fonteDreDe, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -51,13 +52,13 @@ function corDesvio(sinal: 1 | -1, desvio: number): string {
 }
 
 export function DrePage() {
-  const { estado, salvarSacas } = useDre()
+  const { estado, salvarSacas, lancamentos, sacas } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeAdministrar(usuario?.papel)
   const [lancarSacas, setLancarSacas] = useState(false)
   const competencias = useMemo(
-    () => competenciasDisponiveis(estado.lancamentos),
-    [estado.lancamentos],
+    () => competenciasDisponiveis(lancamentos),
+    [lancamentos],
   )
   const [comp, setComp] = useState<string>(() => competencias[0] ?? new Date().toISOString().slice(0, 7))
   const competencia = competencias.includes(comp) ? comp : (competencias[0] ?? comp)
@@ -71,8 +72,8 @@ export function DrePage() {
   const ateData = ehMesCorrente ? hoje : undefined
 
   const dre = useMemo(
-    () => montarDre(competencia, estado.lancamentos, mapa, orcamento, ateData),
-    [competencia, estado.lancamentos, mapa, orcamento, ateData],
+    () => montarDre(competencia, lancamentos, mapa, orcamento, ateData),
+    [competencia, lancamentos, mapa, orcamento, ateData],
   )
 
   // Resultado líquido ACUMULADO no ano (YTD): soma o resultado de todos os meses
@@ -87,7 +88,7 @@ export function DrePage() {
     const mesesComDif: string[] = []
     for (const c of meses) {
       const ate = c === hoje.slice(0, 7) ? hoje : undefined
-      const rl = montarDre(c, estado.lancamentos, mapa, undefined, ate).realizado.resultadoLiquido
+      const rl = montarDre(c, lancamentos, mapa, undefined, ate).realizado.resultadoLiquido
       total += rl
       const decl = estado.resultadoDeclarado?.[c]
       if (decl != null && Math.abs(rl - decl) > 1) {
@@ -96,23 +97,20 @@ export function DrePage() {
       }
     }
     return { total, ano, nMeses: meses.length, difDeclarado, mesesComDif }
-  }, [competencias, competencia, estado.lancamentos, estado.resultadoDeclarado, mapa, hoje])
+  }, [competencias, competencia, lancamentos, estado.resultadoDeclarado, mapa, hoje])
 
   const serieMC = useMemo(
-    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais ?? false),
-    [competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais],
+    () => serieMargemContribuicao(competencias, lancamentos, mapa, estado.mcIncluirComerciais ?? false),
+    [competencias, lancamentos, mapa, estado.mcIncluirComerciais],
   )
 
   const temOrcamento = !!orcamento
   const orcPendente = !!orcamento && !orcamentoAprovado(orcamento)
 
-  const sacasDoMes = useMemo(
-    () => estado.sacas?.[competencia] ?? {},
-    [estado.sacas, competencia],
-  )
+  const sacasDoMes = useMemo(() => sacas[competencia] ?? {}, [sacas, competencia])
   const resumo = useMemo(
-    () => resumoGraos(competencia, estado.lancamentos, mapa, sacasDoMes),
-    [competencia, estado.lancamentos, mapa, sacasDoMes],
+    () => resumoGraos(competencia, lancamentos, mapa, sacasDoMes),
+    [competencia, lancamentos, mapa, sacasDoMes],
   )
 
   // Meta (orçado) × realizado por grão: volume (sacas), preço de VENDA/saca e
@@ -151,7 +149,7 @@ export function DrePage() {
   // Faturamento = receita bruta realizada — base da análise vertical (% em cada linha).
   const faturamento = dre.linhas.find((l) => l.linha === 'receita_bruta')?.realizado ?? 0
 
-  const semDados = estado.lancamentos.length === 0
+  const semDados = lancamentos.length === 0
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -162,23 +160,36 @@ export function DrePage() {
             Demonstração do <span className="text-green">Resultado</span>
           </h1>
         </div>
-        {competencias.length > 0 && (
-          <div className="w-44">
-            <span className="mb-1 block text-xs font-medium text-muted">Competência</span>
-            <Select
-              value={competencia}
-              onChange={setComp}
-              options={competencias.map((c) => ({ value: c, label: rotuloCompetencia(c) }))}
-            />
-          </div>
-        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <SeletorFonteDre />
+          {competencias.length > 0 && (
+            <div className="w-44">
+              <span className="mb-1 block text-xs font-medium text-muted">Competência</span>
+              <Select
+                value={competencia}
+                onChange={setComp}
+                options={competencias.map((c) => ({ value: c, label: rotuloCompetencia(c) }))}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {semDados ? (
         <Card className="animate-rise">
           <p className="text-muted">
-            Nenhum lançamento ainda. Vá em <strong className="text-ink">Lançamentos</strong> e
-            sincronize com o Safragold para gerar o DRE.
+            {fonteDreDe(estado) === 'enoki' ? (
+              <>
+                Nenhum lançamento da Enoki ainda. Vá em{' '}
+                <strong className="text-ink">Lançamentos</strong> e clique em{' '}
+                <strong className="text-ink">Sincronizar Enoki</strong>.
+              </>
+            ) : (
+              <>
+                Nenhum lançamento ainda. Vá em <strong className="text-ink">Lançamentos</strong> e
+                importe a planilha da DRE gerencial.
+              </>
+            )}
           </p>
         </Card>
       ) : (

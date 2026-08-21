@@ -14,6 +14,9 @@
     },
     "api/enoki-caixa.ts": {
       "maxDuration": 120
+    },
+    "api/enoki-dre.ts": {
+      "maxDuration": 120
     }
   }
 }

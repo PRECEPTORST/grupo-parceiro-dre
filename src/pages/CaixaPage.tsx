@@ -62,7 +62,7 @@ function iguais(a: PremissasCaixa, b: PremissasCaixa): boolean {
 }
 
 export function CaixaPage() {
-  const { estado, salvarPremissasCaixa } = useDre()
+  const { estado, salvarPremissasCaixa, lancamentos } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeEditarOrcamento(usuario?.papel)
 
@@ -118,8 +118,8 @@ export function CaixaPage() {
   const resGrao = useMemo(() => resultadoCaixaPorGrao(movimentos ?? []), [movimentos])
 
   const projecao = useMemo(
-    () => projetarCaixa(estado.lancamentos, mapa, estado.orcamentos, premissas, movReais),
-    [estado.lancamentos, mapa, estado.orcamentos, premissas, movReais],
+    () => projetarCaixa(lancamentos, mapa, estado.orcamentos, premissas, movReais),
+    [lancamentos, mapa, estado.orcamentos, premissas, movReais],
   )
 
   // Detalhe diário de um mês do horizonte.
@@ -129,8 +129,8 @@ export function CaixaPage() {
     ? mesDetalhe
     : (mesesHorizonte[0] ?? premissas.competenciaSaldo)
   const diario = useMemo(
-    () => projetarCaixaDiario(mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas, movReais),
-    [mesAtivo, estado.lancamentos, mapa, estado.orcamentos, premissas, movReais],
+    () => projetarCaixaDiario(mesAtivo, lancamentos, mapa, estado.orcamentos, premissas, movReais),
+    [mesAtivo, lancamentos, mapa, estado.orcamentos, premissas, movReais],
   )
 
   const set = <K extends keyof PremissasCaixa>(chave: K, valor: PremissasCaixa[K]) =>
@@ -160,7 +160,7 @@ export function CaixaPage() {
   const totalEntradas = projecao.meses.reduce((s, m) => s + m.entradas, 0)
   const totalSaidas = projecao.meses.reduce((s, m) => s + m.saidas, 0)
 
-  if (estado.lancamentos.length === 0) {
+  if (lancamentos.length === 0) {
     return (
       <div className="mx-auto max-w-5xl px-8 py-8">
         <Cabecalho />

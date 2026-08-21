@@ -54,10 +54,10 @@ const tooltipStyle = {
 }
 
 export function DashboardPage() {
-  const { estado } = useDre()
+  const { estado, lancamentos } = useDre()
   const competencias = useMemo(
-    () => competenciasDisponiveis(estado.lancamentos),
-    [estado.lancamentos],
+    () => competenciasDisponiveis(lancamentos),
+    [lancamentos],
   )
   const [comp, setComp] = useState<string>(() => competencias[0] ?? new Date().toISOString().slice(0, 7))
   const competencia = competencias.includes(comp) ? comp : (competencias[0] ?? comp)
@@ -73,27 +73,27 @@ export function DashboardPage() {
   const ateData = ehMesCorrente ? hoje : undefined
 
   const dre = useMemo(
-    () => montarDre(competencia, estado.lancamentos, mapa, orcamentoAtual, ateData),
-    [competencia, estado.lancamentos, mapa, orcamentoAtual, ateData],
+    () => montarDre(competencia, lancamentos, mapa, orcamentoAtual, ateData),
+    [competencia, lancamentos, mapa, orcamentoAtual, ateData],
   )
 
   const serie = useMemo(
     () =>
       [...competencias].reverse().map((c) => {
         const orc = estado.orcamentos.find((o) => o.competencia === c) ?? null
-        const d = montarDre(c, estado.lancamentos, mapa, orc)
+        const d = montarDre(c, lancamentos, mapa, orc)
         return {
           rotulo: rotuloCompetencia(c),
           receitaLiquida: d.realizado.receitaLiquida,
           resultadoLiquido: d.realizado.resultadoLiquido,
         }
       }),
-    [competencias, estado.lancamentos, estado.orcamentos, mapa],
+    [competencias, lancamentos, estado.orcamentos, mapa],
   )
 
   const serieMC = useMemo(
-    () => serieMargemContribuicao(competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais ?? false),
-    [competencias, estado.lancamentos, mapa, estado.mcIncluirComerciais],
+    () => serieMargemContribuicao(competencias, lancamentos, mapa, estado.mcIncluirComerciais ?? false),
+    [competencias, lancamentos, mapa, estado.mcIncluirComerciais],
   )
 
   const comparativo = [
@@ -119,7 +119,7 @@ export function DashboardPage() {
     [dre],
   )
 
-  if (estado.lancamentos.length === 0) {
+  if (lancamentos.length === 0) {
     return (
       <div className="mx-auto max-w-6xl px-8 py-8">
         <Cabecalho competencias={[]} competencia={competencia} setComp={setComp} />

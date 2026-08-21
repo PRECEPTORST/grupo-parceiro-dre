@@ -9,6 +9,7 @@ import { AuthContext, type UsuarioLogado } from '../context/AuthContext'
 import { DreProvider } from '../context/DreContext'
 import { OrcamentoPage } from '../pages/OrcamentoPage'
 import { DrePage } from '../pages/DrePage'
+import { LancamentosPage } from '../pages/LancamentosPage'
 
 const KEY = 'grupo-parceiro-dre:v1'
 
@@ -37,6 +38,33 @@ const estado = {
     },
   ],
   sacas: { '2026-02': { soja: 5200 } },
+  // Fatia da Enoki (fonte alternativa) — exercita o seletor de fonte, o selo de
+  // status e o diagnóstico da carga sem precisar de rede.
+  lancamentosEnoki: [
+    { id: 'enoki-nf-1-1', data: '2026-02-05', contaSafragold: '3.1.01', historico: 'NF 900 · SOJA EM GRÃOS · CARGILL', valor: 640_000, origem: 'enoki' },
+    { id: 'enoki-nf-2-1', data: '2026-02-20', contaSafragold: '3.1.02', historico: 'NF 901 · MILHO EM GRÃOS · PIF PAF', valor: 180_000, origem: 'enoki' },
+    { id: 'enoki-p-10', data: '2026-02-06', contaSafragold: '4.1.01', historico: 'JOSE ROSA · Fat. NFe entrada', valor: 520_000, origem: 'enoki' },
+    { id: 'enoki-p-11', data: '2026-02-18', contaSafragold: '4.1.10', historico: 'TRANSPORTES X · Frete', valor: 41_000, origem: 'enoki' },
+    { id: 'enoki-p-12', data: '2026-02-22', contaSafragold: '3.2.06', historico: 'CLIENTE Y · devolução de venda', valor: 12_000, origem: 'enoki' },
+    { id: 'enoki-p-13', data: '2026-02-25', contaSafragold: '5.1.01', historico: 'AGRO MAQ · imobilizado', valor: 30_000, origem: 'enoki' },
+    { id: 'enoki-r-20', data: '2026-02-27', contaSafragold: '4.1.01', historico: 'JOSE ROSA · estorno de compra', valor: -25_000, origem: 'enoki' },
+  ],
+  sacasEnoki: { '2026-02': { soja: 4450, milho: 2250 } },
+  enokiSync: {
+    atualizadoEm: '2026-02-28T14:32:00.000Z',
+    de: '2026-01-01',
+    ate: '2026-02-28',
+    registros: 2121,
+    lancamentos: 7,
+    homologacao: true,
+    completo: true,
+    residuos: [{ centroCusto: 'SEM CC', fluxo: 'entrada', quantidade: 410, valor: 1_744_000 }],
+    descartes: [
+      { motivo: 'receita_vem_da_nf', quantidade: 4017, valor: 218_300_000 },
+      { motivo: 'nf_intragrupo', quantidade: 401, valor: 18_200_000 },
+      { motivo: 'nf_cancelada', quantidade: 461, valor: 15_200_000 },
+    ],
+  },
 }
 localStorage.setItem(KEY, JSON.stringify(estado))
 
@@ -53,10 +81,11 @@ const auth = {
 const abas = [
   { rota: 'orcamento', label: 'Orçamento' },
   { rota: 'dre', label: 'DRE' },
+  { rota: 'lancamentos', label: 'Lançamentos' },
 ] as const
 
 export function DemoApp() {
-  const [rota, setRota] = useState<'orcamento' | 'dre'>('orcamento')
+  const [rota, setRota] = useState<'orcamento' | 'dre' | 'lancamentos'>('dre')
   return (
     <AuthContext.Provider value={auth}>
       <DreProvider>
@@ -77,7 +106,13 @@ export function DemoApp() {
               </button>
             ))}
           </div>
-          {rota === 'orcamento' ? <OrcamentoPage /> : <DrePage />}
+          {rota === 'orcamento' ? (
+            <OrcamentoPage />
+          ) : rota === 'lancamentos' ? (
+            <LancamentosPage />
+          ) : (
+            <DrePage />
+          )}
         </div>
       </DreProvider>
     </AuthContext.Provider>

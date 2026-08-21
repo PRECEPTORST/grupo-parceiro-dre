@@ -49,18 +49,18 @@ function canon(v: Record<string, number>): string {
 }
 
 export function OrcamentoPage() {
-  const { estado, salvarOrcamento, salvarImpostos } = useDre()
+  const { estado, salvarOrcamento, salvarImpostos, lancamentos } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeEditarOrcamento(usuario?.papel)
   const podeAprovar = podeAprovarOrcamento(usuario?.papel)
 
   const competenciaComDados = useMemo(() => {
     const comDados = [
-      ...competenciasDisponiveis(estado.lancamentos),
+      ...competenciasDisponiveis(lancamentos),
       ...estado.orcamentos.map((o) => o.competencia),
     ].sort()
     return comDados.length ? comDados[comDados.length - 1] : new Date().toISOString().slice(0, 7)
-  }, [estado.lancamentos, estado.orcamentos])
+  }, [lancamentos, estado.orcamentos])
 
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>('mensal')
   const [ano, setAno] = useState(() => Number(competenciaComDados.slice(0, 4)))
@@ -76,14 +76,14 @@ export function OrcamentoPage() {
     set.add(atual + 1)
     set.add(Number(competenciaComDados.slice(0, 4)))
     for (const o of estado.orcamentos) set.add(Number(o.competencia.slice(0, 4)))
-    for (const c of competenciasDisponiveis(estado.lancamentos)) set.add(Number(c.slice(0, 4)))
+    for (const c of competenciasDisponiveis(lancamentos)) set.add(Number(c.slice(0, 4)))
     return [...set].sort((a, b) => b - a)
-  }, [estado.orcamentos, estado.lancamentos, competenciaComDados])
+  }, [estado.orcamentos, lancamentos, competenciaComDados])
 
   const opcoesPeriodo = useMemo(() => periodosDoAno(periodicidade, ano), [periodicidade, ano])
 
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
-  const grupos = useMemo(() => catalogoPorLinha(estado.lancamentos, mapa), [estado.lancamentos, mapa])
+  const grupos = useMemo(() => catalogoPorLinha(lancamentos, mapa), [lancamentos, mapa])
 
   // Receita de grão é orçada por sacas × preço, e o CUSTO (aquisição) é derivado
   // pela margem/saca (preço de compra = venda − margem). Ambas as contas — receita
@@ -179,7 +179,7 @@ export function OrcamentoPage() {
     setVals((a) => ({ ...a, [m]: { ...a[m], [conta]: n } }))
   const totalConta = (conta: string) => meses.reduce((s, m) => s + getV(m, conta), 0)
   const setTotalConta = (conta: string, total: number) => {
-    const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+    const dist = distribuirSazonal(total, meses, lancamentos, conta)
     setVals((a) => {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m], [conta]: dist[m] }
@@ -219,7 +219,7 @@ export function OrcamentoPage() {
   const totalValorGrao = (conta: string) => meses.reduce((s, m) => s + valorGrao(m, conta), 0)
   const totalCustoGrao = (conta: string) => meses.reduce((s, m) => s + custoGrao(m, conta), 0)
   const setTotalSacas = (conta: string, total: number) => {
-    const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+    const dist = distribuirSazonal(total, meses, lancamentos, conta)
     setSacas((a) => {
       const next = { ...a }
       for (const m of meses) next[m] = { ...next[m], [conta]: dist[m] }
@@ -335,7 +335,7 @@ export function OrcamentoPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           competencia: meses[0],
-          historicoLancamentos: estado.lancamentos,
+          historicoLancamentos: lancamentos,
           classificacoes: estado.classificacoes,
         }),
       })
@@ -371,7 +371,7 @@ export function OrcamentoPage() {
       for (const m of meses) next[m] = { ...next[m] }
       for (const [conta, total] of Object.entries(importados)) {
         if (contasForaDoEditor.has(conta)) continue
-        const dist = distribuirSazonal(total, meses, estado.lancamentos, conta)
+        const dist = distribuirSazonal(total, meses, lancamentos, conta)
         for (const m of meses) next[m][conta] = dist[m]
       }
       return next

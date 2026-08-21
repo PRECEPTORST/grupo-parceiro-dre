@@ -361,6 +361,72 @@ export interface EstadoDre {
    * ajuste manual no subtotal da origem. Ausente quando a fonte não declara total.
    */
   resultadoDeclarado?: Record<string, number>
+  /**
+   * Lançamentos vindos da API Enoki por COMPETÊNCIA (item 1.3 do ROADMAP.md).
+   * Ficam num campo SEPARADO de propósito: na Fase 1 as duas fontes convivem
+   * LADO A LADO (planilha × Enoki) e o usuário escolhe qual ler em `fonteDre`.
+   * Somar as duas seria dupla contagem — a fusão controlada é a Fase 2 (item 2.1).
+   */
+  lancamentosEnoki?: LancamentoCanonico[]
+  /** Sacas vendidas extraídas das notas fiscais da Enoki (item 2.2 usa isto). */
+  sacasEnoki?: Record<string, Partial<Record<Grao, number>>>
+  /** Diagnóstico da última sincronização com a Enoki. */
+  enokiSync?: EnokiSyncMeta
+  /** Qual fonte o DRE exibe. Ausente = 'planilha' (retrocompatível). */
+  fonteDre?: FonteDre
+}
+
+/** Fonte de dados que alimenta o DRE exibido. */
+export type FonteDre = 'planilha' | 'enoki'
+
+export const ROTULO_FONTE: Record<FonteDre, string> = {
+  planilha: 'Planilha (DRE gerencial)',
+  enoki: 'Enoki (API, automático)',
+}
+
+/** Resumo da última sincronização com a Enoki — alimenta o selo de status. */
+export interface EnokiSyncMeta {
+  atualizadoEm: string
+  de: string
+  ate: string
+  /** Registros crus trazidos da API. */
+  registros: number
+  /** Lançamentos gerados após a normalização. */
+  lancamentos: number
+  /** true quando a API apontada é a de homologação. */
+  homologacao: boolean
+  /** false quando o laço parou antes de percorrer todas as tarefas. */
+  completo: boolean
+  /** Centros de custo sem regra determinística (fila da IA — item 1.4). */
+  residuos: { centroCusto: string; fluxo: string; quantidade: number; valor: number }[]
+  /** O que foi descartado e por quê (auditoria). */
+  descartes: { motivo: string; quantidade: number; valor: number }[]
+}
+
+/** Fonte efetiva do DRE (ausente = 'planilha'). */
+export function fonteDreDe(estado: Pick<EstadoDre, 'fonteDre'>): FonteDre {
+  return estado.fonteDre ?? 'planilha'
+}
+
+/** Lançamentos que o DRE deve ler, conforme a fonte selecionada. */
+export function lancamentosDaFonte(estado: EstadoDre): LancamentoCanonico[] {
+  return fonteDreDe(estado) === 'enoki' ? (estado.lancamentosEnoki ?? []) : estado.lancamentos
+}
+
+/**
+ * Sacas vendidas por competência conforme a fonte. Na fonte Enoki as sacas saem
+ * das notas fiscais, mas o que foi digitado à mão SEMPRE vence — quem conferiu o
+ * número não pode ser atropelado por uma sincronização.
+ */
+export function sacasDaFonte(estado: EstadoDre): Record<string, Partial<Record<Grao, number>>> {
+  const manuais = estado.sacas ?? {}
+  if (fonteDreDe(estado) !== 'enoki') return manuais
+  const automaticas = estado.sacasEnoki ?? {}
+  const saida: Record<string, Partial<Record<Grao, number>>> = {}
+  for (const competencia of new Set([...Object.keys(automaticas), ...Object.keys(manuais)])) {
+    saida[competencia] = { ...automaticas[competencia], ...manuais[competencia] }
+  }
+  return saida
 }
 
 export function estadoDreVazio(): EstadoDre {

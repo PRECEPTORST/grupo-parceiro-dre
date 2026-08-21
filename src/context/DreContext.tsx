@@ -18,7 +18,10 @@ import type {
   ConfigConfiabilidade,
   RegraImposto,
   Grao,
+  FonteDre,
 } from '../lib/tipos'
+import { lancamentosDaFonte, sacasDaFonte } from '../lib/tipos'
+import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura, podeAdministrar } from '../lib/permissoes'
 
@@ -26,6 +29,15 @@ export type StatusSync = 'carregando' | 'sincronizado' | 'salvando' | 'erro' | '
 
 interface DreContextValue {
   estado: EstadoDre
+  /**
+   * Lançamentos da FONTE selecionada (`estado.fonteDre`). Toda tela deve ler
+   * daqui, e não de `estado.lancamentos` — senão a troca de fonte fica
+   * inconsistente entre as abas. `estado.lancamentos` continua sendo só a fatia
+   * da planilha.
+   */
+  lancamentos: LancamentoCanonico[]
+  /** Sacas da fonte selecionada (Enoki das NFs, com o manual vencendo). */
+  sacas: Record<string, Partial<Record<Grao, number>>>
   /** Salva/atualiza classificações de contas (merge por contaSafragold). */
   salvarClassificacoes: (novas: Classificacao[]) => void
   /** Cria ou substitui o orçamento de uma competência. */
@@ -53,6 +65,18 @@ interface DreContextValue {
   }) => void
   /** Puxa os lançamentos do Safragold e mescla no estado (merge por id). */
   sincronizarSafragold: () => Promise<{ importados: number; simulado: boolean }>
+  /**
+   * Puxa a Enoki por COMPETÊNCIA e SUBSTITUI `lancamentosEnoki` (a API é a fonte
+   * da verdade da janela pedida). Não toca em `lancamentos` (planilha) — as duas
+   * fontes convivem lado a lado até a fusão da Fase 2.
+   */
+  sincronizarEnoki: (opcoes?: {
+    de?: string
+    ate?: string
+    aoProgredir?: (p: ProgressoSync) => void
+  }) => Promise<{ configurado: boolean; lancamentos: number; completo: boolean }>
+  /** Troca a fonte que o DRE exibe (planilha × Enoki). */
+  salvarFonteDre: (fonte: FonteDre) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -115,6 +139,40 @@ export function DreProvider({ children }: { children: ReactNode }) {
       return { ...s, lancamentos: [...porId.values()] }
     })
     return { importados: novos.length, simulado: !!d.simulado }
+  }, [])
+
+  // Sincronização com a Enoki por COMPETÊNCIA (item 1.3 do ROADMAP.md). Percorre
+  // o cursor do endpoint até concluir e SUBSTITUI a fatia Enoki do estado.
+  const sincronizarEnoki = useCallback<DreContextValue['sincronizarEnoki']>(async (opcoes = {}) => {
+    const r = await puxarEnokiDre({
+      de: opcoes.de,
+      ate: opcoes.ate,
+      aoProgredir: opcoes.aoProgredir,
+    })
+    if (!r.configurado) return { configurado: false, lancamentos: 0, completo: true }
+
+    setEstado((s) => ({
+      ...s,
+      lancamentosEnoki: r.lancamentos,
+      sacasEnoki: r.sacas,
+      enokiSync: {
+        atualizadoEm: r.meta.atualizadoEm,
+        de: r.meta.de,
+        ate: r.meta.ate,
+        registros: r.meta.registros,
+        lancamentos: r.lancamentos.length,
+        homologacao: r.meta.homologacao,
+        completo: r.completo,
+        residuos: r.residuos.map((x) => ({
+          centroCusto: x.centroCusto,
+          fluxo: x.fluxo,
+          quantidade: x.quantidade,
+          valor: x.valor,
+        })),
+        descartes: r.descartes.map((d) => ({ motivo: d.motivo, quantidade: d.quantidade, valor: d.valor })),
+      },
+    }))
+    return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo }
   }, [])
 
   // Sincroniza o Safragold AUTOMATICAMENTE uma vez por sessão, assim que a nuvem
@@ -183,6 +241,8 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarMcIncluirComerciais = (incluir: boolean) =>
       setEstado((s) => ({ ...s, mcIncluirComerciais: incluir }))
 
+    const salvarFonteDre = (fonte: FonteDre) => setEstado((s) => ({ ...s, fonteDre: fonte }))
+
     const importarDreGerencial: DreContextValue['importarDreGerencial'] = (dados) =>
       setEstado((s) => {
         // Classificações: mescla por contaSafragold (memoriza; a importada vence).
@@ -198,6 +258,8 @@ export function DreProvider({ children }: { children: ReactNode }) {
 
     return {
       estado,
+      lancamentos: lancamentosDaFonte(estado),
+      sacas: sacasDaFonte(estado),
       salvarClassificacoes,
       salvarOrcamento,
       salvarPremissasCaixa,
@@ -208,11 +270,13 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarMcIncluirComerciais,
       importarDreGerencial,
       sincronizarSafragold,
+      sincronizarEnoki,
+      salvarFonteDre,
       statusSync,
       erroSync,
       ressincronizar,
     }
-  }, [estado, statusSync, erroSync, ressincronizar, sincronizarSafragold])
+  }, [estado, statusSync, erroSync, ressincronizar, sincronizarSafragold, sincronizarEnoki])
 
   return <DreContext.Provider value={value}>{children}</DreContext.Provider>
 }

@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext'
 import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { ImportarDreModal } from '../components/ImportarDreModal'
+import { SincronizarEnoki } from '../components/SincronizarEnoki'
+import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { formatBRL } from '../lib/format'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { META_LINHAS, LIMIAR_REVISAO } from '../lib/tipos'
 
 export function LancamentosPage() {
-  const { estado, sincronizarSafragold, salvarClassificacoes } = useDre()
+  const { estado, sincronizarSafragold, salvarClassificacoes, lancamentos } = useDre()
   const { usuario } = useAuth()
   const admin = podeAdministrar(usuario?.papel)
   const [sincronizando, setSincronizando] = useState(false)
@@ -26,9 +28,9 @@ export function LancamentosPage() {
 
   const contasNaoClassificadas = useMemo(() => {
     const set = new Set<string>()
-    for (const l of estado.lancamentos) if (!mapa[l.contaSafragold]) set.add(l.contaSafragold)
+    for (const l of lancamentos) if (!mapa[l.contaSafragold]) set.add(l.contaSafragold)
     return [...set].sort()
-  }, [estado.lancamentos, mapa])
+  }, [lancamentos, mapa])
 
   const sincronizar = async () => {
     setSincronizando(true)
@@ -54,7 +56,7 @@ export function LancamentosPage() {
     try {
       const amostras = contasNaoClassificadas.map((conta) => ({
         contaSafragold: conta,
-        exemplos: estado.lancamentos
+        exemplos: lancamentos
           .filter((l) => l.contaSafragold === conta)
           .slice(0, 3)
           .map((l) => l.historico),
@@ -84,6 +86,8 @@ export function LancamentosPage() {
             Fonte do <span className="text-green">DRE</span>
           </h1>
         </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <SeletorFonteDre />
         {admin && (
           <div className="flex gap-2">
             <Botao variante="fantasma" onClick={() => setImportando(true)}>
@@ -101,7 +105,14 @@ export function LancamentosPage() {
             )}
           </div>
         )}
+        </div>
       </div>
+
+      {admin && (
+        <div className="mb-6">
+          <SincronizarEnoki />
+        </div>
+      )}
 
       {erro && (
         <Card className="mb-4 animate-rise border-danger/40 bg-danger/5">
@@ -114,7 +125,7 @@ export function LancamentosPage() {
         </Card>
       )}
 
-      {estado.lancamentos.length === 0 ? (
+      {lancamentos.length === 0 ? (
         <Card className="animate-rise">
           <p className="text-muted">
             {admin ? (
@@ -142,7 +153,7 @@ export function LancamentosPage() {
                 </tr>
               </thead>
               <tbody>
-                {estado.lancamentos
+                {lancamentos
                   .slice()
                   .sort((a, b) => b.data.localeCompare(a.data))
                   .map((l) => {

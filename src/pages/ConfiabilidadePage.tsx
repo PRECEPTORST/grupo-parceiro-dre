@@ -26,13 +26,13 @@ const ESTILO_SEV: Record<Severidade, { rotulo: string; texto: string; ponto: str
 }
 
 export function ConfiabilidadePage() {
-  const { estado, salvarClassificacoes, salvarConfigConfiabilidade } = useDre()
+  const { estado, salvarClassificacoes, salvarConfigConfiabilidade, lancamentos } = useDre()
   const { usuario } = useAuth()
   const podeAgir = podeAdministrar(usuario?.papel)
 
   const competencias = useMemo(
-    () => competenciasDisponiveis(estado.lancamentos),
-    [estado.lancamentos],
+    () => competenciasDisponiveis(lancamentos),
+    [lancamentos],
   )
   const [comp, setComp] = useState<string>(() => competencias[0] ?? new Date().toISOString().slice(0, 7))
   const competencia = competencias.includes(comp) ? comp : (competencias[0] ?? comp)
@@ -42,18 +42,18 @@ export function ConfiabilidadePage() {
 
   // Auditoria: análise ESTRUTURAL de todo o período carregado (independe do mês selecionado).
   const auditoria = useMemo(
-    () => analisarAuditoria(estado.lancamentos, mapa, estado.resultadoDeclarado),
-    [estado.lancamentos, mapa, estado.resultadoDeclarado],
+    () => analisarAuditoria(lancamentos, mapa, estado.resultadoDeclarado),
+    [lancamentos, mapa, estado.resultadoDeclarado],
   )
 
   const relatorio = useMemo(
     () =>
-      analisarConfiabilidade(competencia, estado.lancamentos, estado.classificacoes, mapa, {
+      analisarConfiabilidade(competencia, lancamentos, estado.classificacoes, mapa, {
         pisoMaterialidade: config.pisoMaterialidade,
         pctReceita: config.pctReceita,
         hoje: hojeISO(),
       }),
-    [competencia, estado.lancamentos, estado.classificacoes, mapa, config.pisoMaterialidade, config.pctReceita],
+    [competencia, lancamentos, estado.classificacoes, mapa, config.pisoMaterialidade, config.pctReceita],
   )
 
   const [soMateriais, setSoMateriais] = useState(true)
@@ -74,7 +74,7 @@ export function ConfiabilidadePage() {
       { contaSafragold: conta, linha, confianca: 1, justificativa: 'Confirmado na Confiabilidade' },
     ])
 
-  if (estado.lancamentos.length === 0) {
+  if (lancamentos.length === 0) {
     return (
       <div className="mx-auto max-w-4xl px-8 py-8">
         <Cabecalho />
