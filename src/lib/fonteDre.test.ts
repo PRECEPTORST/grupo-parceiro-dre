@@ -5,6 +5,8 @@ import {
   sacasDaFonte,
   origemDe,
   mapaRegrasEnoki,
+  mesclarManuais,
+  idLancamentoManual,
   estadoDreVazio,
   type EstadoDre,
   type LancamentoCanonico,
@@ -87,5 +89,51 @@ describe('mapaRegrasEnoki', () => {
     expect(
       mapaRegrasEnoki([{ chave: '', conta: '4.4.03', confianca: 1, justificativa: '', origem: 'ia' }]),
     ).toEqual({})
+  })
+})
+
+describe('mesclarManuais (item 2.4)', () => {
+  const planilha = [
+    { ...lanc('p-folha'), contaSafragold: '4.3.01', data: '2026-06-30', valor: 100 },
+    { ...lanc('p-outro'), contaSafragold: '4.3.05', data: '2026-06-30', valor: 50 },
+  ]
+  const manuais = [
+    { ...lanc('m-folha', 'manual'), contaSafragold: '4.3.01', data: '2026-06-30', valor: 120 },
+  ]
+
+  it('o manual SUBSTITUI a planilha na mesma conta e competência (não soma)', () => {
+    const r = mesclarManuais(planilha, manuais)
+    expect(r.map((x) => x.id).sort()).toEqual(['m-folha', 'p-outro'])
+    expect(r.find((x) => x.contaSafragold === '4.3.01')!.valor).toBe(120)
+  })
+
+  it('mesma conta em OUTRA competência convive', () => {
+    const outroMes = [
+      { ...lanc('m-folha-jul', 'manual'), contaSafragold: '4.3.01', data: '2026-07-31', valor: 130 },
+    ]
+    const r = mesclarManuais(planilha, outroMes)
+    expect(r).toHaveLength(3)
+  })
+
+  it('valor zero não entra', () => {
+    const r = mesclarManuais(planilha, [
+      { ...lanc('m-zero', 'manual'), contaSafragold: '4.5.01', data: '2026-06-30', valor: 0 },
+    ])
+    expect(r.map((x) => x.id)).not.toContain('m-zero')
+  })
+
+  it('sem manuais devolve a planilha intacta', () => {
+    expect(mesclarManuais(planilha, undefined)).toBe(planilha)
+    expect(mesclarManuais(planilha, [])).toBe(planilha)
+  })
+
+  it('idLancamentoManual é determinístico', () => {
+    expect(idLancamentoManual('4.3.01', '2026-06')).toBe('manual-4.3.01-2026-06')
+  })
+
+  it('lancamentosDaFonte na planilha já traz os manuais', () => {
+    const e = estado({ lancamentos: planilha, lancamentosManuais: manuais, fonteDre: 'planilha' })
+    const r = lancamentosDaFonte(e)
+    expect(r.find((x) => x.contaSafragold === '4.3.01')!.valor).toBe(120)
   })
 })

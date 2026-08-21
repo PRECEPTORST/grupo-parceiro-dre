@@ -381,6 +381,35 @@ export interface EstadoDre {
    * usa `configFusaoPadrao()`.
    */
   configFusao?: Partial<ConfigFusao>
+  /**
+   * Lançamentos digitados à mão (item 2.4): folha, depreciação, financeiras e
+   * IRPJ quando não vêm nem da API nem da planilha. Entram junto com a planilha
+   * (as duas são "a fonte não-Enoki"), e VENCEM a planilha na mesma conta e
+   * competência — quem digitou está corrigindo o que foi importado.
+   */
+  lancamentosManuais?: LancamentoCanonico[]
+}
+
+/** Id determinístico de um lançamento manual (conta + competência). */
+export function idLancamentoManual(conta: string, competencia: string): string {
+  return `manual-${conta}-${competencia}`
+}
+
+/**
+ * Junta a planilha com os lançamentos manuais. O manual SUBSTITUI a planilha na
+ * mesma conta e competência, em vez de somar — senão corrigir um valor
+ * importado viraria contá-lo duas vezes.
+ */
+export function mesclarManuais(
+  planilha: LancamentoCanonico[],
+  manuais: LancamentoCanonico[] | undefined,
+): LancamentoCanonico[] {
+  if (!manuais?.length) return planilha
+  const substituidos = new Set(manuais.map((m) => `${m.contaSafragold}|${m.data.slice(0, 7)}`))
+  const base = planilha.filter(
+    (l) => !substituidos.has(`${l.contaSafragold}|${l.data.slice(0, 7)}`),
+  )
+  return [...base, ...manuais.filter((m) => m.valor !== 0)]
 }
 
 /**
@@ -460,7 +489,14 @@ export function fonteDreDe(estado: Pick<EstadoDre, 'fonteDre'>): FonteDre {
  * com `fundirLancamentos` — não dá para fazer aqui sem import circular.
  */
 export function lancamentosDaFonte(estado: EstadoDre): LancamentoCanonico[] {
-  return fonteDreDe(estado) === 'enoki' ? (estado.lancamentosEnoki ?? []) : estado.lancamentos
+  return fonteDreDe(estado) === 'enoki'
+    ? (estado.lancamentosEnoki ?? [])
+    : mesclarManuais(estado.lancamentos, estado.lancamentosManuais)
+}
+
+/** Lado NÃO-Enoki da fusão: planilha + lançamentos manuais. */
+export function lancamentosPlanilha(estado: EstadoDre): LancamentoCanonico[] {
+  return mesclarManuais(estado.lancamentos, estado.lancamentosManuais)
 }
 
 /**

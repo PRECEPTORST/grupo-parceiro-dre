@@ -22,7 +22,13 @@ import type {
   RegraEnoki,
   ConfigFusao,
 } from '../lib/tipos'
-import { lancamentosDaFonte, sacasDaFonte, mapaRegrasEnoki, fonteDreDe } from '../lib/tipos'
+import {
+  lancamentosDaFonte,
+  lancamentosPlanilha,
+  sacasDaFonte,
+  mapaRegrasEnoki,
+  fonteDreDe,
+} from '../lib/tipos'
 import { mapaEfetivo } from '../lib/planoContas'
 import { configFusaoEfetiva, fundirLancamentos, type ResultadoFusao } from '../lib/fusao'
 import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
@@ -90,6 +96,8 @@ interface DreContextValue {
   salvarRegrasEnoki: (novas: RegraEnoki[]) => void
   /** Define de qual fonte cada linha do DRE é lida no modo fundido. */
   salvarConfigFusao: (config: Partial<ConfigFusao>) => void
+  /** Substitui os lançamentos digitados à mão (folha, depreciação, financeiras). */
+  salvarLancamentosManuais: (lista: LancamentoCanonico[]) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -265,6 +273,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarConfigFusao = (config: Partial<ConfigFusao>) =>
       setEstado((s) => ({ ...s, configFusao: config }))
 
+    const salvarLancamentosManuais = (lista: LancamentoCanonico[]) =>
+      setEstado((s) => ({ ...s, lancamentosManuais: lista.filter((l) => l.valor !== 0) }))
+
     const salvarRegrasEnoki = (novas: RegraEnoki[]) =>
       setEstado((s) => {
         const porChave = new Map((s.regrasEnoki ?? []).map((r) => [r.chave, r]))
@@ -295,7 +306,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const fusao =
       fonteDreDe(estado) === 'fundido'
         ? fundirLancamentos(
-            estado.lancamentos,
+            lancamentosPlanilha(estado),
             estado.lancamentosEnoki ?? [],
             mapaEfetivo(estado.classificacoes),
             configFusaoEfetiva(estado.configFusao),
@@ -321,6 +332,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarFonteDre,
       salvarRegrasEnoki,
       salvarConfigFusao,
+      salvarLancamentosManuais,
       statusSync,
       erroSync,
       ressincronizar,

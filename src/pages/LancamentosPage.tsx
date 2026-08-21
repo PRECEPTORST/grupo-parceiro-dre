@@ -5,6 +5,7 @@ import { podeAdministrar } from '../lib/permissoes'
 import { Botao, Card, Kicker } from '../components/ui'
 import { ImportarDreModal } from '../components/ImportarDreModal'
 import { SincronizarEnoki } from '../components/SincronizarEnoki'
+import { LancamentosManuaisModal } from '../components/LancamentosManuaisModal'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { formatBRL } from '../lib/format'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
@@ -17,6 +18,7 @@ export function LancamentosPage() {
   const [sincronizando, setSincronizando] = useState(false)
   const [classificando, setClassificando] = useState(false)
   const [importando, setImportando] = useState(false)
+  const [lancandoManual, setLancandoManual] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -92,6 +94,9 @@ export function LancamentosPage() {
           <div className="flex gap-2">
             <Botao variante="fantasma" onClick={() => setImportando(true)}>
               ⬆ Importar planilha (DRE)
+            </Botao>
+            <Botao variante="fantasma" onClick={() => setLancandoManual(true)}>
+              ⊞ Lançar estrutura
             </Botao>
             <Botao onClick={sincronizar} disabled={sincronizando}>
               {sincronizando ? 'Sincronizando…' : '↻ Sincronizar Safragold'}
@@ -207,6 +212,9 @@ export function LancamentosPage() {
       )}
 
       {admin && importando && <ImportarDreModal onClose={() => setImportando(false)} />}
+      {admin && lancandoManual && (
+        <LancamentosManuaisModal aoFechar={() => setLancandoManual(false)} />
+      )}
     </div>
   )
 }

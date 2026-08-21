@@ -57,21 +57,21 @@
   Nesta fase, modo **lado a lado**: DRE Enoki × DRE planilha (sem fusão ainda — evita dupla contagem).
   _CA: DRE jan–hoje renderiza só com dados da API; verificação visual `?demo` + prod._
 
-## Fase 2 — Estrutura + fusão de fontes
+## Fase 2 — Estrutura + fusão de fontes ✅ concluída em 2026-08-21
 
 > Meta: um DRE só, completo (trading da API + estrutura da planilha/manual), sem dupla contagem.
 
-- [ ] **2.1 Regra de fusão por linha do DRE** (G)
+- [x] **2.1 Regra de fusão por linha do DRE** (G)
   Config explícita: quais linhas vêm da API (receita, deduções, CPV) e quais da planilha/manual
   (folha→administrativas, depreciação, financeiras, IRPJ/CSLL). Determinística e visível na UI.
   _CA: nenhuma conta somada em dobro; teste de fusão; nota de fonte por linha no DRE analítico._
-- [ ] **2.2 Sacas automáticas das NFs** (M)
+- [x] **2.2 Sacas automáticas das NFs** (M)
   `EstadoDre.sacas` alimentado pela API (substitui digitação da §20; override manual continua vencendo).
   _CA: sacas por grão/mês da API = validação (milho 90–288k/mês); R$/saca e meta×realizado funcionam._
-- [ ] **2.3 Deduções completas** (M)
+- [x] **2.3 Deduções completas** (M)
   NFs de devolução (265 na validação) + motor de alíquotas (§6) por CFOP onde faltar título de
   tributo. _CA: linha deduções > 0 e coerente com o motor de impostos._
-- [ ] **2.4 Lançamento manual de estrutura** (M)
+- [x] **2.4 Lançamento manual de estrutura** (M)
   Rotina mensal simples (admin) para folha/depreciação/financeiras quando não vierem de planilha —
   grade conta × mês, origem='manual'. _CA: entra no DRE fundido e na auditoria._
 
