@@ -8,6 +8,7 @@ import { competenciasDisponiveis } from '../lib/dre'
 import { mapaEfetivo } from '../lib/planoContas'
 import { analisarConfiabilidade, type AchadoConfiabilidade, type Severidade } from '../lib/confiabilidade'
 import { analisarAuditoria, type AchadoAuditoria } from '../lib/auditoria'
+import { PainelReconciliacao } from '../components/PainelReconciliacao'
 import { LINHAS_DRE, META_LINHAS, configConfiabilidadePadrao, type LinhaDRE } from '../lib/tipos'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -104,6 +105,11 @@ export function ConfiabilidadePage() {
             options={competencias.map((c) => ({ value: c, label: rotuloCompetencia(c) }))}
           />
         </div>
+      </div>
+
+      {/* Reconciliação entre as duas fontes — o confronto mais forte que existe */}
+      <div className="mb-4">
+        <PainelReconciliacao />
       </div>
 
       {/* Achados de auditoria — estruturais, do período inteiro */}

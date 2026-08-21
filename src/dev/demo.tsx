@@ -10,6 +10,7 @@ import { DreProvider } from '../context/DreContext'
 import { OrcamentoPage } from '../pages/OrcamentoPage'
 import { DrePage } from '../pages/DrePage'
 import { LancamentosPage } from '../pages/LancamentosPage'
+import { ConfiabilidadePage } from '../pages/ConfiabilidadePage'
 
 const KEY = 'grupo-parceiro-dre:v1'
 
@@ -90,10 +91,11 @@ const abas = [
   { rota: 'orcamento', label: 'Orçamento' },
   { rota: 'dre', label: 'DRE' },
   { rota: 'lancamentos', label: 'Lançamentos' },
+  { rota: 'confiabilidade', label: 'Confiabilidade' },
 ] as const
 
 export function DemoApp() {
-  const [rota, setRota] = useState<'orcamento' | 'dre' | 'lancamentos'>('dre')
+  const [rota, setRota] = useState<'orcamento' | 'dre' | 'lancamentos' | 'confiabilidade'>('confiabilidade')
   return (
     <AuthContext.Provider value={auth}>
       <DreProvider>
@@ -118,6 +120,8 @@ export function DemoApp() {
             <OrcamentoPage />
           ) : rota === 'lancamentos' ? (
             <LancamentosPage />
+          ) : rota === 'confiabilidade' ? (
+            <ConfiabilidadePage />
           ) : (
             <DrePage />
           )}
