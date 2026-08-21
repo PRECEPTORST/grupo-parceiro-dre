@@ -1,7 +1,7 @@
 # GPResults — Contexto do Projeto
 
 > Memória geral do app, para retomar o trabalho numa sessão nova sem perder o histórico.
-> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-07-16**.
+> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-08-21**.
 
 ---
 
@@ -583,3 +583,38 @@ Três dimensões da auditoria (feedback do Luciano):
 - **App Concili (separado):** conciliação bancária (extrato OFX/CSV × lançamentos) — projeto próprio do
   Luciano, fora do GPResults.
 - Possíveis pedidos de UI: mais indicadores, ajustes por feedback. (Insights automáticos já entregues.)
+
+## 27. VALIDAÇÃO: DRE por competência A PARTIR da API financeira (sessão 2026-08-21)
+
+**Decisão (brainstorm, consenso): caminho D — DRE de competência-aproximado via API + reconciliação
+com a planilha (auditoria §17); balancete do Safra (se vier) só troca a fonte.** A conclusão de §26
+("API financeira → não dá DRE de competência") estava INCOMPLETA: os títulos têm **`dataLancamento`**
+(data da NF/fato gerador ≈ competência) além de `dataQuitacao` (caixa), e **`NfSaida` dá a receita
+bruta por emissão** (produto, kg, CFOP, contrato). Validado com extração real jan–jul/2026, 5 empresas
+(4.914 receber / 7.154 pagar / 8.035 NFs; scripts no scratchpad da sessão, dados NÃO commitados).
+
+**A API cobre BEM (trading):** receita por grão via NF (R$260,9M fora do grupo: soja 146M, milho 87M,
+café 40M, sorgo 6M — ordem de grandeza bate com a planilha ~R$40M/mês mar–mai); **sacas automáticas**
+dos itens (⚠️ soja/milho/sorgo em kg ÷60; **CAFÉ já em sacas** — mapa de unidade por produto!); CPV
+compras R$189M ("COMPRA {GRÃO}" por dataLancamento) + FRETE R$16,4M + armazenagem/secagem; deduções
+parciais (265 NFs devolução, estornos "RECEITA X" no a pagar — estorno R$910k/mai ≈ âncora da
+inadimplência de abr → item de reconciliação).
+
+**A API NÃO cobre (estrutura):** folha/pró-labore (só "FÉRIAS R$12k"), despesa financeira de
+empréstimos, depreciação, IRPJ/CSLL; despesas administrativas somam só centenas de mil. **Perguntar ao
+Juliano/Daiane se a estrutura é paga fora do módulo financeiro ou se falta na homologação.**
+
+**Engenharia (para o build):** (1) eliminar intra-grupo — R$18,2M de NF com destinatário CNPJ raiz do
+grupo (`30798330`, `22271113`, `47591700`); (2) normalizar produto (typos "SORGO EM GÃOS", "MILHO EM
+GRAOS"); (3) gap NF 260,9M × títulos a receber 223,7M ≈ R$37M a investigar (vira achado de auditoria);
+(4) ~20k registros/7 meses + rate limit agressivo (429) → sync INCREMENTAL por `desdeId` com throttling
+(~1 req/s), não janela cheia por load; (5) NfSaida exige dataInicio/dataFim.
+
+**Backlog executável: `ROADMAP.md` na raiz do repo** (fases 0–4 com critérios de aceite, riscos e
+sequência de sessões — seguir de lá; este resumo é só o registro da decisão).
+
+**Fases:** F1 `api/enoki-dre.ts` — NF+títulos → `LancamentoCanonico` (data=dataLancamento/dataEmissao),
+mapa determinístico centroCusto→conta + IA só p/ "SEM CC" (padrão classificar.ts); motor `dre.ts`
+intocado (REGRA DE OURO). F2 — estrutura (folha/depreciação/financeiras) segue da planilha (§18) ou
+lançamento manual, com ORIGEM marcada por lançamento (api×manual). F3 — painel de reconciliação
+API×planilha na auditoria + custo médio móvel por grão (CPV vendido ≠ comprado) + eliminação intra-grupo.

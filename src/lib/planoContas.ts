@@ -91,6 +91,7 @@ export const PLANO_CONTAS: PlanoConta[] = [
   { conta: '4.3.17', descricao: 'Taxas e contribuições (associações, sindicatos)', linha: 'despesas_administrativas' },
   { conta: '4.3.18', descricao: 'Treinamento e capacitação', linha: 'despesas_administrativas' },
   { conta: '4.3.19', descricao: 'Segurança e vigilância', linha: 'despesas_administrativas' },
+  { conta: '4.3.20', descricao: 'Outras despesas administrativas', linha: 'despesas_administrativas' },
 
   // ---- Outras receitas operacionais ----
   { conta: '3.4.01', descricao: 'Receita de locação de bens', linha: 'outras_receitas_operacionais' },
@@ -126,6 +127,14 @@ export const PLANO_CONTAS: PlanoConta[] = [
   // ---- Impostos sobre o lucro ----
   { conta: '4.6.01', descricao: 'IRPJ', linha: 'impostos_lucro' },
   { conta: '4.6.02', descricao: 'CSLL', linha: 'impostos_lucro' },
+
+  // ---- Investimentos (capex — ABAIXO do resultado, ver §19 do context.md) ----
+  { conta: '5.1.01', descricao: 'Imobilizado e equipamentos', linha: 'investimentos' },
+  { conta: '5.1.02', descricao: 'Veículos', linha: 'investimentos' },
+  { conta: '5.1.03', descricao: 'Consórcios', linha: 'investimentos' },
+  { conta: '5.1.04', descricao: 'Obras e benfeitorias', linha: 'investimentos' },
+  { conta: '5.1.05', descricao: 'Móveis e utensílios', linha: 'investimentos' },
+  { conta: '5.1.06', descricao: 'Terrenos', linha: 'investimentos' },
 ]
 
 /** Mapa conta → linha do plano padrão. */

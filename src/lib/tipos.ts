@@ -106,10 +106,13 @@ export const ROTULO_GRAO: Record<Grao, string> = {
 }
 
 // ---------------------------------------------------------------------------
-// Lançamento canônico — o que sai da ingestão do Safragold, normalizado.
-// `valor` é sempre em REAIS e POSITIVO (a magnitude que pertence à sua linha).
-// A camada de normalização já resolve débito/crédito e sinal.
+// Lançamento canônico — o que sai da ingestão (Enoki/planilha), normalizado.
+// `valor` é em REAIS e quase sempre POSITIVO (a magnitude que pertence à sua
+// linha); só estornos vindos do ERP são negativos. A camada de normalização já
+// resolve débito/crédito e sinal.
 // ---------------------------------------------------------------------------
+export type OrigemLancamento = 'enoki' | 'planilha' | 'manual'
+
 export interface LancamentoCanonico {
   id: string
   /** Competência do lançamento (data ISO 'YYYY-MM-DD'). */
@@ -117,9 +120,31 @@ export interface LancamentoCanonico {
   /** Código/nome da conta de origem no Safragold — chave da classificação. */
   contaSafragold: string
   historico: string
-  /** Valor em reais, positivo. */
+  /**
+   * Valor em reais, normalmente POSITIVO (a magnitude que pertence à sua linha).
+   * Pode ser NEGATIVO em um caso específico: ESTORNO vindo do ERP (pagamento num
+   * centro de custo de receita, recebimento num centro de compra). O motor soma
+   * os valores por conta, então o negativo reduz a linha corretamente.
+   */
   valor: number
   centroCusto?: string
+  /**
+   * De onde veio o lançamento: 'enoki' (API Safra Cloud, automático), 'planilha'
+   * (importação da DRE gerencial) ou 'manual'. AUSENTE = 'planilha' (dados
+   * carregados antes deste campo existir) — ver item 1.5 do ROADMAP.md.
+   */
+  origem?: OrigemLancamento
+}
+
+/** Origem efetiva de um lançamento (ausente = 'planilha', retrocompatível). */
+export function origemDe(l: Pick<LancamentoCanonico, 'origem'>): OrigemLancamento {
+  return l.origem ?? 'planilha'
+}
+
+export const ROTULO_ORIGEM: Record<OrigemLancamento, string> = {
+  enoki: 'Enoki (API)',
+  planilha: 'Planilha',
+  manual: 'Manual',
 }
 
 /** Saída do agente classificador para cada conta do Safragold. */
