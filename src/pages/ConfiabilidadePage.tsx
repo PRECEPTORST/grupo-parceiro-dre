@@ -81,8 +81,8 @@ export function ConfiabilidadePage() {
         <Cabecalho />
         <Card className="animate-rise">
           <p className="text-muted">
-            Ainda não há lançamentos. Sincronize em{' '}
-            <strong className="text-ink">Lançamentos</strong> para o motor analisar a confiabilidade.
+            Ainda não há lançamentos. Vá em <strong className="text-ink">Lançamentos</strong> e
+            carregue os dados da Enoki para o motor analisar a confiabilidade.
           </p>
         </Card>
       </div>

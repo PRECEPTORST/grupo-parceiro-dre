@@ -37,6 +37,7 @@ export function SincronizarEnoki() {
   const { estado, sincronizarEnoki, salvarRegrasEnoki } = useDre()
   const [rodando, setRodando] = useState(false)
   const [classificando, setClassificando] = useState(false)
+  const [iniciadoEm, setIniciadoEm] = useState(0)
   const [progresso, setProgresso] = useState<ProgressoSync | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -46,15 +47,25 @@ export function SincronizarEnoki() {
   const hoje = new Date().toISOString().slice(0, 10)
   const inicioAno = `${hoje.slice(0, 4)}-01-01`
 
-  const rodar = async () => {
+  /** Início da janela curta da atualização: 21 dias atrás. */
+  const inicioRecente = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 21)
+    return d.toISOString().slice(0, 10)
+  })()
+
+  const rodar = async (modo: 'completa' | 'atualizar') => {
+    const de = modo === 'completa' ? inicioAno : inicioRecente
     setRodando(true)
     setErro(null)
     setAviso(null)
     setProgresso(null)
+    setIniciadoEm(Date.now())
     try {
       const r = await sincronizarEnoki({
-        de: inicioAno,
+        de,
         ate: hoje,
+        incremental: modo === 'atualizar',
         aoProgredir: (p) => setProgresso(p),
       })
       if (!r.configurado) {
@@ -63,16 +74,21 @@ export function SincronizarEnoki() {
         )
       } else if (!r.completo) {
         setAviso(
-          `${r.lancamentos} lançamento(s) importados, mas a carga não terminou. Clique de novo para continuar de onde parou.`,
+          `${r.lancamentos} lançamento(s) carregados, mas a carga ainda não terminou. Clique de novo para continuar de onde parou — nada do que já veio se perde.`,
         )
       } else {
-        setAviso(`${r.lancamentos} lançamento(s) importados da Enoki (${inicioAno} a ${hoje}).`)
+        setAviso(
+          modo === 'completa'
+            ? `Pronto: ${r.lancamentos} lançamentos carregados de ${de} a ${hoje}. Vá para a aba DRE.`
+            : `Atualizado: ${r.lancamentos} lançamentos nos últimos 21 dias.`,
+        )
       }
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e))
     } finally {
       setRodando(false)
       setProgresso(null)
+      setIniciadoEm(0)
     }
   }
 
@@ -127,6 +143,19 @@ export function SincronizarEnoki() {
     }
   }
 
+  const temCarga = !!sync?.lancamentos
+
+  // Estimativa grosseira do que falta, a partir do ritmo já observado. Serve só
+  // para o usuário saber se espera ou volta depois.
+  const restante = (() => {
+    if (!progresso?.progresso || !iniciadoEm) return null
+    const decorrido = (Date.now() - iniciadoEm) / 1000
+    const total = (decorrido / progresso.progresso) * 100
+    const falta = Math.max(0, total - decorrido)
+    if (falta < 45) return 'menos de 1 min'
+    return `${Math.ceil(falta / 60)} min`
+  })()
+
   const residuoTotal = (sync?.residuos ?? []).reduce((s, r) => s + r.valor, 0)
   const regras = estado.regrasEnoki ?? []
   const aRevisar = regras.filter((r) => r.origem === 'ia' && r.confianca < LIMIAR_REVISAO)
@@ -136,7 +165,9 @@ export function SincronizarEnoki() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Kicker>DRE automático</Kicker>
-          <h2 className="mt-1 text-lg font-bold text-ink">Sincronizar com a Enoki</h2>
+          <h2 className="mt-1 text-lg font-bold text-ink">
+            {temCarga ? 'Sincronizar com a Enoki' : 'Carregar o DRE da Enoki'}
+          </h2>
           <p className="mt-1 max-w-xl text-sm text-muted">
             Monta o DRE por <strong className="text-ink">competência</strong> a partir das notas
             fiscais de saída e dos títulos financeiros — data do fato gerador, não a do pagamento.
@@ -150,11 +181,37 @@ export function SincronizarEnoki() {
                 : `✨ Classificar ${sync.residuos.length} pendência(s)`}
             </Botao>
           )}
-          <Botao onClick={rodar} disabled={rodando || classificando}>
-            {rodando ? 'Sincronizando…' : '↻ Sincronizar Enoki'}
+          {temCarga && (
+            <Botao
+              variante="fantasma"
+              onClick={() => rodar('completa')}
+              disabled={rodando || classificando}
+            >
+              ⬇ Recarregar o ano
+            </Botao>
+          )}
+          <Botao
+            onClick={() => rodar(temCarga ? 'atualizar' : 'completa')}
+            disabled={rodando || classificando}
+          >
+            {rodando
+              ? 'Carregando…'
+              : temCarga
+                ? '↻ Atualizar'
+                : `⬇ Carregar ${hoje.slice(0, 4)}`}
           </Botao>
         </div>
       </div>
+
+      {!temCarga && !rodando && (
+        <div className="mt-4 rounded-lg border border-line bg-cream-2 p-3 text-sm text-muted">
+          <strong className="text-ink">O que vai acontecer:</strong> o app puxa as notas fiscais e
+          os títulos do ano inteiro — alguns milhares de registros — e monta o DRE sozinho. A
+          primeira carga leva <strong className="text-ink">alguns minutos</strong> e acontece em
+          etapas; pode deixar esta aba aberta. Se parar no meio, é só clicar de novo: ela continua
+          de onde estava.
+        </div>
+      )}
 
       {(rodando || classificando) && (
         <div className="mt-4">
@@ -165,9 +222,15 @@ export function SincronizarEnoki() {
             />
           </div>
           <p className="mt-2 text-xs text-muted tabular-nums">
-            {progresso
-              ? `${progresso.progresso}% · ${progresso.tarefasFeitas}/${progresso.tarefas} consultas · ${progresso.registros} registros`
-              : 'Conectando…'}
+            {progresso ? (
+              <>
+                {progresso.progresso}% · {progresso.tarefasFeitas}/{progresso.tarefas} consultas ·{' '}
+                {progresso.registros.toLocaleString('pt-BR')} registros
+                {restante && <span className="text-faint"> · ~{restante} restante(s)</span>}
+              </>
+            ) : (
+              'Conectando…'
+            )}
           </p>
         </div>
       )}

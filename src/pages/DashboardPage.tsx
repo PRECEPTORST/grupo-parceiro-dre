@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import { useDre } from '../context/DreContext'
 import { Card, Kicker, Select } from '../components/ui'
+import { PrimeirosPassos } from '../components/PrimeirosPassos'
 import { formatBRL, formatBRLCompact, formatPct, formatDataBR } from '../lib/format'
 import {
   montarDre,
@@ -123,12 +124,7 @@ export function DashboardPage() {
     return (
       <div className="mx-auto max-w-6xl px-8 py-8">
         <Cabecalho competencias={[]} competencia={competencia} setComp={setComp} />
-        <Card className="animate-rise">
-          <p className="text-muted">
-            Ainda não há dados. Vá em <strong className="text-ink">Lançamentos</strong> e sincronize
-            o Safragold para o dashboard ganhar vida.
-          </p>
-        </Card>
+        <PrimeirosPassos />
       </div>
     )
   }

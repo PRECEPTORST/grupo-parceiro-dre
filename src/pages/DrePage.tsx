@@ -17,8 +17,9 @@ import {
 import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { PainelCustoMedio } from '../components/PainelCustoMedio'
+import { PrimeirosPassos } from '../components/PrimeirosPassos'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
-import { orcamentoAprovado, fonteDreDe, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
+import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -177,22 +178,7 @@ export function DrePage() {
       </div>
 
       {semDados ? (
-        <Card className="animate-rise">
-          <p className="text-muted">
-            {fonteDreDe(estado) === 'enoki' ? (
-              <>
-                Nenhum lançamento da Enoki ainda. Vá em{' '}
-                <strong className="text-ink">Lançamentos</strong> e clique em{' '}
-                <strong className="text-ink">Sincronizar Enoki</strong>.
-              </>
-            ) : (
-              <>
-                Nenhum lançamento ainda. Vá em <strong className="text-ink">Lançamentos</strong> e
-                importe a planilha da DRE gerencial.
-              </>
-            )}
-          </p>
-        </Card>
+        <PrimeirosPassos />
       ) : (
         <>
           {/* KPIs */}

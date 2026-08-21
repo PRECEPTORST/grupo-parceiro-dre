@@ -166,7 +166,7 @@ export function CaixaPage() {
         <Cabecalho />
         <Card className="animate-rise">
           <p className="text-muted">
-            Ainda não há dados. Sincronize o Safragold em{' '}
+            Ainda não há dados. Carregue os dados da Enoki em{' '}
             <strong className="text-ink">Lançamentos</strong> para o motor projetar o caixa.
           </p>
         </Card>

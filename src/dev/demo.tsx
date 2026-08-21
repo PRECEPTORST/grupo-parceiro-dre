@@ -90,7 +90,12 @@ const estado = {
     ],
   },
 }
-localStorage.setItem(KEY, JSON.stringify(estado))
+// `?demo=vazio` semeia o app SEM dados, para conferir a tela de primeiros passos.
+const vazio = new URLSearchParams(location.search).get('demo') === 'vazio'
+localStorage.setItem(
+  KEY,
+  JSON.stringify(vazio ? { lancamentos: [], classificacoes: [], orcamentos: [] } : estado),
+)
 
 const usuario: UsuarioLogado = { id: 'demo', usuario: 'Demo', papel: 'socio' }
 const auth = {

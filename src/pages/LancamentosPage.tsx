@@ -12,10 +12,9 @@ import { mapaEfetivo, nomeConta } from '../lib/planoContas'
 import { META_LINHAS, LIMIAR_REVISAO, origemDe, ROTULO_ORIGEM } from '../lib/tipos'
 
 export function LancamentosPage() {
-  const { estado, sincronizarSafragold, salvarClassificacoes, lancamentos } = useDre()
+  const { estado, salvarClassificacoes, lancamentos } = useDre()
   const { usuario } = useAuth()
   const admin = podeAdministrar(usuario?.papel)
-  const [sincronizando, setSincronizando] = useState(false)
   const [classificando, setClassificando] = useState(false)
   const [importando, setImportando] = useState(false)
   const [lancandoManual, setLancandoManual] = useState(false)
@@ -33,22 +32,6 @@ export function LancamentosPage() {
     for (const l of lancamentos) if (!mapa[l.contaSafragold]) set.add(l.contaSafragold)
     return [...set].sort()
   }, [lancamentos, mapa])
-
-  const sincronizar = async () => {
-    setSincronizando(true)
-    setErro(null)
-    setAviso(null)
-    try {
-      const { importados, simulado } = await sincronizarSafragold()
-      setAviso(
-        `${importados} lançamento(s) importados.${simulado ? ' (dados SIMULADOS — Safragold ainda não conectado)' : ''}`,
-      )
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSincronizando(false)
-    }
-  }
 
   const classificar = async () => {
     if (!contasNaoClassificadas.length) return
@@ -90,26 +73,23 @@ export function LancamentosPage() {
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <SeletorFonteDre />
-        {admin && (
-          <div className="flex gap-2">
-            <Botao variante="fantasma" onClick={() => setImportando(true)}>
-              ⬆ Importar planilha (DRE)
-            </Botao>
-            <Botao variante="fantasma" onClick={() => setLancandoManual(true)}>
-              ⊞ Lançar estrutura
-            </Botao>
-            <Botao onClick={sincronizar} disabled={sincronizando}>
-              {sincronizando ? 'Sincronizando…' : '↻ Sincronizar Safragold'}
-            </Botao>
-            {contasNaoClassificadas.length > 0 && (
-              <Botao variante="fantasma" onClick={classificar} disabled={classificando}>
-                {classificando
-                  ? 'Classificando…'
-                  : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
+          {admin && (
+            <div className="flex flex-wrap gap-2">
+              <Botao variante="fantasma" onClick={() => setImportando(true)}>
+                ⬆ Importar planilha
               </Botao>
-            )}
-          </div>
-        )}
+              <Botao variante="fantasma" onClick={() => setLancandoManual(true)}>
+                ⊞ Lançar estrutura
+              </Botao>
+              {contasNaoClassificadas.length > 0 && (
+                <Botao variante="fantasma" onClick={classificar} disabled={classificando}>
+                  {classificando
+                    ? 'Classificando…'
+                    : `✨ Classificar ${contasNaoClassificadas.length} conta(s)`}
+                </Botao>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -133,15 +113,9 @@ export function LancamentosPage() {
       {lancamentos.length === 0 ? (
         <Card className="animate-rise">
           <p className="text-muted">
-            {admin ? (
-              <>
-                Nenhum lançamento importado. Clique em{' '}
-                <strong className="text-ink">Sincronizar Safragold</strong> para puxar os
-                lançamentos conciliados.
-              </>
-            ) : (
-              'Nenhum lançamento importado ainda. Um administrador precisa sincronizar o Safragold.'
-            )}
+            {admin
+              ? 'Nenhum lançamento nesta fonte ainda. Use o painel acima para carregar os dados da Enoki.'
+              : 'Nenhum lançamento ainda. Um administrador precisa carregar os dados da Enoki.'}
           </p>
         </Card>
       ) : (
