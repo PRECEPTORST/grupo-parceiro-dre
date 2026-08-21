@@ -16,6 +16,7 @@ import {
 } from '../lib/dre'
 import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
+import { PainelCustoMedio } from '../components/PainelCustoMedio'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
 import { orcamentoAprovado, fonteDreDe, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
@@ -301,6 +302,10 @@ export function DrePage() {
               </table>
             </div>
           </Card>
+
+          <div className="mt-5">
+            <PainelCustoMedio competencia={competencia} podeEditar={podeEditar} />
+          </div>
 
           <QuadroDespesas dre={dre} temOrcamento={temOrcamento} />
 

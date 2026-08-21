@@ -388,6 +388,15 @@ export interface EstadoDre {
    * competência — quem digitou está corrigindo o que foi importado.
    */
   lancamentosManuais?: LancamentoCanonico[]
+  /**
+   * Sacas COMPRADAS por competência e grão (item 3.2). Informadas: a API não
+   * traz volume de compra — os títulos de "COMPRA {GRÃO}" só têm valor e o
+   * endpoint de Contratos devolve apenas contratos de venda (verificado em
+   * 2026-08-21). Sem isto não há custo médio móvel.
+   */
+  sacasCompradas?: Record<string, Partial<Record<Grao, number>>>
+  /** Estoque de abertura por grão (sacas e valor) no início do período. */
+  estoqueAbertura?: Partial<Record<Grao, { sacas: number; valor: number }>>
 }
 
 /** Id determinístico de um lançamento manual (conta + competência). */

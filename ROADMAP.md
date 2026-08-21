@@ -79,14 +79,18 @@
 
 > Meta: transformar a diferença API × planilha em ferramenta de auditoria (o que o cliente pediu, §15).
 
-- [ ] **3.1 Painel de reconciliação API × planilha** (G)
+- [x] **3.1 Painel de reconciliação API × planilha** (G)
   Motor §17 ganha comparação por linha/mês entre origens; divergência = achado com severidade.
   _CA: reproduz como achados os já conhecidos: estorno R$910k (mai API × abr planilha) e gap de timing._
-- [ ] **3.2 Custo médio móvel por grão → CPV vendido** (G)
-  kg comprados (títulos/contratos) × kg vendidos (NFs) → custo médio móvel; CPV = vendido, não
-  comprado (estoque deixa de distorcer o mês). Determinístico, testado.
-  _CA: CPV mensal ≠ compras do mês quando há formação de estoque; margem/saca por competência
-  reconcilia com meta×realizado._
+- [x] **3.2 Custo médio móvel por grão → CPV vendido** (G)
+  Motor `src/lib/custoMedio.ts` + painel no DRE + entrada de volume/estoque. Determinístico, testado.
+  ⚠ **BLOQUEIO DE DADO descoberto em 2026-08-21:** a API NÃO informa quantidade comprada — os
+  títulos de "COMPRA {GRÃO}" só têm valor, e `Contratos` devolve apenas "Contrato de Venda"
+  (testado inclusive por `idContrato` de um título de compra: vazio). Por isso o volume comprado
+  e o estoque de abertura são INFORMADOS na tela. **Perguntar ao Safra se produção expõe contrato
+  de compra** (vira item de Fase 0); se sim, troca-se só o alimentador.
+  _CA: ✅ CPV mensal ≠ compras do mês quando há formação de estoque; alertas de estoque negativo e
+  de volume-sem-valor._
 - [ ] **3.3 Investigar o gap NF × títulos (~R$37M)** (M)
   Barter/adiantamentos/complementares? Vira regra do motor (explicado) ou achado permanente.
   _CA: gap decomposto e documentado no `context.md`._

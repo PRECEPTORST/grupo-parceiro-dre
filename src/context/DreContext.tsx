@@ -98,6 +98,11 @@ interface DreContextValue {
   salvarConfigFusao: (config: Partial<ConfigFusao>) => void
   /** Substitui os lançamentos digitados à mão (folha, depreciação, financeiras). */
   salvarLancamentosManuais: (lista: LancamentoCanonico[]) => void
+  /** Grava o volume comprado por grão/mês e o estoque de abertura (item 3.2). */
+  salvarEstoque: (dados: {
+    sacasCompradas: Record<string, Partial<Record<Grao, number>>>
+    estoqueAbertura: Partial<Record<Grao, { sacas: number; valor: number }>>
+  }) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -276,6 +281,13 @@ export function DreProvider({ children }: { children: ReactNode }) {
     const salvarLancamentosManuais = (lista: LancamentoCanonico[]) =>
       setEstado((s) => ({ ...s, lancamentosManuais: lista.filter((l) => l.valor !== 0) }))
 
+    const salvarEstoque: DreContextValue['salvarEstoque'] = (dados) =>
+      setEstado((s) => ({
+        ...s,
+        sacasCompradas: dados.sacasCompradas,
+        estoqueAbertura: dados.estoqueAbertura,
+      }))
+
     const salvarRegrasEnoki = (novas: RegraEnoki[]) =>
       setEstado((s) => {
         const porChave = new Map((s.regrasEnoki ?? []).map((r) => [r.chave, r]))
@@ -333,6 +345,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       salvarRegrasEnoki,
       salvarConfigFusao,
       salvarLancamentosManuais,
+      salvarEstoque,
       statusSync,
       erroSync,
       ressincronizar,

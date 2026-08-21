@@ -51,6 +51,10 @@ const estado = {
     { id: 'enoki-r-20', data: '2026-02-27', contaSafragold: '4.1.01', historico: 'JOSE ROSA · estorno de compra', valor: -25_000, origem: 'enoki' },
   ],
   sacasEnoki: { '2026-02': { soja: 4450, milho: 2250 } },
+  // Volume comprado (informado — a API não traz) + estoque de abertura, para o
+  // painel de custo médio móvel (item 3.2) ter o que calcular no demo.
+  sacasCompradas: { '2026-02': { soja: 4000 }, '2026-03': { soja: 3000 }, '2026-05': { milho: 2500 } },
+  estoqueAbertura: { soja: { sacas: 1200, valor: 150_000 } },
   regrasEnoki: [
     { chave: 'COPASA SANEAMENTO', conta: '4.3.09', confianca: 0.94, justificativa: 'Concessionária de água.', origem: 'ia' },
     { chave: 'TRANSPORTES SILVA', conta: '4.1.10', confianca: 0.62, justificativa: 'Frete, provavelmente de compra.', origem: 'ia' },

@@ -35,7 +35,9 @@ export function PainelReconciliacao() {
   const [expandido, setExpandido] = useState(false)
 
   const planilha = useMemo(() => lancamentosPlanilha(estado), [estado])
-  const enoki = estado.lancamentosEnoki ?? []
+  // `?? []` inline criaria uma referência nova a cada render e invalidaria o
+  // memo abaixo — que reconcilia milhares de lançamentos.
+  const enoki = useMemo(() => estado.lancamentosEnoki ?? [], [estado.lancamentosEnoki])
   const mapa = useMemo(() => mapaEfetivo(estado.classificacoes), [estado.classificacoes])
 
   const rel = useMemo(
