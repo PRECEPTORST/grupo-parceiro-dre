@@ -1,7 +1,7 @@
 # GPResults — Contexto do Projeto
 
 > Memória geral do app, para retomar o trabalho numa sessão nova sem perder o histórico.
-> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-08-21**.
+> **Sempre ler e atualizar este arquivo ao começar/terminar.** Atualizado em **2026-08-21** (Fases 1–3 do ROADMAP construídas — ver §28).
 
 ---
 
@@ -618,3 +618,119 @@ mapa determinístico centroCusto→conta + IA só p/ "SEM CC" (padrão classific
 intocado (REGRA DE OURO). F2 — estrutura (folha/depreciação/financeiras) segue da planilha (§18) ou
 lançamento manual, com ORIGEM marcada por lançamento (api×manual). F3 — painel de reconciliação
 API×planilha na auditoria + custo médio móvel por grão (CPV vendido ≠ comprado) + eliminação intra-grupo.
+
+## 28. DRE por competência da Enoki — Fases 1 a 3 CONSTRUÍDAS (sessão 2026-08-21)
+
+Execução do `ROADMAP.md` (§27). **Fases 1, 2 e 3 concluídas + item 4.2.** 241 testes.
+Verificação visual toda em `?demo` (que agora tem abas DRE / Orçamento / Lançamentos /
+Confiabilidade e uma fatia Enoki semeada). **Nada foi para produção nesta sessão** — falta a
+chave de produção (item 0.2) e `CRON_SECRET`.
+
+### O que mudou nos NÚMEROS (e por quê) — leia isto primeiro
+
+A validação da §27 dizia receita de R$ 261,2M. **Está desatualizada.** Duas correções feitas
+durante a construção mudaram o quadro, ambas para melhor:
+
+| | §27 (validação) | Agora (construído) |
+|---|---|---|
+| Receita bruta jan–jul | R$ 261,2M | **R$ 240,1M** |
+| Deduções | R$ 5,4M | **R$ 20,4M** |
+| Margem bruta | 20,9% | **8,1%** |
+
+1. **CFOP (§2.3):** "nota de saída, finalidade Normal" NÃO é venda. Dentro do que eu contava como
+   faturamento havia **R$ 21,1M de remessa para armazém geral** (5905/5934 — o grão sai do pátio
+   mas continua sendo da empresa) e **R$ 18,3M de transferência entre estabelecimentos**
+   (5152/6152). Este último bate quase exato com o intragrupo que eu já detectava por CNPJ: duas
+   medições independentes concordando. E, do outro lado, **R$ 20,4M de devolução de venda**
+   (1202/2202/1504/2504) estavam sendo descartados em vez de reduzir a receita.
+2. A margem de 8,1% é plausível para trading de grãos e coerente com o semestre perto do
+   breakeven da planilha do cliente (a de 20,9% nunca foi).
+
+### O achado grande, AINDA EM ABERTO: o gap de 9,1% (§3.3)
+
+Notas de venda R$ 239,8M × títulos a receber de receita R$ 217,9M = **R$ 21,9M (9,1%)**, estável
+em todo mês (5–12%). Confrontando contrato a contrato (232 contratos com as duas pontas): razão
+mediana **0,960**, dispersão grande (p10 = 0,755), 30% batendo exato. Alíquota daria razão
+constante → a assinatura é de **desconto de classificação** (umidade/impureza/avariados).
+
+⚠ **NÃO foi reclassificado.** Se for abatimento, a receita bruta está 9% superavaliada e o valor
+pertence às deduções — o que **virava o resultado do semestre de positivo para negativo**. Grande
+demais para entrar por hipótese (regra de ouro). Está quantificado num card da Confiabilidade.
+**É a pergunta nº 1 para o contador.**
+
+### Arquitetura construída
+
+```
+API Enoki → api/enoki-dre.ts (TRANSPORTE puro) → src/lib/enokiDre.ts (REGRA, testada) → montarDre
+```
+Deliberadamente diferente do `enoki-caixa.ts`: o endpoint só faz HTTP/paginação/janelas/throttling
+e enxuga campos; toda a regra de negócio fica no front, onde é testada. Duplicar 400 linhas seria
+pedir para as cópias divergirem.
+
+- **`src/lib/centroCusto.ts`** — mapa determinístico centro de custo → conta, cobrindo os 43 CCs
+  reais. A DIREÇÃO importa: armazenagem paga é custo (4.1.11), recebida é receita (3.1.09); fluxo
+  na contramão sem conta própria vira ESTORNO (sinal −1). Receita de grão recebida é IGNORADA (o
+  fato gerador é a NF).
+- **`src/lib/enokiDre.ts`** — NF/título → `LancamentoCanonico` por competência. Armadilhas:
+  unidade por produto (**soja/milho/sorgo em kg ÷60; CAFÉ já em sacas**), intragrupo por raiz de
+  CNPJ, typos ("SORGO EM GÃOS"), canceladas/ajustes, CFOP. **CFOP desconhecido vira 'outro' e é
+  excluído com registro — nunca vira receita por omissão.**
+- **`src/lib/cfop.ts`** — natureza fiscal por SUFIXO do CFOP (o 1º dígito é só o âmbito).
+  ⚠ **A confirmar com o contador:** 5501/5502/6501/6502 ("remessa com fim específico de
+  exportação") estão como VENDA — formalmente são remessa, mas é assim que a venda ao exportador
+  é documentada aqui, e os recebíveis confirmam.
+- **`src/lib/fusao.ts`** (2.1) — cada LINHA do DRE lê de UMA fonte (padrão: trading da Enoki,
+  estrutura da planilha). Somar as duas seria dupla contagem. `linhasOrfas` denuncia quando a
+  fonte escolhida não tem lançamento nenhum.
+- **`src/lib/reconciliacao.ts`** (3.1) — Enoki × planilha linha a linha, mês a mês, só o material.
+  ⚠ Lição: exigir materialidade em R$ **E** em % descartava R$ 600k numa linha de R$ 40M (1,5%) —
+  justamente o que o sócio quer ver. Agora o piso em R$ corta o ruído sempre e o % baixo só
+  descarta quando o valor absoluto também é pequeno.
+- **`src/lib/custoMedio.ts`** (3.2) — média ponderada móvel por grão → CPV do que foi VENDIDO.
+- **`src/lib/gapContratos.ts`** (3.3) — confronto nota × título por contrato.
+- **`api/classificar-enoki.ts`** (1.4) — IA classifica só o resíduo "SEM CC" (R$ 2,5M de R$ 437M),
+  agrupado por PARCEIRO (agrupar por "SEM CC" daria um balde único inclassificável). Regra
+  confirmada à mão nunca é sobrescrita pela IA.
+
+### BLOQUEIO DE DADO (item 3.2) — pergunta para o Safra
+
+**A API não informa QUANTIDADE COMPRADA.** Os títulos de "COMPRA {GRÃO}" têm valor mas não sacas,
+e `Contratos` devolve **só "Contrato de Venda"** — testei inclusive consultando pelo `idContrato`
+que um título de compra referencia: volta vazio. Sem volume não há custo médio. Por isso o volume
+comprado e o estoque de abertura são **declarados** numa tela própria (`EstoqueModal`). Se produção
+expuser contrato de compra, troca-se só o alimentador.
+
+### Estado / campos novos em `EstadoDre`
+
+`lancamentosEnoki`, `sacasEnoki`, `enokiSync` (com diagnóstico e resumo do gap), `fonteDre`
+('planilha'|'enoki'|'fundido'), `configFusao`, `regrasEnoki`, `lancamentosManuais`,
+`sacasCompradas`, `estoqueAbertura`. Tudo retrocompatível (ausente = comportamento antigo).
+`LancamentoCanonico.origem` ('enoki'|'planilha'|'manual'; ausente = 'planilha').
+⚠ **`valor` pode ser NEGATIVO** agora — só em estorno vindo do ERP. `montarDre` soma, então reduz
+a linha corretamente.
+
+⚠ **Contexto passa a expor `lancamentos`/`sacas` JÁ FILTRADOS pela fonte.** Toda tela lê de lá, não
+de `estado.lancamentos` — senão trocar a fonte ficaria inconsistente entre abas.
+
+### Armadilhas novas (para a §12)
+
+- **Modal dentro de cabeçalho animado:** `animate-rise` usa transform; um ancestral com transform
+  vira o bloco de contenção de `position: fixed` e o modal aparece recortado. **Usar `createPortal`
+  para o `document.body`** (ModalFusao, LancamentosManuaisModal, EstoqueModal fazem isso).
+- **`?? []` inline em dependência de `useMemo`** cria referência nova a cada render e invalida o
+  memo — com 11 mil lançamentos isso é caro. Memoizar o fallback.
+- **Sync incremental DEVE mesclar por janela**, nunca substituir: uma janela curta apagaria a carga
+  histórica. O período sincronizado é autoritário sobre si mesmo; o resto é preservado.
+- **`describe.skipIf` ainda EXECUTA o corpo** para coletar os testes — leitura de fixture precisa
+  ser preguiçosa.
+- `@types/node` já existe transitivamente; usar `/// <reference types="node" />` no arquivo em vez
+  de afrouxar o `tsconfig.app.json`.
+
+### Pendências para o cliente / Luciano (nada disso é código)
+
+1. **Folha e estrutura passam pelo financeiro da Enoki?** Na homologação quase não aparecem.
+2. **URL e chave de PRODUÇÃO** (item 0.2) — nada foi ao ar; o buraco de estrutura pode mudar.
+3. **Contador:** o gap de 9,1% é desconto de classificação? Se sim, vira dedução e o semestre
+   fecha negativo. E os CFOPs 5501/5502/6501/6502 são venda mesmo?
+4. **Safra:** produção expõe contrato de COMPRA (para o volume do custo médio)?
+5. **Setar `CRON_SECRET`** na Vercel para o cron diário sair do 401.
