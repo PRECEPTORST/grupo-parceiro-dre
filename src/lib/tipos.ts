@@ -374,6 +374,30 @@ export interface EstadoDre {
   enokiSync?: EnokiSyncMeta
   /** Qual fonte o DRE exibe. Ausente = 'planilha' (retrocompatível). */
   fonteDre?: FonteDre
+  /** Regras aprendidas para o resíduo da Enoki (item 1.4 do ROADMAP.md). */
+  regrasEnoki?: RegraEnoki[]
+}
+
+/**
+ * Regra aprendida para títulos que o ERP mandou SEM centro de custo.
+ * `chave` = nome do parceiro normalizado. Sugerida pela IA, editável pelo
+ * usuário — quando `origem` é 'manual' a regra nunca mais volta para o modelo.
+ */
+export interface RegraEnoki {
+  chave: string
+  /** Conta do plano onde os títulos desse parceiro são lançados. */
+  conta: string
+  /** 0..1 — abaixo de LIMIAR_REVISAO entra na fila de revisão. */
+  confianca: number
+  justificativa: string
+  origem: 'ia' | 'manual'
+}
+
+/** Mapa chave → conta a partir das regras aprendidas (o que a normalização usa). */
+export function mapaRegrasEnoki(regras: RegraEnoki[] | undefined): Record<string, string> {
+  const mapa: Record<string, string> = {}
+  for (const r of regras ?? []) if (r.chave && r.conta) mapa[r.chave] = r.conta
+  return mapa
 }
 
 /** Fonte de dados que alimenta o DRE exibido. */
@@ -397,8 +421,18 @@ export interface EnokiSyncMeta {
   homologacao: boolean
   /** false quando o laço parou antes de percorrer todas as tarefas. */
   completo: boolean
-  /** Centros de custo sem regra determinística (fila da IA — item 1.4). */
-  residuos: { centroCusto: string; fluxo: string; quantidade: number; valor: number }[]
+  /**
+   * Títulos sem regra determinística (fila da IA — item 1.4). Guarda `chave` e
+   * `amostras` porque é exatamente isso que o classificador precisa receber.
+   */
+  residuos: {
+    chave: string
+    centroCusto: string
+    fluxo: 'entrada' | 'saida'
+    quantidade: number
+    valor: number
+    amostras: string[]
+  }[]
   /** O que foi descartado e por quê (auditoria). */
   descartes: { motivo: string; quantidade: number; valor: number }[]
 }

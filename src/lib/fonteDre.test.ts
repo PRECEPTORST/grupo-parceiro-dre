@@ -4,6 +4,7 @@ import {
   lancamentosDaFonte,
   sacasDaFonte,
   origemDe,
+  mapaRegrasEnoki,
   estadoDreVazio,
   type EstadoDre,
   type LancamentoCanonico,
@@ -68,5 +69,23 @@ describe('sacasDaFonte', () => {
 
   it('funciona sem nenhuma das duas', () => {
     expect(sacasDaFonte(estado({ fonteDre: 'enoki' }))).toEqual({})
+  })
+})
+
+describe('mapaRegrasEnoki', () => {
+  it('vira um mapa chave → conta', () => {
+    expect(
+      mapaRegrasEnoki([
+        { chave: 'SICOOB', conta: '4.4.03', confianca: 0.9, justificativa: '', origem: 'ia' },
+        { chave: 'COPASA', conta: '4.3.09', confianca: 0.95, justificativa: '', origem: 'manual' },
+      ]),
+    ).toEqual({ SICOOB: '4.4.03', COPASA: '4.3.09' })
+  })
+
+  it('ignora regra incompleta e lista ausente', () => {
+    expect(mapaRegrasEnoki(undefined)).toEqual({})
+    expect(
+      mapaRegrasEnoki([{ chave: '', conta: '4.4.03', confianca: 1, justificativa: '', origem: 'ia' }]),
+    ).toEqual({})
   })
 })

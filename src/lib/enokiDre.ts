@@ -50,6 +50,13 @@ export const RAIZES_CNPJ_GRUPO = ['30798330', '22271113', '47591700']
 export interface ConfigEnokiDre {
   /** Raízes de CNPJ do grupo (8 dígitos). Ausente = `RAIZES_CNPJ_GRUPO`. */
   raizesGrupo?: string[]
+  /**
+   * Regras aprendidas para títulos SEM centro de custo: chave (parceiro
+   * normalizado) → conta do plano. Preenchidas pela IA e editáveis pelo usuário
+   * (item 1.4 do ROADMAP.md). A chave do usuário SEMPRE vence — aqui só chega o
+   * que já foi aprovado.
+   */
+  regras?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
@@ -163,13 +170,24 @@ export interface ResumoDescarte {
   valor: number
 }
 
-/** Centro de custo sem regra determinística — vai para a classificação por IA. */
-export interface ResiduoCentroCusto {
+/**
+ * Título que nenhuma regra determinística soube classificar — a fila da IA.
+ *
+ * A chave é o PARCEIRO normalizado, não o centro de custo: quase todo resíduo é
+ * "SEM CC", então agrupar por centro de custo juntaria tudo num balde só e não
+ * daria para classificar nada. Por parceiro ("SICOOB", "PREFEITURA") o resíduo
+ * vira grupos com significado.
+ */
+export interface ResiduoEnoki {
+  /** Chave de classificação: nome do parceiro normalizado (ou a descrição). */
+  chave: string
+  /** Centro de custo do ERP. 'SEM CC' na maioria; outro valor = centro NOVO no
+   *  ERP, que merece virar regra determinística em `centroCusto.ts`. */
   centroCusto: string
   fluxo: 'entrada' | 'saida'
   quantidade: number
   valor: number
-  /** Amostra de históricos, para a IA classificar com contexto (item 1.4). */
+  /** Amostra de históricos, para a IA classificar com contexto. */
   amostras: string[]
 }
 
@@ -178,14 +196,14 @@ export interface ResultadoEnokiDre {
   /** Sacas VENDIDAS por competência ('YYYY-MM') e grão, extraídas das NFs. */
   sacas: Record<string, Partial<Record<Grao, number>>>
   descartes: ResumoDescarte[]
-  residuos: ResiduoCentroCusto[]
+  residuos: ResiduoEnoki[]
 }
 
 interface Acumulador {
   lancamentos: LancamentoCanonico[]
   sacas: Record<string, Partial<Record<Grao, number>>>
   descartes: Map<MotivoDescarte, { quantidade: number; valor: number }>
-  residuos: Map<string, ResiduoCentroCusto>
+  residuos: Map<string, ResiduoEnoki>
 }
 
 function novoAcumulador(): Acumulador {
@@ -201,21 +219,30 @@ function descartar(acc: Acumulador, motivo: MotivoDescarte, valor: number): void
 
 function registrarResiduo(
   acc: Acumulador,
+  chave: string,
   centroCusto: string,
   fluxo: 'entrada' | 'saida',
   valor: number,
   historico: string,
 ): void {
-  const rotulo = normalizarRotulo(centroCusto) || SEM_CENTRO_CUSTO
-  const chave = `${rotulo}|${fluxo}`
+  const cc = normalizarRotulo(centroCusto) || SEM_CENTRO_CUSTO
+  const id = `${chave}|${fluxo}`
   const atual =
-    acc.residuos.get(chave) ?? { centroCusto: rotulo, fluxo, quantidade: 0, valor: 0, amostras: [] }
+    acc.residuos.get(id) ?? { chave, centroCusto: cc, fluxo, quantidade: 0, valor: 0, amostras: [] }
   atual.quantidade += 1
   atual.valor += Math.abs(valor)
   if (historico && atual.amostras.length < 5 && !atual.amostras.includes(historico)) {
     atual.amostras.push(historico)
   }
-  acc.residuos.set(chave, atual)
+  acc.residuos.set(id, atual)
+}
+
+/**
+ * Chave de classificação de um título sem centro de custo. Prefere o parceiro
+ * (estável entre meses); cai na descrição quando o título não tem parceiro.
+ */
+export function chaveResiduo(parceiro: string, descricao: string): string {
+  return normalizarRotulo(parceiro) || normalizarRotulo(descricao).slice(0, 60) || SEM_CENTRO_CUSTO
 }
 
 function somarSacas(acc: Acumulador, competencia: string, grao: Grao, sacas: number): void {
@@ -299,7 +326,12 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
 // Títulos financeiros → custos, despesas, deduções, investimentos
 // ---------------------------------------------------------------------------
 
-function processarTitulos(titulos: any[], fluxo: 'entrada' | 'saida', acc: Acumulador): void {
+function processarTitulos(
+  titulos: any[],
+  fluxo: 'entrada' | 'saida',
+  acc: Acumulador,
+  regras: Record<string, string>,
+): void {
   for (const [i, t] of (titulos ?? []).entries()) {
     const valorBruto = numeroEnoki(t?.valor)
     // COMPETÊNCIA = data do lançamento (fato gerador), NÃO a da quitação.
@@ -320,21 +352,34 @@ function processarTitulos(titulos: any[], fluxo: 'entrada' | 'saida', acc: Acumu
     const historico = [parceiro, descricao].filter(Boolean).join(' · ').slice(0, 160)
 
     const destino = destinoDeCentroCusto(centroCusto, fluxo)
-    if (!destino) {
-      registrarResiduo(acc, centroCusto, fluxo, valor, historico || centroCusto)
-      continue
-    }
-    if (destino.ignorar) {
-      descartar(acc, (destino.motivo as MotivoDescarte) ?? 'patrimonial_ou_intragrupo', valor)
-      continue
+    let conta: string
+    let sinal: 1 | -1 = 1
+
+    if (destino) {
+      if (destino.ignorar) {
+        descartar(acc, (destino.motivo as MotivoDescarte) ?? 'patrimonial_ou_intragrupo', valor)
+        continue
+      }
+      conta = destino.conta
+      sinal = destino.sinal
+    } else {
+      // Sem regra determinística: cai na regra APRENDIDA (item 1.4). Sem ela,
+      // vira resíduo explícito — nunca some do relatório.
+      const chave = chaveResiduo(parceiro, descricao)
+      const aprendida = regras[chave]
+      if (!aprendida) {
+        registrarResiduo(acc, chave, centroCusto, fluxo, valor, historico || centroCusto)
+        continue
+      }
+      conta = aprendida
     }
 
     acc.lancamentos.push({
       id: `enoki-${fluxo === 'entrada' ? 'r' : 'p'}-${t?.idItemLancamento ?? t?.idLancamento ?? i}`,
       data,
-      contaSafragold: destino.conta,
+      contaSafragold: conta,
       historico,
-      valor: destino.sinal * valor,
+      valor: sinal * valor,
       centroCusto: centroCusto || undefined,
       origem: 'enoki',
     })
@@ -366,9 +411,10 @@ export function normalizarEnokiDre(
   const raizes = config.raizesGrupo ?? RAIZES_CNPJ_GRUPO
   const acc = novoAcumulador()
 
+  const regras = config.regras ?? {}
   processarNfs(entrada.nfs ?? [], raizes, acc)
-  processarTitulos(entrada.pagar ?? [], 'saida', acc)
-  processarTitulos(entrada.receber ?? [], 'entrada', acc)
+  processarTitulos(entrada.pagar ?? [], 'saida', acc, regras)
+  processarTitulos(entrada.receber ?? [], 'entrada', acc, regras)
 
   // Dedup por id (a paginação da API pode repetir registros na borda das janelas).
   const vistos = new Set<string>()

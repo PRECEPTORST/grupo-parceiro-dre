@@ -19,8 +19,9 @@ import type {
   RegraImposto,
   Grao,
   FonteDre,
+  RegraEnoki,
 } from '../lib/tipos'
-import { lancamentosDaFonte, sacasDaFonte } from '../lib/tipos'
+import { lancamentosDaFonte, sacasDaFonte, mapaRegrasEnoki } from '../lib/tipos'
 import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura, podeAdministrar } from '../lib/permissoes'
@@ -74,9 +75,14 @@ interface DreContextValue {
     de?: string
     ate?: string
     aoProgredir?: (p: ProgressoSync) => void
-  }) => Promise<{ configurado: boolean; lancamentos: number; completo: boolean }>
+    /** Regras a aplicar nesta carga. Ausente = as que estão no estado. Explícito
+     *  porque logo após salvar regras o estado ainda não re-renderizou. */
+    regras?: RegraEnoki[]
+  }) => Promise<{ configurado: boolean; lancamentos: number; completo: boolean; residuos: number }>
   /** Troca a fonte que o DRE exibe (planilha × Enoki). */
   salvarFonteDre: (fonte: FonteDre) => void
+  /** Grava/atualiza as regras aprendidas do resíduo da Enoki (merge por chave). */
+  salvarRegrasEnoki: (novas: RegraEnoki[]) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -143,13 +149,17 @@ export function DreProvider({ children }: { children: ReactNode }) {
 
   // Sincronização com a Enoki por COMPETÊNCIA (item 1.3 do ROADMAP.md). Percorre
   // o cursor do endpoint até concluir e SUBSTITUI a fatia Enoki do estado.
+  const regrasRef = useRef<RegraEnoki[]>([])
+  regrasRef.current = estado.regrasEnoki ?? []
+
   const sincronizarEnoki = useCallback<DreContextValue['sincronizarEnoki']>(async (opcoes = {}) => {
     const r = await puxarEnokiDre({
       de: opcoes.de,
       ate: opcoes.ate,
       aoProgredir: opcoes.aoProgredir,
+      config: { regras: mapaRegrasEnoki(opcoes.regras ?? regrasRef.current) },
     })
-    if (!r.configurado) return { configurado: false, lancamentos: 0, completo: true }
+    if (!r.configurado) return { configurado: false, lancamentos: 0, completo: true, residuos: 0 }
 
     setEstado((s) => ({
       ...s,
@@ -164,15 +174,17 @@ export function DreProvider({ children }: { children: ReactNode }) {
         homologacao: r.meta.homologacao,
         completo: r.completo,
         residuos: r.residuos.map((x) => ({
+          chave: x.chave,
           centroCusto: x.centroCusto,
           fluxo: x.fluxo,
           quantidade: x.quantidade,
           valor: x.valor,
+          amostras: x.amostras,
         })),
         descartes: r.descartes.map((d) => ({ motivo: d.motivo, quantidade: d.quantidade, valor: d.valor })),
       },
     }))
-    return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo }
+    return { configurado: true, lancamentos: r.lancamentos.length, completo: r.completo, residuos: r.residuos.length }
   }, [])
 
   // Sincroniza o Safragold AUTOMATICAMENTE uma vez por sessão, assim que a nuvem
@@ -243,6 +255,18 @@ export function DreProvider({ children }: { children: ReactNode }) {
 
     const salvarFonteDre = (fonte: FonteDre) => setEstado((s) => ({ ...s, fonteDre: fonte }))
 
+    const salvarRegrasEnoki = (novas: RegraEnoki[]) =>
+      setEstado((s) => {
+        const porChave = new Map((s.regrasEnoki ?? []).map((r) => [r.chave, r]))
+        for (const n of novas) {
+          const atual = porChave.get(n.chave)
+          // Regra confirmada à mão nunca é sobrescrita por sugestão da IA.
+          if (atual?.origem === 'manual' && n.origem === 'ia') continue
+          porChave.set(n.chave, n)
+        }
+        return { ...s, regrasEnoki: [...porChave.values()] }
+      })
+
     const importarDreGerencial: DreContextValue['importarDreGerencial'] = (dados) =>
       setEstado((s) => {
         // Classificações: mescla por contaSafragold (memoriza; a importada vence).
@@ -272,6 +296,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       sincronizarSafragold,
       sincronizarEnoki,
       salvarFonteDre,
+      salvarRegrasEnoki,
       statusSync,
       erroSync,
       ressincronizar,

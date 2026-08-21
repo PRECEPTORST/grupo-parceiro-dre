@@ -50,6 +50,10 @@ const estado = {
     { id: 'enoki-r-20', data: '2026-02-27', contaSafragold: '4.1.01', historico: 'JOSE ROSA · estorno de compra', valor: -25_000, origem: 'enoki' },
   ],
   sacasEnoki: { '2026-02': { soja: 4450, milho: 2250 } },
+  regrasEnoki: [
+    { chave: 'COPASA SANEAMENTO', conta: '4.3.09', confianca: 0.94, justificativa: 'Concessionária de água.', origem: 'ia' },
+    { chave: 'TRANSPORTES SILVA', conta: '4.1.10', confianca: 0.62, justificativa: 'Frete, provavelmente de compra.', origem: 'ia' },
+  ],
   enokiSync: {
     atualizadoEm: '2026-02-28T14:32:00.000Z',
     de: '2026-01-01',
@@ -58,7 +62,10 @@ const estado = {
     lancamentos: 7,
     homologacao: true,
     completo: true,
-    residuos: [{ centroCusto: 'SEM CC', fluxo: 'entrada', quantidade: 410, valor: 1_744_000 }],
+    residuos: [
+      { chave: 'SICOOB - COOPERATIVA DE CREDITO', centroCusto: 'SEM CC', fluxo: 'saida' as const, quantidade: 38, valor: 812_000, amostras: ['Tarifa mensal de conta', 'Tarifa de TED'] },
+      { chave: 'PREFEITURA MUNICIPAL', centroCusto: 'SEM CC', fluxo: 'saida' as const, quantidade: 6, valor: 141_000, amostras: ['ISS sobre serviço'] },
+    ],
     descartes: [
       { motivo: 'receita_vem_da_nf', quantidade: 4017, valor: 218_300_000 },
       { motivo: 'nf_intragrupo', quantidade: 401, valor: 18_200_000 },

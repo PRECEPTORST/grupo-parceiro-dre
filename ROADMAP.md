@@ -23,7 +23,7 @@
   (CNPJs raiz `30798330`, `22271113`, `47591700`), café cotado por saca, tratamento de devoluções.
   _CA: ok do Luciano/cliente na reunião._
 
-## Fase 1 — DRE de trading automático (o coração) 🎯
+## Fase 1 — DRE de trading automático (o coração) ✅ concluída em 2026-08-21
 
 > Meta: abrir o app e ver o DRE jan–hoje montado sozinho a partir da API, nas linhas de
 > receita/deduções/CPV, com a REGRA DE OURO intacta (motor `dre.ts` não muda).

@@ -206,9 +206,11 @@ describe('títulos → competência pela dataLancamento', () => {
       ],
     })
     expect(r.lancamentos).toHaveLength(0)
-    const residuo = r.residuos.find((x) => x.centroCusto === 'SEM CC')!
+    // Agrupado pelo PARCEIRO (os dois títulos são do mesmo), não pelo 'SEM CC'.
+    const residuo = r.residuos.find((x) => x.chave === 'JOAO EMILIO ROCHETO')!
     expect(residuo.quantidade).toBe(2)
     expect(residuo.valor).toBeCloseTo(500, 2)
+    expect(residuo.centroCusto).toBe('SEM CC')
     expect(residuo.amostras.length).toBeGreaterThan(0)
   })
 
@@ -275,5 +277,51 @@ describe('competenciasDeLancamentos', () => {
       nfs: [nfVenda(), nfVenda({ idNf: 3, dataEmissao: '2026-04-15T00:00:00-03:00' })],
     })
     expect(competenciasDeLancamentos(r.lancamentos)).toEqual(['2026-04', '2026-06'])
+  })
+})
+
+describe('regras aprendidas para o resíduo (item 1.4)', () => {
+  const semCC = [
+    titulo({ idItemLancamento: 90, centroCusto: 'SEM CC', valor: '4000', parceiroNome: 'SICOOB', descricao: 'Tarifa mensal' }),
+    titulo({ idItemLancamento: 91, centroCusto: 'SEM CC', valor: '1500', parceiroNome: 'SICOOB', descricao: 'Tarifa de TED' }),
+    titulo({ idItemLancamento: 92, centroCusto: 'SEM CC', valor: '900', parceiroNome: 'COPASA', descricao: 'Conta de água' }),
+  ]
+
+  it('sem regra, tudo vira resíduo agrupado por parceiro', () => {
+    const r = normalizarEnokiDre({ pagar: semCC })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.residuos.map((x) => x.chave).sort()).toEqual(['COPASA', 'SICOOB'])
+    // Ordenado por valor: SICOOB (5.500) antes de COPASA (900).
+    expect(r.residuos[0].chave).toBe('SICOOB')
+    expect(r.residuos[0].valor).toBeCloseTo(5500, 2)
+  })
+
+  it('com a regra aprendida, o título cai na conta e sai da fila', () => {
+    const r = normalizarEnokiDre({ pagar: semCC }, { regras: { SICOOB: '4.4.03' } })
+    expect(r.lancamentos).toHaveLength(2)
+    expect(r.lancamentos.every((l) => l.contaSafragold === '4.4.03')).toBe(true)
+    expect(r.residuos.map((x) => x.chave)).toEqual(['COPASA'])
+  })
+
+  it('a regra aprendida chega ao DRE na linha certa', () => {
+    const r = normalizarEnokiDre({ pagar: semCC }, { regras: { SICOOB: '4.4.03', COPASA: '4.3.09' } })
+    const dre = montarDre('2026-06', r.lancamentos, mapaEfetivo([]))
+    expect(dre.linhas.find((l) => l.linha === 'despesa_financeira')!.realizado).toBeCloseTo(5500, 2)
+    expect(dre.linhas.find((l) => l.linha === 'despesas_administrativas')!.realizado).toBeCloseTo(900, 2)
+    expect(dre.naoClassificadas).toHaveLength(0)
+  })
+
+  it('a chave cai na descrição quando não há parceiro', () => {
+    const r = normalizarEnokiDre({
+      pagar: [titulo({ idItemLancamento: 95, centroCusto: 'SEM CC', parceiroNome: '', descricao: 'Taxa avulsa' })],
+    })
+    expect(r.residuos[0].chave).toBe('TAXA AVULSA')
+  })
+
+  it('centro de custo NOVO no ERP aparece no resíduo com o próprio nome', () => {
+    const r = normalizarEnokiDre({
+      pagar: [titulo({ idItemLancamento: 96, centroCusto: 'CENTRO NOVO DO ERP', parceiroNome: 'FORNECEDOR Z' })],
+    })
+    expect(r.residuos[0].centroCusto).toBe('CENTRO NOVO DO ERP')
   })
 })
