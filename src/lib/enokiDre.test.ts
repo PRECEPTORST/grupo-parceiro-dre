@@ -24,6 +24,7 @@ function nfVenda(over: Record<string, unknown> = {}) {
     status: 'Finalizada',
     tipoOperacao: 'SAÍDA',
     finalidade: 'Normal',
+    cfop: '6502', // venda com fim específico de exportação (o CFOP dominante real)
     idEmpresa: 1,
     valorTotalNf: '88533.3332',
     destinatarioNome: 'CARGILL AGRICOLA S A',
@@ -118,11 +119,65 @@ describe('intragrupo (armadilha #2)', () => {
 describe('notas que não são venda (armadilha #4)', () => {
   it('cancelada, de entrada e de ajuste são descartadas', () => {
     expect(ehCancelada(nfVenda({ status: 'Cancelada' }))).toBe(true)
-    expect(ehVenda(nfVenda({ tipoOperacao: 'ENTRADA' }))).toBe(false)
+    expect(ehVenda(nfVenda({ tipoOperacao: 'ENTRADA', cfop: '1202' }))).toBe(false)
     expect(ehVenda(nfVenda({ finalidade: 'Ajuste' }))).toBe(false)
-    expect(ehVenda(nfVenda({ finalidade: 'Devolução/Retorno' }))).toBe(false)
     expect(ehVenda(nfVenda())).toBe(true)
     expect(ehVenda(nfVenda({ finalidade: 'Complementar' }))).toBe(true)
+  })
+
+  it('remessa para armazém e transferência NÃO são venda (item 2.3)', () => {
+    expect(ehVenda(nfVenda({ cfop: '5905' }))).toBe(false) // remessa p/ armazém geral
+    expect(ehVenda(nfVenda({ cfop: '5934' }))).toBe(false) // remessa simbólica
+    expect(ehVenda(nfVenda({ cfop: '6152' }))).toBe(false) // transferência
+    const r = normalizarEnokiDre({
+      nfs: [nfVenda({ cfop: '5905' }), nfVenda({ idNf: 2, cfop: '6152' })],
+    })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.some((d) => d.motivo === 'nf_remessa')).toBe(true)
+    expect(r.descartes.some((d) => d.motivo === 'nf_transferencia')).toBe(true)
+  })
+
+  it('CFOP desconhecido NÃO vira receita por omissão', () => {
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ cfop: '5999' })] })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.some((d) => d.motivo === 'nf_outra_operacao')).toBe(true)
+  })
+
+  it('devolução de VENDA reduz receita e devolve as sacas', () => {
+    const r = normalizarEnokiDre({
+      nfs: [
+        nfVenda(), // venda 88.533,33 / 666,67 sacas
+        nfVenda({
+          idNf: 7,
+          tipoOperacao: 'ENTRADA',
+          finalidade: 'Devolução/Retorno',
+          cfop: '1202',
+          itens: [{ idItem: 70, produto: 'SOJA EM GRÃOS', quantidade: '6000', valorTotal: '13000' }],
+        }),
+      ],
+    })
+    const devolucao = r.lancamentos.find((l) => l.contaSafragold === '3.2.06')!
+    expect(devolucao.valor).toBeCloseTo(13_000, 2)
+    // 40.000 kg vendidos − 6.000 kg devolvidos = 34.000 kg ÷ 60.
+    expect(r.sacas['2026-06'].soja).toBeCloseTo(34_000 / 60, 2)
+  })
+
+  it('devolução de COMPRA reduz o CPV (valor negativo)', () => {
+    const r = normalizarEnokiDre({
+      nfs: [
+        nfVenda({
+          idNf: 8,
+          tipoOperacao: 'SAÍDA',
+          finalidade: 'Devolução/Retorno',
+          cfop: '5202',
+          itens: [{ idItem: 80, produto: 'MILHO EM GRÃOS', quantidade: '6000', valorTotal: '8000' }],
+        }),
+      ],
+    })
+    const l = r.lancamentos[0]
+    expect(l.contaSafragold).toBe('4.1.02') // aquisição de milho
+    expect(l.valor).toBeCloseTo(-8_000, 2)
+    expect(r.sacas['2026-06']).toBeUndefined() // devolver compra não mexe em venda
   })
 
   it('item de crédito de ICMS não vira receita', () => {

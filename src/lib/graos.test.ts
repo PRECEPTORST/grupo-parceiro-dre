@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { resumoGraos } from './graos'
 import { mapaDeClassificacoes } from './dre'
+import { mapaEfetivo } from './planoContas'
 import type { Classificacao, LancamentoCanonico } from './tipos'
 
 const classificacoes: Classificacao[] = [
@@ -81,5 +82,26 @@ describe('resumoGraos', () => {
     expect(sem.sacasTotal).toBe(0)
     expect(sem.lucroLiquidoPorSaca).toBeNull()
     expect(sem.graos[0].lucroBrutoPorSaca).toBeNull()
+  })
+})
+
+describe('sacas negativas (devolução de venda de mês anterior)', () => {
+  it('não distribui custo compartilhado negativo e não calcula R$/saca', () => {
+    const lancamentos: LancamentoCanonico[] = [
+      { id: 'r-soja', data: '2026-05-10', contaSafragold: '3.1.01', historico: 'Venda soja', valor: 1_000_000 },
+      { id: 'c-soja', data: '2026-05-11', contaSafragold: '4.1.01', historico: 'Compra soja', valor: 800_000 },
+      { id: 'frete', data: '2026-05-12', contaSafragold: '4.1.10', historico: 'Frete', valor: 60_000 },
+      { id: 'dev-sorgo', data: '2026-05-20', contaSafragold: '3.2.06', historico: 'Devolução sorgo', valor: 30_000 },
+    ]
+    const r = resumoGraos('2026-05', lancamentos, mapaEfetivo([]), { soja: 10_000, sorgo: -800 })
+    const sorgo = r.graos.find((g) => g.grao === 'sorgo')!
+    const soja = r.graos.find((g) => g.grao === 'soja')!
+
+    // Sorgo não recebe frete (nem positivo nem negativo); a soja absorve tudo.
+    expect(sorgo.custo).toBe(0)
+    expect(soja.custo).toBeCloseTo(860_000, 2)
+    // R$/saca não é calculado com volume não positivo.
+    expect(sorgo.lucroBrutoPorSaca).toBeNull()
+    expect(soja.lucroBrutoPorSaca).not.toBeNull()
   })
 })

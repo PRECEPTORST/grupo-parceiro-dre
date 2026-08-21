@@ -28,31 +28,31 @@
 > Meta: abrir o app e ver o DRE jan–hoje montado sozinho a partir da API, nas linhas de
 > receita/deduções/CPV, com a REGRA DE OURO intacta (motor `dre.ts` não muda).
 
-- [ ] **1.1 Normalização determinística Enoki→DRE** — `src/lib/enokiDre.ts` (G)
+- [x] **1.1 Normalização determinística Enoki→DRE** — `src/lib/enokiDre.ts` (G)
   Título/NF → `LancamentoCanonico` com `data = dataLancamento` (títulos) / `dataEmissao` (NFs).
   Inclui: filtros (canceladas, ajustes, `ENTRADA`, lote de migração), typos de produto
   ("SORGO EM GÃOS"), **unidade por produto** (kg÷60; café já em sacas), **eliminação intra-grupo**
   por CNPJ raiz, estornos ("RECEITA X" no a pagar reduz receita). Sem IA, tudo testado.
   _CA: testes com fixtures reais das 3 armadilhas (intra-grupo, café, typo); soma bate com a
   extração validada em 2026-08-21 (receita fora do grupo R$260,9M jan–jul)._
-- [ ] **1.2 Mapa determinístico `centroCusto → conta do plano`** (M)
+- [x] **1.2 Mapa determinístico `centroCusto → conta do plano`** (M)
   "COMPRA SOJA"→4.1.0x, "RECEITA MILHO"→3.1.0x, "FRETE"/"SECAGEM"/"ARMAZENAGEM"→CPV,
   administrativas etc. Cobrir os ~40 CCs observados. IA **não** participa aqui.
   _CA: 100% dos CCs da extração de validação mapeados; teste exaustivo do Record._
-- [ ] **1.3 Endpoint de sincronização incremental** — `api/enoki-dre.ts` (G)
+- [x] **1.3 Endpoint de sincronização incremental** — `api/enoki-dre.ts` (G)
   Puxa NfSaida + títulos (pagar/receber) por `desdeId`, throttling ~1 req/s + backoff 429,
   janelas obrigatórias do NfSaida, **cache/estado incremental no Blob** (nunca repuxar 20k
   registros por load; `maxDuration` respeitado). Reusa padrões do `api/enoki-caixa.ts`.
   _CA: 1ª carga completa jan–hoje em ≤120s por invocação (continuável); cargas seguintes só
   trazem o delta; 5 empresas._
-- [ ] **1.4 Classificação IA só do resíduo "SEM CC"** (M)
+- [x] **1.4 Classificação IA só do resíduo "SEM CC"** (M)
   `descricao + parceiroNome` → conta, padrão `api/classificar.ts` (tool use, confiança,
   memorização em `classificacoes`). "SEM CC" = R$1,7M receber + R$0,8M pagar na validação.
   _CA: fila de revisão para confiança <0,8; reclassificação manual vence sempre._
-- [ ] **1.5 Origem por lançamento** — `LancamentoCanonico.origem: 'enoki'|'planilha'|'manual'` (P)
+- [x] **1.5 Origem por lançamento** — `LancamentoCanonico.origem: 'enoki'|'planilha'|'manual'` (P)
   Campo novo em `tipos.ts` (retrocompatível: ausente = 'planilha').
   _CA: tela Lançamentos exibe a origem; testes de retrocompatibilidade._
-- [ ] **1.6 DRE automático na UI** (M)
+- [x] **1.6 DRE automático na UI** (M)
   Botão/rotina "Sincronizar Enoki (competência)" + badge de fonte no DRE (como o badge do Caixa).
   Nesta fase, modo **lado a lado**: DRE Enoki × DRE planilha (sem fusão ainda — evita dupla contagem).
   _CA: DRE jan–hoje renderiza só com dados da API; verificação visual `?demo` + prod._

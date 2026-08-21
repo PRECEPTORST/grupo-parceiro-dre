@@ -20,8 +20,11 @@ import type {
   Grao,
   FonteDre,
   RegraEnoki,
+  ConfigFusao,
 } from '../lib/tipos'
-import { lancamentosDaFonte, sacasDaFonte, mapaRegrasEnoki } from '../lib/tipos'
+import { lancamentosDaFonte, sacasDaFonte, mapaRegrasEnoki, fonteDreDe } from '../lib/tipos'
+import { mapaEfetivo } from '../lib/planoContas'
+import { configFusaoEfetiva, fundirLancamentos, type ResultadoFusao } from '../lib/fusao'
 import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
 import { useAuth } from './AuthContext'
 import { ehSomenteLeitura, podeAdministrar } from '../lib/permissoes'
@@ -39,6 +42,8 @@ interface DreContextValue {
   lancamentos: LancamentoCanonico[]
   /** Sacas da fonte selecionada (Enoki das NFs, com o manual vencendo). */
   sacas: Record<string, Partial<Record<Grao, number>>>
+  /** Diagnóstico da fusão (só quando a fonte é 'fundido'; senão null). */
+  fusao: ResultadoFusao | null
   /** Salva/atualiza classificações de contas (merge por contaSafragold). */
   salvarClassificacoes: (novas: Classificacao[]) => void
   /** Cria ou substitui o orçamento de uma competência. */
@@ -83,6 +88,8 @@ interface DreContextValue {
   salvarFonteDre: (fonte: FonteDre) => void
   /** Grava/atualiza as regras aprendidas do resíduo da Enoki (merge por chave). */
   salvarRegrasEnoki: (novas: RegraEnoki[]) => void
+  /** Define de qual fonte cada linha do DRE é lida no modo fundido. */
+  salvarConfigFusao: (config: Partial<ConfigFusao>) => void
   statusSync: StatusSync
   erroSync: string | null
   ressincronizar: () => void
@@ -255,6 +262,9 @@ export function DreProvider({ children }: { children: ReactNode }) {
 
     const salvarFonteDre = (fonte: FonteDre) => setEstado((s) => ({ ...s, fonteDre: fonte }))
 
+    const salvarConfigFusao = (config: Partial<ConfigFusao>) =>
+      setEstado((s) => ({ ...s, configFusao: config }))
+
     const salvarRegrasEnoki = (novas: RegraEnoki[]) =>
       setEstado((s) => {
         const porChave = new Map((s.regrasEnoki ?? []).map((r) => [r.chave, r]))
@@ -280,10 +290,23 @@ export function DreProvider({ children }: { children: ReactNode }) {
         }
       })
 
+    // Modo fundido: cada linha do DRE vem da fonte configurada (item 2.1). Feito
+    // aqui porque precisa do mapa de contas, que a resolução em `tipos.ts` não tem.
+    const fusao =
+      fonteDreDe(estado) === 'fundido'
+        ? fundirLancamentos(
+            estado.lancamentos,
+            estado.lancamentosEnoki ?? [],
+            mapaEfetivo(estado.classificacoes),
+            configFusaoEfetiva(estado.configFusao),
+          )
+        : null
+
     return {
       estado,
-      lancamentos: lancamentosDaFonte(estado),
+      lancamentos: fusao ? fusao.lancamentos : lancamentosDaFonte(estado),
       sacas: sacasDaFonte(estado),
+      fusao,
       salvarClassificacoes,
       salvarOrcamento,
       salvarPremissasCaixa,
@@ -297,6 +320,7 @@ export function DreProvider({ children }: { children: ReactNode }) {
       sincronizarEnoki,
       salvarFonteDre,
       salvarRegrasEnoki,
+      salvarConfigFusao,
       statusSync,
       erroSync,
       ressincronizar,

@@ -92,13 +92,18 @@ export function resumoGraos(
   }
 
   const sacasTotal = GRAOS.reduce((s, g) => s + (sacas[g] ?? 0), 0)
+  // Base do rateio: só volume POSITIVO. Um grão pode fechar o mês com sacas
+  // negativas (devolução de uma venda de mês anterior); ratear frete e
+  // armazenagem por volume negativo daria custo negativo a esse grão.
+  const sacasPositivas = GRAOS.reduce((s, g) => s + Math.max(0, sacas[g] ?? 0), 0)
 
   const graos: ResumoGrao[] = GRAOS.map((g) => {
     const s = sacas[g] ?? 0
     const receitaBruta = arred(receitaGrao[g])
     // Deduções rateadas pela receita; CPV compartilhado rateado por volume.
     const ded = receitaGraosTotal > 0 ? deducoesTotal * (receitaGrao[g] / receitaGraosTotal) : 0
-    const compartilhado = sacasTotal > 0 ? cpvCompartilhado * (s / sacasTotal) : 0
+    const compartilhado =
+      sacasPositivas > 0 ? cpvCompartilhado * (Math.max(0, s) / sacasPositivas) : 0
     const custo = arred(aquisicaoGrao[g] + compartilhado)
     const receitaLiquida = arred(receitaBruta - ded)
     const lucroBruto = arred(receitaLiquida - custo)

@@ -12,6 +12,7 @@ const NF = {
   status: 'Finalizada',
   tipoOperacao: 'SAÍDA',
   finalidade: 'Normal',
+  cfop: '6502',
   valorTotalNf: '1000',
   destinatarioNome: 'CLIENTE X',
   destinatarioCpfCnpj: '60498706000904',

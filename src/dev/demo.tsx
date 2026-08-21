@@ -68,8 +68,9 @@ const estado = {
     ],
     descartes: [
       { motivo: 'receita_vem_da_nf', quantidade: 4017, valor: 218_300_000 },
-      { motivo: 'nf_intragrupo', quantidade: 401, valor: 18_200_000 },
+      { motivo: 'nf_transferencia', quantidade: 401, valor: 18_290_000 },
       { motivo: 'nf_cancelada', quantidade: 461, valor: 15_200_000 },
+      { motivo: 'nf_remessa', quantidade: 67, valor: 21_100_000 },
     ],
   },
 }

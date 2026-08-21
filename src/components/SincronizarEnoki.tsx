@@ -16,7 +16,9 @@ import type { ProgressoSync } from '../lib/enokiSync'
 const ROTULO_DESCARTE: Record<string, string> = {
   receita_vem_da_nf: 'Título de receita (a receita vem da nota fiscal)',
   nf_intragrupo: 'Venda entre empresas do grupo (eliminada)',
-  nf_nao_e_venda: 'Nota que não é venda (entrada, ajuste, devolução)',
+  nf_remessa: 'Remessa/retorno de armazém — não é venda',
+  nf_transferencia: 'Transferência entre estabelecimentos',
+  nf_outra_operacao: 'Outra operação fiscal (fora do DRE)',
   nf_cancelada: 'Nota cancelada',
   nf_ajuste_fiscal: 'Item de ajuste de ICMS',
   patrimonial_ou_intragrupo: 'Conta patrimonial ou rateio do grupo',

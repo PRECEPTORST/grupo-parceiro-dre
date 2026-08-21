@@ -8,7 +8,7 @@ import { SincronizarEnoki } from '../components/SincronizarEnoki'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { formatBRL } from '../lib/format'
 import { mapaEfetivo, nomeConta } from '../lib/planoContas'
-import { META_LINHAS, LIMIAR_REVISAO } from '../lib/tipos'
+import { META_LINHAS, LIMIAR_REVISAO, origemDe, ROTULO_ORIGEM } from '../lib/tipos'
 
 export function LancamentosPage() {
   const { estado, sincronizarSafragold, salvarClassificacoes, lancamentos } = useDre()
@@ -149,7 +149,8 @@ export function LancamentosPage() {
                   <th className="py-2.5 px-4 font-semibold">Conta</th>
                   <th className="py-2.5 px-4 font-semibold">Histórico</th>
                   <th className="py-2.5 px-4 text-right font-semibold">Valor</th>
-                  <th className="py-2.5 pr-5 pl-4 font-semibold">Linha do DRE</th>
+                  <th className="py-2.5 px-4 font-semibold">Linha do DRE</th>
+                  <th className="py-2.5 pr-5 pl-4 font-semibold">Origem</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,7 +173,7 @@ export function LancamentosPage() {
                         <td className="py-2 px-4 text-right tabular-nums text-ink">
                           {formatBRL(l.valor)}
                         </td>
-                        <td className="py-2 pr-5 pl-4">
+                        <td className="py-2 px-4">
                           {linha ? (
                             <span
                               className={baixa ? 'font-medium text-gold-deep' : 'text-muted'}
@@ -184,6 +185,17 @@ export function LancamentosPage() {
                           ) : (
                             <span className="text-faint">não classificada</span>
                           )}
+                        </td>
+                        <td className="py-2 pr-5 pl-4">
+                          <span
+                            className={
+                              origemDe(l) === 'enoki'
+                                ? 'rounded-full border border-green/30 bg-green/10 px-2 py-0.5 text-[11px] font-semibold text-green-deep'
+                                : 'rounded-full border border-line bg-cream px-2 py-0.5 text-[11px] font-semibold text-muted'
+                            }
+                          >
+                            {ROTULO_ORIGEM[origemDe(l)]}
+                          </span>
                         </td>
                       </tr>
                     )

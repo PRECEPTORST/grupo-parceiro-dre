@@ -52,7 +52,7 @@ function corDesvio(sinal: 1 | -1, desvio: number): string {
 }
 
 export function DrePage() {
-  const { estado, salvarSacas, lancamentos, sacas } = useDre()
+  const { estado, salvarSacas, lancamentos, sacas, fusao } = useDre()
   const { usuario } = useAuth()
   const podeEditar = podeAdministrar(usuario?.papel)
   const [lancarSacas, setLancarSacas] = useState(false)
@@ -294,6 +294,7 @@ export function DrePage() {
                       subtotais={SUBTOTAIS_APOS[l.linha]}
                       dreRealizado={dre.realizado}
                       dreOrcado={dre.orcado}
+                      fonteLinha={fusao?.porLinha.find((p) => p.linha === l.linha)?.fonte}
                     />
                   ))}
                 </tbody>
@@ -583,6 +584,7 @@ function LinhaGrupo({
   subtotais,
   dreRealizado,
   dreOrcado,
+  fonteLinha,
 }: {
   linha: LinhaResultado
   temOrcamento: boolean
@@ -592,6 +594,8 @@ function LinhaGrupo({
   subtotais?: { chave: keyof Subtotais; rotulo: string; forte?: boolean }[]
   dreRealizado: Subtotais
   dreOrcado: Subtotais
+  /** No modo fundido, de qual fonte esta linha veio (item 2.1). */
+  fonteLinha?: 'enoki' | 'planilha'
 }) {
   const temContas = linha.contas.length > 0
   const desvio = linha.realizado - linha.orcado
@@ -617,6 +621,22 @@ function LinhaGrupo({
             {linha.rotulo}
             {temContas && (
               <span className="text-[11px] font-normal text-faint">({linha.contas.length})</span>
+            )}
+            {fonteLinha && (
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  fonteLinha === 'enoki'
+                    ? 'bg-green/10 text-green-deep'
+                    : 'bg-cream-2 text-muted'
+                }`}
+                title={
+                  fonteLinha === 'enoki'
+                    ? 'Esta linha vem da API da Enoki'
+                    : 'Esta linha vem da planilha da DRE gerencial'
+                }
+              >
+                {fonteLinha}
+              </span>
             )}
           </span>
         </td>

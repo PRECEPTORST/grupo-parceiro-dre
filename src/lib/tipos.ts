@@ -376,6 +376,11 @@ export interface EstadoDre {
   fonteDre?: FonteDre
   /** Regras aprendidas para o resíduo da Enoki (item 1.4 do ROADMAP.md). */
   regrasEnoki?: RegraEnoki[]
+  /**
+   * Fonte de cada linha do DRE no modo fundido (item 2.1). Parcial: o que faltar
+   * usa `configFusaoPadrao()`.
+   */
+  configFusao?: Partial<ConfigFusao>
 }
 
 /**
@@ -401,12 +406,19 @@ export function mapaRegrasEnoki(regras: RegraEnoki[] | undefined): Record<string
 }
 
 /** Fonte de dados que alimenta o DRE exibido. */
-export type FonteDre = 'planilha' | 'enoki'
+export type FonteDre = 'planilha' | 'enoki' | 'fundido'
 
 export const ROTULO_FONTE: Record<FonteDre, string> = {
   planilha: 'Planilha (DRE gerencial)',
   enoki: 'Enoki (API, automático)',
+  fundido: 'Fundido (Enoki + planilha)',
 }
+
+/** De qual fonte uma linha do DRE é lida no modo fundido (ver `fusao.ts`). */
+export type FonteLinha = 'enoki' | 'planilha'
+
+/** Fonte escolhida para cada linha do DRE no modo fundido. */
+export type ConfigFusao = Record<LinhaDRE, FonteLinha>
 
 /** Resumo da última sincronização com a Enoki — alimenta o selo de status. */
 export interface EnokiSyncMeta {
@@ -442,7 +454,11 @@ export function fonteDreDe(estado: Pick<EstadoDre, 'fonteDre'>): FonteDre {
   return estado.fonteDre ?? 'planilha'
 }
 
-/** Lançamentos que o DRE deve ler, conforme a fonte selecionada. */
+/**
+ * Lançamentos das fontes SIMPLES (planilha ou Enoki). O modo 'fundido' precisa do
+ * mapa de contas para decidir linha a linha, então é resolvido no `DreContext`
+ * com `fundirLancamentos` — não dá para fazer aqui sem import circular.
+ */
 export function lancamentosDaFonte(estado: EstadoDre): LancamentoCanonico[] {
   return fonteDreDe(estado) === 'enoki' ? (estado.lancamentosEnoki ?? []) : estado.lancamentos
 }
@@ -454,7 +470,7 @@ export function lancamentosDaFonte(estado: EstadoDre): LancamentoCanonico[] {
  */
 export function sacasDaFonte(estado: EstadoDre): Record<string, Partial<Record<Grao, number>>> {
   const manuais = estado.sacas ?? {}
-  if (fonteDreDe(estado) !== 'enoki') return manuais
+  if (fonteDreDe(estado) === 'planilha') return manuais
   const automaticas = estado.sacasEnoki ?? {}
   const saida: Record<string, Partial<Record<Grao, number>>> = {}
   for (const competencia of new Set([...Object.keys(automaticas), ...Object.keys(manuais)])) {

@@ -37,15 +37,30 @@ describe.skipIf(!temFixture)('extração real jan–jul/2026', () => {
   const totalLinha = (nome: string) =>
     dresReais().reduce((s, d) => s + d.linhas.find((l) => l.linha === nome)!.realizado, 0)
 
-  it('receita bruta bate com a validação (~R$ 261M)', () => {
-    expect(totalLinha('receita_bruta') / 1e6).toBeGreaterThan(255)
-    expect(totalLinha('receita_bruta') / 1e6).toBeLessThan(266)
+  it('receita bruta bate com a validação (~R$ 240M, só CFOP de venda)', () => {
+    expect(totalLinha('receita_bruta') / 1e6).toBeGreaterThan(235)
+    expect(totalLinha('receita_bruta') / 1e6).toBeLessThan(245)
   })
 
-  it('elimina ~R$ 18,2M de venda intragrupo', () => {
-    const d = extracao().descartes.find((x) => x.motivo === 'nf_intragrupo')!
-    expect(d.valor / 1e6).toBeGreaterThan(17)
-    expect(d.valor / 1e6).toBeLessThan(20)
+  it('exclui remessa para armazém (~R$ 21M) e transferência (~R$ 18M)', () => {
+    const { descartes } = extracao()
+    const remessa = descartes.find((x) => x.motivo === 'nf_remessa')!
+    const transf = descartes.find((x) => x.motivo === 'nf_transferencia')!
+    expect(remessa.valor / 1e6).toBeGreaterThan(18)
+    expect(transf.valor / 1e6).toBeGreaterThan(16)
+  })
+
+  it('as devoluções entram como dedução (~R$ 20M)', () => {
+    expect(totalLinha('deducoes') / 1e6).toBeGreaterThan(15)
+    expect(totalLinha('deducoes') / 1e6).toBeLessThan(25)
+  })
+
+  it('a margem bruta fica em patamar de trading (entre 3% e 15%)', () => {
+    const rb = totalLinha('receita_bruta')
+    const liq = rb - totalLinha('deducoes')
+    const margem = ((liq - totalLinha('custo_produto')) / liq) * 100
+    expect(margem).toBeGreaterThan(3)
+    expect(margem).toBeLessThan(15)
   })
 
   it('nenhuma conta fica sem classificação no DRE', () => {
@@ -63,6 +78,14 @@ describe.skipIf(!temFixture)('extração real jan–jul/2026', () => {
     for (const m of MESES) {
       const s = extracao().sacas[m] ?? {}
       expect((s.soja ?? 0) + (s.milho ?? 0), m).toBeGreaterThan(0)
+    }
+  })
+
+  it('milho fica na faixa de volume observada (60k–290k sacas/mês)', () => {
+    for (const m of MESES) {
+      const milho = extracao().sacas[m]?.milho ?? 0
+      expect(milho, m).toBeGreaterThan(50_000)
+      expect(milho, m).toBeLessThan(300_000)
     }
   })
 })

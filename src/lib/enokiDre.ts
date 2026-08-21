@@ -35,6 +35,7 @@ import {
   type LancamentoCanonico,
 } from './tipos'
 import { destinoDeCentroCusto, normalizarRotulo, SEM_CENTRO_CUSTO } from './centroCusto'
+import { naturezaDeCfop, type NaturezaCfop } from './cfop'
 import { numeroEnoki } from './enoki'
 
 /** Quilos por saca — padrão do agronegócio brasileiro. */
@@ -80,6 +81,14 @@ export const CONTA_RECEITA_GRAO: Record<Grao, string> = {
   milho: '3.1.02',
   sorgo: '3.1.03',
   cafe: '3.1.05',
+}
+
+/** Conta de AQUISIÇÃO (4.1.0x) de cada grão. */
+export const CONTA_AQUISICAO_GRAO: Record<Grao, string> = {
+  soja: '4.1.01',
+  milho: '4.1.02',
+  sorgo: '4.1.03',
+  cafe: '4.1.05',
 }
 
 /** Grão do produto da NF (null quando não é grão: toner, impressora, ICMS…). */
@@ -156,7 +165,9 @@ function dataValida(d: string): boolean {
 /** Motivo pelo qual um registro cru não virou lançamento. */
 export type MotivoDescarte =
   | 'nf_cancelada'
-  | 'nf_nao_e_venda'
+  | 'nf_remessa'
+  | 'nf_transferencia'
+  | 'nf_outra_operacao'
   | 'nf_intragrupo'
   | 'nf_ajuste_fiscal'
   | 'data_invalida'
@@ -255,11 +266,23 @@ function somarSacas(acc: Acumulador, competencia: string, grao: Grao, sacas: num
 // Notas fiscais de saída → receita bruta + sacas
 // ---------------------------------------------------------------------------
 
-/** true quando a NF representa uma VENDA que gera receita bruta. */
-export function ehVenda(nf: any): boolean {
-  const operacao = normalizarRotulo(nf?.tipoOperacao)
+/**
+ * O que a nota representa para o DRE.
+ *
+ * O CFOP manda: "saída, finalidade Normal" inclui remessa para armazém (5905) e
+ * transferência (6152), que NÃO são venda. A finalidade só entra como filtro dos
+ * ajustes puramente fiscais.
+ */
+export function naturezaDaNf(nf: any): NaturezaCfop {
   const finalidade = normalizarRotulo(nf?.finalidade)
-  return operacao === 'SAIDA' && (finalidade === 'NORMAL' || finalidade === 'COMPLEMENTAR')
+  if (finalidade === 'AJUSTE') return 'outro'
+  const entrada = normalizarRotulo(nf?.tipoOperacao) === 'ENTRADA'
+  return naturezaDeCfop(nf?.cfop, entrada)
+}
+
+/** true quando a NF gera receita bruta. */
+export function ehVenda(nf: any): boolean {
+  return naturezaDaNf(nf) === 'venda'
 }
 
 /** true quando a NF foi cancelada (não conta em lugar nenhum). */
@@ -274,8 +297,17 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       descartar(acc, 'nf_cancelada', valorNf)
       continue
     }
-    if (!ehVenda(nf)) {
-      descartar(acc, 'nf_nao_e_venda', valorNf)
+    const natureza = naturezaDaNf(nf)
+    if (natureza === 'remessa' || natureza === 'transferencia' || natureza === 'outro') {
+      descartar(
+        acc,
+        natureza === 'remessa'
+          ? 'nf_remessa'
+          : natureza === 'transferencia'
+            ? 'nf_transferencia'
+            : 'nf_outra_operacao',
+        valorNf,
+      )
       continue
     }
     if (ehIntragrupo(nf?.destinatarioCpfCnpj, raizes)) {
@@ -303,21 +335,39 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
         continue
       }
       const grao = graoDeProduto(produto)
-      // Grão → conta de venda do cereal; o resto (sucata, equipamento) → outras receitas.
-      const conta = grao ? CONTA_RECEITA_GRAO[grao] : '3.4.02'
-      const historico = [`NF ${numero}`, produto, destinatario].filter(Boolean).join(' · ').slice(0, 160)
+      // Venda: conta do cereal (ou outras receitas, para sucata/equipamento).
+      // Devolução de VENDA vira dedução; devolução de COMPRA reduz o CPV do grão.
+      const conta =
+        natureza === 'devolucao_venda'
+          ? '3.2.06'
+          : natureza === 'devolucao_compra'
+            ? grao
+              ? CONTA_AQUISICAO_GRAO[grao]
+              : '4.1.10'
+            : grao
+              ? CONTA_RECEITA_GRAO[grao]
+              : '3.4.02'
+      // Devolução de compra REDUZ o custo → entra negativa na conta de aquisição.
+      const sinal = natureza === 'devolucao_compra' ? -1 : 1
+      const rotulo =
+        natureza === 'venda' ? `NF ${numero}` : `NF ${numero} · devolução`
+      const historico = [rotulo, produto, destinatario].filter(Boolean).join(' · ').slice(0, 160)
 
       acc.lancamentos.push({
         id: `enoki-nf-${nf?.idNf ?? numero}-${item?.idItem ?? i}`,
         data,
         contaSafragold: conta,
         historico,
-        valor,
+        valor: sinal * valor,
         centroCusto: grao ? `RECEITA ${grao.toUpperCase()}` : undefined,
         origem: 'enoki',
       })
 
-      if (grao) somarSacas(acc, competencia, grao, sacasDeItem(produto, item?.quantidade))
+      // Sacas: só a VENDA soma; a devolução de venda devolve o volume.
+      if (grao && natureza !== 'devolucao_compra') {
+        const sacas = sacasDeItem(produto, item?.quantidade)
+        somarSacas(acc, competencia, grao, natureza === 'devolucao_venda' ? -sacas : sacas)
+      }
     }
   }
 }
