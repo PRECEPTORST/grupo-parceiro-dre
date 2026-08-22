@@ -16,7 +16,7 @@
 // Storage → o Blob conectado → .env.local / "Read-write token".
 import { readFileSync } from 'node:fs'
 import crypto from 'node:crypto'
-import { put, list, del } from '@vercel/blob'
+import { put, list, del, get } from '@vercel/blob'
 
 const PREFIXO = 'usuarios'
 const PAPEIS = ['admin', 'socio', 'orcamento', 'consulta']
@@ -68,9 +68,14 @@ if (blobs.length) {
   const maisRecente = blobs.reduce((a, b) =>
     +new Date(a.uploadedAt) >= +new Date(b.uploadedAt) ? a : b,
   )
-  const resp = await fetch(maisRecente.downloadUrl ?? maisRecente.url)
-  const doc = await resp.json()
-  usuarios = Array.isArray(doc?.usuarios) ? doc.usuarios : []
+  // O Blob é PRIVADO: `fetch` na URL devolve Forbidden. A leitura tem que passar
+  // pelo SDK autenticado, igual ao lib/blobdoc.ts.
+  const r = await get(maisRecente.pathname, { access: 'private', token })
+  if (r && r.statusCode === 200) {
+    const texto = await new Response(r.stream).text()
+    const doc = texto ? JSON.parse(texto) : {}
+    usuarios = Array.isArray(doc?.usuarios) ? doc.usuarios : []
+  }
 }
 
 const { salt, senhaHash } = hashSenha(String(senha))
