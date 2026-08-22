@@ -138,6 +138,8 @@ function enxugarNf(nf: any) {
       idItem: i?.idItem,
       produto: i?.produto,
       quantidade: i?.quantidade,
+      // Necessário para inferir a unidade (kg × saca × tonelada) — ver enokiDre.ts.
+      valorUnitario: i?.valorUnitario,
       valorTotal: i?.valorTotal,
     })),
   }

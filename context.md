@@ -692,6 +692,25 @@ pedir para as cópias divergirem.
   agrupado por PARCEIRO (agrupar por "SEM CC" daria um balde único inclassificável). Regra
   confirmada à mão nunca é sobrescrita pela IA.
 
+### ⚠ CORREÇÃO CRÍTICA (2026-08-22): a unidade NÃO é fixa por produto
+
+A §28 dizia "soja/milho/sorgo em kg ÷60; CAFÉ já em sacas". **Estava errado.** A
+mesma base mistura as três unidades no mesmo produto: em jan–jul/2026 a soja
+aparecia em **TONELADAS em 1.544 itens (R$ 113,0M)** e em **QUILOS em 507
+(R$ 31,3M)**. Tratar tudo como quilo subcontava ~858 mil sacas e inflava o preço
+para **R$ 908/saca**, seis vezes o mercado.
+
+A regra agora infere a unidade item a item pelo **preço unitário**: testa kg,
+saca e tonelada e fica com a que dá um preço por saca plausível para aquele grão
+(`FAIXA_PRECO_SACA` em `enokiDre.ts`; as faixas não se sobrepõem, então é
+determinístico). Sem preço unitário, cai no padrão histórico.
+
+Depois da correção os quatro grãos batem com o mercado: soja R$ 143,54/sc,
+milho R$ 74,77, sorgo R$ 60,71, café R$ 1.827,90. Volume de soja: 1.005.292 sc.
+**Como achar erro assim de novo:** cruzar o preço implícito por saca com o preço
+de mercado. É o teste de plausibilidade mais barato e mais revelador que existe
+neste domínio.
+
 ### BLOQUEIO DE DADO (item 3.2) — pergunta para o Safra
 
 **A API não informa QUANTIDADE COMPRADA.** Os títulos de "COMPRA {GRÃO}" têm valor mas não sacas,

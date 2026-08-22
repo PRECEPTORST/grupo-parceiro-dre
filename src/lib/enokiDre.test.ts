@@ -34,7 +34,7 @@ function nfVenda(over: Record<string, unknown> = {}) {
         idItem: 14791,
         produto: 'SOJA EM GRÃOS',
         quantidade: '40000.0000',
-        valorUnitario: '2.2133333300',
+        valorUnitario: '2.2133333300', // R$/kg → 40.000 kg = 666,67 sacas
         valorTotal: '88533.33320000000000',
       },
     ],
@@ -59,28 +59,64 @@ function titulo(over: Record<string, unknown> = {}) {
   }
 }
 
-describe('unidade por produto (armadilha #1)', () => {
-  it('soja/milho/sorgo vêm em QUILOS → sacas = kg ÷ 60', () => {
-    expect(unidadeDeProduto('SOJA EM GRÃOS')).toBe('kg')
-    expect(sacasDeItem('SOJA EM GRÃOS', '36000')).toBeCloseTo(600, 6)
-    expect(sacasDeItem('MILHO EM GRÃOS', 360000)).toBeCloseTo(6000, 6)
+describe('unidade inferida pelo preço unitário (armadilha #1)', () => {
+  it('quilos: preço unitário na casa dos reais', () => {
+    expect(unidadeDeProduto('SOJA EM GRÃOS', 2.3967)).toBe('kg')
+    expect(sacasDeItem('SOJA EM GRÃOS', '36000', 2.3967)).toBeCloseTo(600, 6)
+    expect(sacasDeItem('MILHO EM GRÃOS', 360000, 1.3333)).toBeCloseTo(6000, 6)
   })
 
-  it('CAFÉ já vem em SACAS — não divide', () => {
-    expect(unidadeDeProduto('CAFÉ EM GRÃOS')).toBe('saca')
-    expect(sacasDeItem('CAFÉ EM GRÃOS', '250.0000')).toBeCloseTo(250, 6)
+  it('TONELADAS: mesma soja, preço unitário na casa dos milhares', () => {
+    // Caso REAL que estava sendo contado como quilo e subcontava 1000x:
+    // 39,97 ton × R$ 2.175/ton = R$ 86.934,75 → 666,17 sacas a R$ 130,50.
+    expect(unidadeDeProduto('SOJA EM GRÃOS', 2175)).toBe('tonelada')
+    const sacas = sacasDeItem('SOJA EM GRÃOS', 39.97, 2175)
+    expect(sacas).toBeCloseTo(666.17, 1)
+    expect((39.97 * 2175) / sacas).toBeCloseTo(130.5, 1)
+  })
+
+  it('CAFÉ em sacas: preço unitário já é o preço da saca', () => {
+    expect(unidadeDeProduto('CAFÉ EM GRÃOS', 1680)).toBe('saca')
+    expect(sacasDeItem('CAFÉ EM GRÃOS', '250.0000', 1680)).toBeCloseTo(250, 6)
+  })
+
+  it('café por TONELADA não é confundido com café por saca', () => {
+    expect(unidadeDeProduto('CAFÉ EM GRÃOS', 28000)).toBe('tonelada')
+    expect(sacasDeItem('CAFÉ EM GRÃOS', 1, 28000)).toBeCloseTo(1000 / 60, 4)
+  })
+
+  it('as três unidades levam ao MESMO preço por saca — é isso que valida a regra', () => {
+    const casos: [string, number, number][] = [
+      ['SOJA EM GRÃOS', 36000, 2.3967], // kg
+      ['SOJA EM GRÃOS', 36, 2396.7], // tonelada
+      ['SOJA EM GRÃOS', 600, 143.8], // saca
+    ]
+    for (const [produto, qtd, vu] of casos) {
+      const sacas = sacasDeItem(produto, qtd, vu)
+      expect(sacas, `${produto} ${qtd}`).toBeCloseTo(600, 0)
+      expect((qtd * vu) / sacas).toBeCloseTo(143.8, 0)
+    }
   })
 
   it('confere com o contrato real: milho R$ 1,3333/kg × 60 = R$ 80,00/saca', () => {
-    const sacas = sacasDeItem('MILHO EM GRÃOS', 360000)
+    const sacas = sacasDeItem('MILHO EM GRÃOS', 360000, 1.3333333)
     const total = 360000 * 1.33333333
     expect(sacas).toBeCloseTo(6000, 4)
     expect(total / sacas).toBeCloseTo(80, 1)
   })
 
+  it('sem preço unitário cai no padrão histórico (café em saca, resto em quilo)', () => {
+    expect(unidadeDeProduto('SOJA EM GRÃOS')).toBe('kg')
+    expect(unidadeDeProduto('CAFÉ EM GRÃOS')).toBe('saca')
+  })
+
+  it('preço fora de qualquer faixa plausível cai no padrão, não inventa', () => {
+    expect(unidadeDeProduto('SOJA EM GRÃOS', 0.0001)).toBe('kg')
+  })
+
   it('produto que não é grão não gera saca', () => {
     expect(graoDeProduto('TONER / CILINDRO')).toBeNull()
-    expect(sacasDeItem('TONER / CILINDRO', 1)).toBe(0)
+    expect(sacasDeItem('TONER / CILINDRO', 1, 1950)).toBe(0)
   })
 
   it('KG_POR_SACA é 60', () => expect(KG_POR_SACA).toBe(60))
@@ -91,7 +127,7 @@ describe('typos de cadastro (armadilha #3)', () => {
     expect(graoDeProduto('SORGO EM GÃOS')).toBe('sorgo')
     expect(graoDeProduto('MILHO EM GRAOS')).toBe('milho')
     expect(graoDeProduto('CAFÉ EM GRÃOS')).toBe('cafe')
-    expect(sacasDeItem('SORGO EM GÃOS', 6000)).toBeCloseTo(100, 6)
+    expect(sacasDeItem('SORGO EM GÃOS', 6000, 1.05)).toBeCloseTo(100, 6)
   })
 })
 

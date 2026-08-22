@@ -70,16 +70,64 @@ export interface ConfigEnokiDre {
 // Produtos: unidade e grão
 // ---------------------------------------------------------------------------
 
-/** Unidade em que o ERP registra a quantidade de um produto. */
-export type UnidadeProduto = 'kg' | 'saca' | 'unidade'
+/**
+ * Unidade em que o ERP registra a quantidade de um item.
+ *
+ * ⚠ NÃO é fixa por produto. A mesma base mistura as três: em jan–jul/2026, a
+ * soja aparecia em TONELADAS em 1.544 itens (R$ 113,0M) e em QUILOS em 507
+ * (R$ 31,3M). Tratar tudo como quilo subcontava ~858 mil sacas de soja e
+ * inflava o preço para R$ 908/saca — seis vezes o valor de mercado.
+ */
+export type UnidadeProduto = 'kg' | 'saca' | 'tonelada' | 'unidade'
 
-const PRODUTOS_GRAO: { re: RegExp; grao: Grao; unidade: UnidadeProduto }[] = [
+const PRODUTOS_GRAO: { re: RegExp; grao: Grao }[] = [
   // Tolerantes a typos de cadastro: "GRAOS"/"GRÃOS"/"GÃOS" e acentuação livre.
-  { re: /\bSOJA\b/, grao: 'soja', unidade: 'kg' },
-  { re: /\bMILHO\b/, grao: 'milho', unidade: 'kg' },
-  { re: /\bSORGO\b/, grao: 'sorgo', unidade: 'kg' },
-  { re: /\bCAFE\b/, grao: 'cafe', unidade: 'saca' },
+  { re: /\bSOJA\b/, grao: 'soja' },
+  { re: /\bMILHO\b/, grao: 'milho' },
+  { re: /\bSORGO\b/, grao: 'sorgo' },
+  { re: /\bCAFE\b/, grao: 'cafe' },
 ]
+
+/**
+ * Faixa PLAUSÍVEL de preço por saca de cada grão (R$). Propositalmente larga —
+ * serve para distinguir ordem de grandeza (kg × saca × tonelada), não para
+ * validar preço. As três unidades caem em faixas que não se sobrepõem, então a
+ * inferência é determinística.
+ */
+const FAIXA_PRECO_SACA: Record<Grao, [number, number]> = {
+  soja: [60, 400],
+  milho: [25, 200],
+  sorgo: [20, 200],
+  cafe: [400, 4000],
+}
+
+/** Quanto vale uma saca se a quantidade estiver nesta unidade. */
+function precoPorSacaSe(unidade: UnidadeProduto, valorUnitario: number): number {
+  if (unidade === 'kg') return valorUnitario * KG_POR_SACA
+  if (unidade === 'tonelada') return (valorUnitario / 1000) * KG_POR_SACA
+  return valorUnitario // já é por saca
+}
+
+/**
+ * Descobre a unidade do item pelo PREÇO UNITÁRIO: testa kg, saca e tonelada e
+ * fica com a que resulta num preço por saca plausível para aquele grão. É
+ * determinístico (as faixas não se sobrepõem) e resiste ao cadastro
+ * inconsistente do ERP.
+ *
+ * Sem preço unitário utilizável, cai no padrão histórico do grão — café em
+ * sacas, o resto em quilos — que é o comportamento anterior.
+ */
+export function inferirUnidade(grao: Grao, valorUnitario: unknown): UnidadeProduto {
+  const vu = numeroEnoki(valorUnitario)
+  const [min, max] = FAIXA_PRECO_SACA[grao]
+  if (vu > 0) {
+    for (const u of ['kg', 'saca', 'tonelada'] as const) {
+      const preco = precoPorSacaSe(u, vu)
+      if (preco >= min && preco <= max) return u
+    }
+  }
+  return grao === 'cafe' ? 'saca' : 'kg'
+}
 
 /** Conta de RECEITA (3.1.0x) de cada grão — espelha `GRAO_DE_CONTA`. */
 export const CONTA_RECEITA_GRAO: Record<Grao, string> = {
@@ -104,22 +152,23 @@ export function graoDeProduto(produto: string): Grao | null {
   return null
 }
 
-/** Unidade em que a quantidade do produto está expressa. */
-export function unidadeDeProduto(produto: string): UnidadeProduto {
-  const s = normalizarRotulo(produto)
-  for (const p of PRODUTOS_GRAO) if (p.re.test(s)) return p.unidade
-  return 'unidade'
+/** Unidade do item, inferida pelo preço unitário (ver `inferirUnidade`). */
+export function unidadeDeProduto(produto: string, valorUnitario?: unknown): UnidadeProduto {
+  const grao = graoDeProduto(produto)
+  if (!grao) return 'unidade'
+  return inferirUnidade(grao, valorUnitario)
 }
 
 /**
- * Converte a quantidade da NF em SACAS. Soja/milho/sorgo vêm em quilos (÷60);
- * café já vem em sacas. Produto que não é grão não tem saca (0).
+ * Converte a quantidade da NF em SACAS, inferindo a unidade pelo preço unitário.
+ * Produto que não é grão não tem saca (0).
  */
-export function sacasDeItem(produto: string, quantidade: unknown): number {
+export function sacasDeItem(produto: string, quantidade: unknown, valorUnitario?: unknown): number {
   const q = numeroEnoki(quantidade)
   if (!Number.isFinite(q) || q <= 0) return 0
-  const unidade = unidadeDeProduto(produto)
+  const unidade = unidadeDeProduto(produto, valorUnitario)
   if (unidade === 'kg') return q / KG_POR_SACA
+  if (unidade === 'tonelada') return (q * 1000) / KG_POR_SACA
   if (unidade === 'saca') return q
   return 0
 }
@@ -394,7 +443,7 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
 
       // Sacas: só a VENDA soma; a devolução de venda devolve o volume.
       if (grao && natureza !== 'devolucao_compra') {
-        const sacas = sacasDeItem(produto, item?.quantidade)
+        const sacas = sacasDeItem(produto, item?.quantidade, item?.valorUnitario)
         somarSacas(acc, competencia, grao, natureza === 'devolucao_venda' ? -sacas : sacas)
       }
     }
