@@ -21,6 +21,10 @@
 //
 // Config (ambiente): ENOKI_BASE_URL, ENOKI_API_KEY, ENOKI_EMPRESAS (csv, default "1").
 import { authConfigurada, usuarioAtual } from '../lib/auth.js'
+// O enxugamento vive em lib/ para ser TESTÁVEL: quando ele morava aqui, a lista
+// de campos ficou desatualizada, o `cfop` parou de trafegar e a receita inteira
+// sumiu do DRE em produção sem erro nenhum.
+import { enxugarNf, enxugarTitulo } from '../lib/enokiCampos.js'
 
 export const config = { maxDuration: 120 }
 
@@ -111,52 +115,6 @@ function filtrosDeData(t: Tarefa): string {
   if (t.fonte === 'nf') return `dataInicio=${t.de}&dataFim=${t.ate}`
   // COMPETÊNCIA: filtra pela data do LANÇAMENTO (fato gerador), não da quitação.
   return `dataLancInicio=${t.de}&dataLancFim=${t.ate}`
-}
-
-// ---------------------------------------------------------------------------
-// Enxugamento: só os campos que a normalização usa (corta ~70% do payload).
-// ---------------------------------------------------------------------------
-
-function enxugarNf(nf: any) {
-  return {
-    idNf: nf?.idNf,
-    numeroNf: nf?.numeroNf,
-    dataEmissao: nf?.dataEmissao,
-    status: nf?.status,
-    tipoOperacao: nf?.tipoOperacao,
-    finalidade: nf?.finalidade,
-    valorTotalNf: nf?.valorTotalNf,
-    destinatarioNome: nf?.destinatarioNome,
-    destinatarioCpfCnpj: nf?.destinatarioCpfCnpj,
-    // Vínculo com o contrato: é o que permite confrontar o valor faturado com o
-    // título financeiro correspondente (item 3.3 do ROADMAP.md).
-    contratosVinculados: (nf?.contratosVinculados ?? []).map((c: any) => ({
-      idContrato: c?.idContrato,
-      numeroContrato: c?.numeroContrato,
-    })),
-    itens: (nf?.itens ?? []).map((i: any) => ({
-      idItem: i?.idItem,
-      produto: i?.produto,
-      quantidade: i?.quantidade,
-      // Necessário para inferir a unidade (kg × saca × tonelada) — ver enokiDre.ts.
-      valorUnitario: i?.valorUnitario,
-      valorTotal: i?.valorTotal,
-    })),
-  }
-}
-
-function enxugarTitulo(t: any) {
-  return {
-    idItemLancamento: t?.idItemLancamento,
-    idLancamento: t?.idLancamento,
-    dataLancamento: t?.dataLancamento,
-    dataVencimento: t?.dataVencimento,
-    valor: t?.valor,
-    parceiroNome: t?.parceiroNome,
-    descricao: t?.descricao,
-    centroCusto: t?.centroCusto,
-    idContrato: t?.idContrato,
-  }
 }
 
 interface ResultadoTarefa {
