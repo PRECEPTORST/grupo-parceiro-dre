@@ -8,6 +8,7 @@ import {
   ehIntragrupo,
   ehVenda,
   ehCancelada,
+  ehAutorizada,
   competenciasDeLancamentos,
   KG_POR_SACA,
   RAIZES_CNPJ_GRUPO,
@@ -22,6 +23,7 @@ function nfVenda(over: Record<string, unknown> = {}) {
     numeroNf: 12285,
     dataEmissao: '2026-06-01T00:00:00-03:00',
     status: 'Finalizada',
+    statusNfe: 'Enviada',
     tipoOperacao: 'SAÍDA',
     finalidade: 'Normal',
     cfop: '6502', // venda com fim específico de exportação (o CFOP dominante real)
@@ -414,5 +416,35 @@ describe('regras aprendidas para o resíduo (item 1.4)', () => {
       pagar: [titulo({ idItemLancamento: 96, centroCusto: 'CENTRO NOVO DO ERP', parceiroNome: 'FORNECEDOR Z' })],
     })
     expect(r.residuos[0].centroCusto).toBe('CENTRO NOVO DO ERP')
+  })
+})
+
+describe('só nota AUTORIZADA vira receita', () => {
+  it('Finalizada + Enviada conta', () => {
+    expect(ehAutorizada(nfVenda({ status: 'Finalizada', statusNfe: 'Enviada' }))).toBe(true)
+  })
+
+  it('em Digitação NÃO conta — a nota ainda está sendo preenchida', () => {
+    expect(ehAutorizada(nfVenda({ status: 'Digitação', statusNfe: 'Inutil' }))).toBe(false)
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ status: 'Digitação' })] })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.find((d) => d.motivo === 'nf_nao_autorizada')).toBeTruthy()
+  })
+
+  it('"Gerada" NÃO conta — ainda não foi autorizada pela SEFAZ', () => {
+    expect(ehAutorizada(nfVenda({ status: 'Gerada', statusNfe: '' }))).toBe(false)
+  })
+
+  it('número INUTILIZADO não conta, mesmo com status Finalizada', () => {
+    // Caso real: status diz finalizada, mas o número fiscal foi inutilizado.
+    expect(ehAutorizada(nfVenda({ status: 'Finalizada', statusNfe: 'Inutil' }))).toBe(false)
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ statusNfe: 'Inutil' })] })
+    expect(r.lancamentos).toHaveLength(0)
+  })
+
+  it('a regra vale só para VENDA — remessa segue com o descarte dela', () => {
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ cfop: '5905', status: 'Digitação' })] })
+    expect(r.descartes.find((d) => d.motivo === 'nf_remessa')).toBeTruthy()
+    expect(r.descartes.find((d) => d.motivo === 'nf_nao_autorizada')).toBeUndefined()
   })
 })

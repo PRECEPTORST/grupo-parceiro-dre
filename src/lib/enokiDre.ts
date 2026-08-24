@@ -220,6 +220,7 @@ function dataValida(d: string): boolean {
 /** Motivo pelo qual um registro cru não virou lançamento. */
 export type MotivoDescarte =
   | 'nf_cancelada'
+  | 'nf_nao_autorizada'
   | 'nf_remessa'
   | 'nf_transferencia'
   | 'nf_outra_operacao'
@@ -361,6 +362,24 @@ export function ehCancelada(nf: any): boolean {
   return normalizarRotulo(nf?.status) === 'CANCELADA'
 }
 
+/**
+ * true quando a nota está AUTORIZADA e portanto é receita.
+ *
+ * Não basta "não estar cancelada". Na base real convivem notas em `Digitação`
+ * (ainda sendo preenchidas) e notas cujo número foi INUTILIZADO na SEFAZ
+ * (`statusNfe = 'Inutil'`) — inclusive uma com `status = 'Finalizada'` e número
+ * inutilizado. Somadas, eram R$ 1,49M de receita fantasma em jan–jul, e numa
+ * janela curta uma única nota "Gerada" chegou a valer 26% do período.
+ *
+ * Só o par Finalizada + autorizada conta. O que sobra aparece no diagnóstico
+ * como `nf_nao_autorizada`, nunca desaparece em silêncio.
+ */
+export function ehAutorizada(nf: any): boolean {
+  if (normalizarRotulo(nf?.status) !== 'FINALIZADA') return false
+  const sefaz = normalizarRotulo(nf?.statusNfe)
+  return sefaz !== 'INUTIL' && sefaz !== 'CANCELADA'
+}
+
 function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
   for (const nf of nfs ?? []) {
     const valorNf = numeroEnoki(nf?.valorTotalNf)
@@ -369,6 +388,11 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       continue
     }
     const natureza = naturezaDaNf(nf)
+    // Só o que é venda precisa estar autorizado; remessa/ajuste já sai fora abaixo.
+    if (natureza === 'venda' && !ehAutorizada(nf)) {
+      descartar(acc, 'nf_nao_autorizada', valorNf)
+      continue
+    }
     if (natureza === 'remessa' || natureza === 'transferencia' || natureza === 'outro') {
       descartar(
         acc,

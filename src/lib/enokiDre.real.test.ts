@@ -37,9 +37,28 @@ describe.skipIf(!temFixture)('extração real jan–jul/2026', () => {
   const totalLinha = (nome: string) =>
     dresReais().reduce((s, d) => s + d.linhas.find((l) => l.linha === nome)!.realizado, 0)
 
-  it('receita bruta bate com a validação (~R$ 240M, só CFOP de venda)', () => {
-    expect(totalLinha('receita_bruta') / 1e6).toBeGreaterThan(235)
-    expect(totalLinha('receita_bruta') / 1e6).toBeLessThan(245)
+  it('receita bruta bate com a validação (~R$ 238M: CFOP de venda + autorizada)', () => {
+    expect(totalLinha('receita_bruta') / 1e6).toBeGreaterThan(233)
+    expect(totalLinha('receita_bruta') / 1e6).toBeLessThan(243)
+  })
+
+  it('exclui as notas não autorizadas (~R$ 1,5M de receita fantasma)', () => {
+    const d = extracao().descartes.find((x) => x.motivo === 'nf_nao_autorizada')!
+    expect(d).toBeTruthy()
+    expect(d.valor / 1e6).toBeGreaterThan(0.5)
+    expect(d.valor / 1e6).toBeLessThan(3)
+  })
+
+  it('soja tem preço por saca de MERCADO — o teste que pegou o erro de unidade', () => {
+    const { lancamentos, sacas } = extracao()
+    const sc = MESES.reduce((s, m) => s + (sacas[m]?.soja ?? 0), 0)
+    const receita = lancamentos
+      .filter((l) => l.contaSafragold === '3.1.01')
+      .reduce((s, l) => s + l.valor, 0)
+    const porSaca = receita / sc
+    expect(sc).toBeGreaterThan(800_000)
+    expect(porSaca).toBeGreaterThan(100)
+    expect(porSaca).toBeLessThan(200)
   })
 
   it('exclui remessa para armazém (~R$ 21M) e transferência (~R$ 18M)', () => {

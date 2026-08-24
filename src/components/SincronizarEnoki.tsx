@@ -20,6 +20,7 @@ const ROTULO_DESCARTE: Record<string, string> = {
   nf_transferencia: 'Transferência entre estabelecimentos',
   nf_outra_operacao: 'Outra operação fiscal (fora do DRE)',
   nf_cancelada: 'Nota cancelada',
+  nf_nao_autorizada: 'Nota não autorizada (em digitação ou número inutilizado)',
   nf_ajuste_fiscal: 'Item de ajuste de ICMS',
   patrimonial_ou_intragrupo: 'Conta patrimonial ou rateio do grupo',
   data_invalida: 'Sem data válida',

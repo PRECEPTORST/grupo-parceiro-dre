@@ -10,6 +10,7 @@ const NF = {
   numeroNf: 100,
   dataEmissao: '2026-06-01T00:00:00-03:00',
   status: 'Finalizada',
+  statusNfe: 'Enviada',
   tipoOperacao: 'SAÍDA',
   finalidade: 'Normal',
   cfop: '6502',
