@@ -85,6 +85,11 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
 
   // ---- CPV: custos compartilhados (frete, armazém, beneficiamento) ----
   FRETE: { saida: '4.1.10', entrada: '3.1.12', natural: 'saida' },
+  // Produção usa rótulos mais específicos que a homologação — descobertos ao
+  // ler o ERP real em 2026-08-26. "FRETE SOBRE COMPRA" sozinho eram 155 títulos
+  // num único mês; sem esta linha, todos viravam resíduo.
+  'FRETE SOBRE COMPRA': { saida: '4.1.10', natural: 'saida' },
+  'FRETE SOBRE VENDA': { saida: '4.2.03', natural: 'saida' },
   'ARMAZENAGEM SOJA': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
   'ARMAZENAGEM MILHO': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
   'ARMAZENAGEM SORGO': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
@@ -106,15 +111,24 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   UNIFORMES: { saida: '4.3.04', natural: 'saida' },
   AGUA: { saida: '4.3.09', natural: 'saida' },
   'MANUTENCAO SOFTWARE & SISTEMA': { saida: '4.3.11', natural: 'saida' },
+  'SOFTWARE & SISTEMA': { saida: '4.3.11', natural: 'saida' },
   'MATERIAL DE ESCRITORIO': { saida: '4.3.12', natural: 'saida' },
   'MATERIAIS DE LIMPEZA': { saida: '4.3.12', natural: 'saida' },
   'MANUTENCAO DE VEICULOS': { saida: '4.3.14', natural: 'saida' },
   'COMBUSTIVEIS E LUBRIFICANTES': { saida: '4.3.14', natural: 'saida' },
   'OUTRAS DESPESAS': { saida: '4.3.20', natural: 'saida' },
 
+  SEGUROS: { saida: '4.3.15', natural: 'saida' },
+  GRATIFICACOES: { saida: '4.3.01', natural: 'saida' },
+  FUNRURAL: { saida: '3.2.04', natural: 'saida' },
+  'COMISSAO TERCEIROS': { saida: '4.2.01', natural: 'saida' },
+  // Recuperação de inadimplência é RECEITA (a perda já foi lançada antes).
+  'RECUPERACAO DE PREJUIZO - INADIMPLENCIA': { entrada: '3.4.04', natural: 'entrada' },
+
   // ---- Financeiras ----
   'JUROS SOBRE EMPRESTIMOS': { saida: '4.4.01', entrada: '3.5.02', natural: 'saida' },
   'JUROS SOBRE ANTECIPACAO DE RECEBIVEIS': { saida: '4.4.05', entrada: '3.5.02', natural: 'saida' },
+  'EMPRESTIMO DE TERCEIROS': { saida: '4.4.01', entrada: '3.5.02', natural: 'saida' },
 
   // ---- Investimentos (capex — abaixo do resultado, §19) ----
   IMOBILIZADO: { saida: '5.1.01', natural: 'saida' },

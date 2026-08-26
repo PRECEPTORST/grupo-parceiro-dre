@@ -55,6 +55,19 @@ const CENTROS_REAIS = [
   'UNIFORMES',
 ]
 
+/** Centros de custo vistos no ERP de PRODUÇÃO (2026-08-26) — os rótulos são
+ *  mais específicos que os de homologação e não podem virar resíduo. */
+const CENTROS_PRODUCAO = [
+  'FRETE SOBRE COMPRA',
+  'SOFTWARE & SISTEMA',
+  'EMPRESTIMO DE TERCEIROS',
+  'SEGUROS',
+  'RECUPERAÇÃO DE PREJUIZO - INADIMPLENCIA',
+  'COMISSAO TERCEIROS',
+  'GRATIFICACOES',
+  'FUNRURAL',
+]
+
 describe('normalizarRotulo', () => {
   it('tira acento, sobe caixa e colapsa espaço', () => {
     expect(normalizarRotulo('  Consórcios   Contemplado ')).toBe('CONSORCIOS CONTEMPLADO')
@@ -70,6 +83,23 @@ describe('cobertura dos centros de custo reais', () => {
       return !destinoDeCentroCusto(cc, 'saida') && !destinoDeCentroCusto(cc, 'entrada')
     })
     expect(semRegra).toEqual([])
+  })
+
+  it('os centros de custo de PRODUÇÃO também estão mapeados', () => {
+    const semRegra = CENTROS_PRODUCAO.filter(
+      (cc) => !destinoDeCentroCusto(cc, 'saida') && !destinoDeCentroCusto(cc, 'entrada'),
+    )
+    expect(semRegra).toEqual([])
+  })
+
+  it('"FRETE SOBRE COMPRA" é CPV, não despesa comercial', () => {
+    expect(destinoDeCentroCusto('FRETE SOBRE COMPRA', 'saida')).toMatchObject({ conta: '4.1.10' })
+    expect(destinoDeCentroCusto('FRETE SOBRE VENDA', 'saida')).toMatchObject({ conta: '4.2.03' })
+  })
+
+  it('recuperação de inadimplência é RECEITA, não redução de despesa', () => {
+    expect(destinoDeCentroCusto('RECUPERAÇÃO DE PREJUIZO - INADIMPLENCIA', 'entrada'))
+      .toMatchObject({ conta: '3.4.04', sinal: 1 })
   })
 
   it('"SEM CC" devolve null (vai para a fila da IA, não some)', () => {
