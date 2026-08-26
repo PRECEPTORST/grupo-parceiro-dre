@@ -220,54 +220,122 @@ async function lerNfs(page, de, ate) {
 }
 
 /**
+ * Preenche um campo de data dividido em dd/mm/aaaa (ids `<pref>_1/_3/_5`).
+ *
+ * Digitar perde o último dígito do ano ("2026" vira "202") — a máscara do
+ * WebGUI engole um caractere. Escrever o valor direto no DOM resolve, mas só
+ * funciona se os eventos forem disparados: o servidor só fica sabendo do campo
+ * quando o `change` sobe. Confere no fim e avisa se não fixou.
+ */
+async function preencherData(page, pref, dd, mm, aaaa) {
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    for (const [suf, val] of [["1", dd], ["3", mm], ["5", aaaa]]) {
+      const el = page.locator(`#${pref}_${suf}`);
+      if (!(await el.count().catch(() => 0))) return false;
+      await el.click();
+      await el.evaluate((n, v) => {
+        n.value = v;
+        n.dispatchEvent(new Event("input", { bubbles: true }));
+        n.dispatchEvent(new Event("change", { bubbles: true }));
+        n.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+      }, val);
+      await page.waitForTimeout(200);
+    }
+    const lido = await page.evaluate(
+      (pr) => ["1", "3", "5"].map((s) => document.getElementById(`${pr}_${s}`)?.value),
+      pref,
+    );
+    if (lido[0] === dd && lido[1] === mm && lido[2] === aaaa) return true;
+  }
+  log(`  ATENCAO: nao consegui fixar a data em ${pref} — o filtro pode sair errado`);
+  return false;
+}
+
+/** O botão de busca é uma lupa à direita do maior campo do topo. */
+async function clicarLupa(page) {
+  const p = await page.evaluate(() => {
+    const ins = [...document.querySelectorAll("input")].filter((i) => i.type !== "hidden");
+    const busca = ins.map((i) => ({ i, r: i.getBoundingClientRect() }))
+      .filter(({ r }) => r.y < 210 && r.width > 110).sort((a, b) => b.r.width - a.r.width)[0];
+    if (!busca) return null;
+    const alvo = [...document.querySelectorAll("div,span,img,a,td")]
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .filter(({ r }) => r.width >= 14 && r.width <= 60 && r.height >= 14 && r.height <= 46 &&
+                         r.left >= busca.r.right - 4 && r.left <= busca.r.right + 80 &&
+                         Math.abs(r.top - busca.r.top) < 28)
+      .sort((a, b) => a.r.left - b.r.left)[0];
+    return alvo ? { x: Math.round(alvo.r.x + alvo.r.width / 2), y: Math.round(alvo.r.y + alvo.r.height / 2) } : null;
+  });
+  if (!p) return false;
+  await page.mouse.click(p.x, p.y);
+  await page.waitForTimeout(6000);
+  return true;
+}
+
+/**
  * Lançamentos Financeiros — títulos com centro de custo e data de lançamento.
  *
- * DUAS COISAS QUE CUSTARAM CARO ATÉ ACERTAR
- * -----------------------------------------
- * 1. O critério padrão da tela é "Não Quitados". Lendo só ele, as COMPRAS do mês
- *    (que já foram pagas) somem, e o CPV do DRE sai por um quinto do real. A
- *    opção que traz tudo chama-se "Quitados/Não Quitados" — não "Todos".
- * 2. A tela tem um combo Pagar/Receber. Usá-lo é infinitamente melhor do que
- *    adivinhar a direção pela descrição: o ERP já sabe a resposta. Por isso a
- *    varredura roda DUAS VEZES, uma por direção, e cada título já vem rotulado.
+ * TRÊS COISAS QUE CUSTARAM CARO ATÉ ACERTAR (todas contra o ERP real)
+ * ------------------------------------------------------------------
+ * 1. O critério padrão é "Não Quitados". Lendo só ele, as COMPRAS do mês (que já
+ *    foram pagas) somem e o CPV sai por um quinto do real. A opção que traz tudo
+ *    chama-se "Quitados/Não Quitados" — não "Todos", que não existe.
+ * 2. As opções do combo de direção são "CONTAS A PAGAR"/"CONTAS A RECEBER".
+ *    Clicar em "Pagar" falha silenciosamente e a leitura mistura as direções.
+ * 3. Sem filtrar no servidor, a tela lista o histórico inteiro a partir do mais
+ *    ANTIGO — 400 páginas depois ainda não se chegou no mês pedido. O filtro de
+ *    vencimento desta tela FUNCIONA (o da NF não), então é ele que limita a
+ *    varredura. Uma janela de vencimento generosa cobre os lançamentos do mês;
+ *    o recorte fino por competência é feito depois, em código.
  */
-async function lerTitulos(page, direcao) {
+async function lerTitulos(page, de, ate) {
   await openScreen(page, "Financeiro", "Lançamentos Financeiros", "PARCEIRO", { log });
   await page.waitForTimeout(2000);
 
-  try {
-    const cx = await page.locator("span:text-is('TODOS OS PERIODOS')").first().boundingBox({ timeout: 8000 });
-    if (cx) {
-      await page.mouse.click(cx.x - 12, cx.y + cx.height / 2);
-      await page.waitForTimeout(2500);
-      log("  filtro 'TODOS OS PERIODOS' marcado");
-    }
-  } catch {
-    log("  ATENCAO: nao achei 'TODOS OS PERIODOS' — o grid pode vir so do mes corrente");
+  // Critério: precisa incluir os QUITADOS, senão o CPV desaparece. Confirma pelo
+  // total de páginas — se não cresceu, o clique não pegou e é melhor saber.
+  const paginasAntes = (await readPager(page).catch(() => null))?.total ?? 0;
+  for (let t = 0; t < 2; t++) {
+    try {
+      await page.locator("span:text-is('Não Quitados')").first().click({ timeout: 8000 });
+      await page.waitForTimeout(1200);
+      await page.locator("span:text-is('Quitados/Não Quitados')").first().click({ timeout: 8000 });
+      await page.waitForTimeout(3500);
+      break;
+    } catch { await page.waitForTimeout(1500); }
   }
+  const paginasDepois = (await readPager(page).catch(() => null))?.total ?? 0;
+  if (paginasDepois > paginasAntes) log(`  criterio: Quitados/Nao Quitados (${paginasAntes} -> ${paginasDepois} paginas)`);
+  else log(`  ATENCAO: criterio nao mudou o resultado (${paginasAntes} paginas) — titulos pagos podem faltar`);
 
-  try {
-    await clickSpan(page, "Nao Quitados").catch(async () => { await clickSpan(page, "Não Quitados"); });
-    await page.waitForTimeout(900);
-    await page.locator("span:text-is('Quitados/Não Quitados')").first().click({ timeout: 6000 });
-    await page.waitForTimeout(3000);
-    log("  criterio: Quitados/Nao Quitados");
-  } catch {
-    log("  ATENCAO: nao consegui abrir o criterio — titulos ja pagos podem faltar");
-  }
+  // NÃO existe filtro de direção utilizável: o combo "Pag/Rec" aceita o clique e
+  // devolve exatamente as mesmas linhas (comprovado — duas varreduras trouxeram
+  // os mesmos 1840 ids). A direção sai do CENTRO DE CUSTO, em `separarPorNatureza`.
 
-  try {
-    await page.locator("#VWG_202").first().click({ timeout: 6000 });
-    await page.waitForTimeout(900);
-    await page.locator("span:text-is('" + direcao + "')").first().click({ timeout: 6000 });
-    await page.waitForTimeout(3000);
-    log("  direcao: " + direcao);
-  } catch {
-    log("  ATENCAO: nao consegui selecionar \"" + direcao + "\" — a leitura pode misturar direcoes");
+  // Janela de VENCIMENTO larga o bastante para conter os lançamentos do mês:
+  // do início do mês pedido até seis meses depois.
+  const [aa, mm] = de.split("-");
+  const fim = new Date(Date.UTC(Number(aa), Number(mm) - 1 + 6, 0));
+  const grupos = await page.evaluate(() => [...new Set([...document.querySelectorAll("input")]
+    .map((i) => i.id.match(/^(VWG\d+)_1$/)?.[1]).filter(Boolean))]);
+  if (grupos.length >= 2) {
+    // O grupo da ESQUERDA é o "de"; o da direita, o "até".
+    const ordenados = await page.evaluate((g) => g
+      .map((p) => ({ p, x: document.getElementById(`${p}_1`)?.getBoundingClientRect().x ?? 0 }))
+      .sort((a, b) => a.x - b.x).map((o) => o.p), grupos);
+    await preencherData(page, ordenados[0], de.slice(8, 10), de.slice(5, 7), de.slice(0, 4));
+    await preencherData(page, ordenados[1],
+      String(fim.getUTCDate()).padStart(2, "0"),
+      String(fim.getUTCMonth() + 1).padStart(2, "0"),
+      String(fim.getUTCFullYear()));
+    await clicarLupa(page);
+    log(`  vencimento entre ${de} e ${fim.toISOString().slice(0, 10)}`);
+  } else {
+    log("  ATENCAO: campos de vencimento nao encontrados — a varredura sera longa");
   }
 
   const { linhas, travou } = await varrerPaginas(page, "PARCEIRO");
-  log("  " + direcao + ": " + linhas.length + " linha(s)" + (travou ? " (PARCIAL)" : ""));
+  log(`  titulos: ${linhas.length} linha(s)${travou ? " (PARCIAL)" : ""}`);
   return { linhas, travou };
 }
 
@@ -314,6 +382,34 @@ function tituloParaApi(row, i) {
   };
 }
 
+/**
+ * Direção do título a partir do CENTRO DE CUSTO.
+ *
+ * O ERP tem um combo "Pag/Rec" que parece resolver isto — mas ele não filtra:
+ * duas varreduras, uma por direção, trouxeram os mesmos 1840 ids. O centro de
+ * custo, esse sim, carrega a natureza ("RECEITA MILHO", "COMPRA SOJA") e está
+ * preenchido na maioria dos títulos.
+ *
+ * Sem centro de custo, a descrição ainda distingue ("Fat. NFe saída/entrada").
+ * O resto vai para `indefinidos` — são majoritariamente transferências entre
+ * contas do próprio grupo, que legitimamente não são DRE, e seguem no payload
+ * para poderem ser conferidas.
+ */
+function separarPorNatureza(titulos) {
+  const receber = [];
+  const pagar = [];
+  const indefinidos = [];
+  for (const t of titulos) {
+    const cc = String(t.centroCusto ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const desc = String(t.descricao ?? "").toLowerCase();
+    if (cc) (/RECEITA|DEVOLU/.test(cc) ? receber : pagar).push(t);
+    else if (/nfe?\s*sa[ií]da/.test(desc)) receber.push(t);
+    else if (/nfe?\s*entrada/.test(desc)) pagar.push(t);
+    else indefinidos.push(t);
+  }
+  return { receber, pagar, indefinidos };
+}
+
 // ---------------------------------------------------------------- principal
 
 const browser = await chromium.launch({ headless: process.env.ROBOT_HEADLESS !== "false" });
@@ -339,14 +435,16 @@ try {
 
   // Os títulos são lidos UMA vez (a tela não filtra por data de lançamento) e
   // recortados por competência para cada janela.
-  const brutoPagar = await lerTitulos(page, "Pagar");
-  const brutoReceber = await lerTitulos(page, "Receber");
-  const todosPagar = brutoPagar.linhas.map(tituloParaApi).filter((t) => t.dataLancamento);
-  const todosReceber = brutoReceber.linhas.map(tituloParaApi).filter((t) => t.dataLancamento);
-  const titulosTravaram = brutoPagar.travou || brutoReceber.travou;
 
   for (const [de, ate] of janelas()) {
     log(`=== janela ${de} a ${ate}`);
+
+    // Os títulos são lidos POR JANELA: o filtro de vencimento da tela é o que
+    // impede a varredura de percorrer o histórico inteiro.
+    const bruto = await lerTitulos(page, de, ate);
+    const titulosTravaram = bruto.travou;
+    const todos = bruto.linhas.map(tituloParaApi).filter((t) => t.dataLancamento);
+
     const nf = await lerNfs(page, de, ate);
     const nfs = nf.linhas.map(nfParaApi).filter((n) => n.dataEmissao);
 
@@ -354,8 +452,7 @@ try {
       const dt = t.dataLancamento.slice(0, 10);
       return dt >= de && dt <= ate;
     });
-    const pagar = naJanela(todosPagar);
-    const receber = naJanela(todosReceber);
+    const { pagar, receber, indefinidos } = separarPorNatureza(naJanela(todos));
 
     const payload = {
       fonte: "scraper-enoki",
@@ -370,10 +467,11 @@ try {
       // Vão no payload de propósito: são majoritariamente transferências entre
       // contas do grupo (não são DRE), e sumir com eles em silêncio impediria
       // qualquer conferência.
+      indefinidos,
       diagnostico: {
         nfsLidas: nf.linhas.length,
-        pagarLidos: brutoPagar.linhas.length,
-        receberLidos: brutoReceber.linhas.length,
+        titulosLidos: bruto.linhas.length,
+        indefinidos: indefinidos.length,
         semCentroCusto: [...pagar, ...receber].filter((t) => !String(t.centroCusto ?? "").trim()).length,
       },
     };
@@ -381,7 +479,7 @@ try {
     const arquivo = path.join(outDir, `enoki-dre-${de}_${ate}.json`);
     writeFileSync(arquivo, JSON.stringify(payload, null, 1), "utf8");
     log(`  gravado: ${arquivo}`);
-    log(`  nfs=${nfs.length} pagar=${pagar.length} receber=${receber.length}`);
+    log(`  nfs=${nfs.length} pagar=${pagar.length} receber=${receber.length} indefinidos=${indefinidos.length}`);
 
     if (process.env.APP_URL && process.env.INGEST_KEY) {
       const r = await fetch(`${process.env.APP_URL}/api/enoki-ingerir`, {
