@@ -753,3 +753,57 @@ de `estado.lancamentos` — senão trocar a fonte ficaria inconsistente entre ab
    fecha negativo. E os CFOPs 5501/5502/6501/6502 são venda mesmo?
 4. **Safra:** produção expõe contrato de COMPRA (para o volume do custo médio)?
 5. **Setar `CRON_SECRET`** na Vercel para o cron diário sair do 401.
+
+---
+
+## §29 — O CPV vem da NOTA DE ENTRADA (2026-08-26)
+
+O DRE de julho raspado do ERP de produção dava **receita certa e CPV a um quinto
+do real** (R$ 4,6M contra R$ 22,7M da planilha, margem bruta de 81%). Passei uma
+rodada inteira procurando o erro nos títulos financeiros. Não estava lá.
+
+**A receita nasce da NF de saída; o custo tem de nascer da NF de entrada.** A
+tela `Doc. Fiscais > Docs. Fiscais Entrada` simplesmente nunca era aberta. O que
+sobrava de CPV vinha dos títulos — e título só enxerga a fatia que **vence**
+dentro da janela: das 610 parcelas lidas, **610 venciam em agosto**. Daí a
+proporção de ~20%, igual nas compras e nas vendas.
+
+### Como o diagnóstico saiu
+
+Duas contagens resolveram, e nenhuma delas era no código:
+
+1. `dataVencimento` de 610/610 títulos caindo no mesmo mês — distribuição
+   impossível para dado natural, portanto era o filtro, não o negócio.
+2. A soma por CFOP das 1015 notas da tela de saída: **nenhuma era compra**. As
+   323 de CFOP 1949 ("ENTRADA | Ajuste") somam **R$ 0,00** — ajuste de estoque.
+
+Quando uma linha está proporcionalmente errada em vez de pontualmente errada,
+o problema é de FONTE, não de classificação. Vale para a próxima.
+
+### O que mudou
+
+- `cfop.ts`: sufixo de venda **com entrada** passou de `'outro'` para `'compra'`.
+  1102 é a contrapartida exata do 5102 — a tabela por sufixo já sabia disso.
+- `enokiDre.ts`: nota de compra vira CPV; contraparte é o **emitente**; não soma
+  sacas (o volume vendido é o da nota de saída); conta 4.1.18 quando a grade não
+  abre os itens (espelho do 3.1.15 na receita).
+- A grade de entrada traz **CNPJ/CPF**, que a de saída não traz: para as compras
+  a eliminação intragrupo volta a ser por raiz de CNPJ, que é exata.
+
+### Armadilhas do ERP descobertas nesta rodada (somam-se às da §28)
+
+- **O combo "Pag/Rec" da tela de Lançamentos NÃO filtra.** Duas varreduras, uma
+  por direção, trouxeram os mesmos 1840 ids. A direção sai do centro de custo.
+- **O critério padrão é "Não Quitados"** e esconde as compras já pagas. A opção
+  certa chama-se "Quitados/Não Quitados" — não "Todos", que não existe. Conferir
+  pelo total de páginas (34 → 92), nunca pelo clique ter dado certo.
+- **Campo de data perde o último dígito do ano** ("2026" → "202"). Escrever no
+  DOM e disparar `input`/`change`/`keyup`; conferir o valor depois.
+
+### O elo que faltava entre o robô e o site
+
+`/api/enoki-ingerir` guardava o material cru em `enoki-scrape` e **nada convertia
+isso no `estado-enoki` que o app lê**. O robô respondia "enviado ao app" e o site
+seguia mostrando a carga velha de homologação, sem erro em lugar nenhum. Quem
+publica é `robot/enviar-para-o-site.mjs`, e ele agora **compila a normalização
+toda vez** — um `.build` defasado aplicaria as regras antigas em silêncio.
