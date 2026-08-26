@@ -40,6 +40,11 @@ const NF_CRUA = {
   destinatarioCpfCnpj: '60498706000904',
   contratosVinculados: [{ idContrato: 1898, numeroContrato: '1008809565' }],
   chavesNfReferenciadas: ['31260600001690616806559200000442251452005675'],
+  // A fixture cobre os DOIS sentidos de propósito: o contrato de transporte
+  // precisa valer também para a nota de ENTRADA, que é de onde vem o CPV.
+  entrada: false,
+  emitenteNome: 'PARCEIRO DO GRAO LTDA',
+  emitenteCpfCnpj: '30798330000216',
   itens: [
     {
       idItem: 14791,

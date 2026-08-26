@@ -69,6 +69,12 @@ export const CAMPOS_NF_USADOS = [
   'valorTotalNf',
   'destinatarioNome',
   'destinatarioCpfCnpj',
+  // Nota de ENTRADA (a compra, que é o CPV): a contraparte é o fornecedor, e
+  // `entrada` é o que faz o CFOP 1102 ser lido como compra e não como venda.
+  'entrada',
+  'statusNfe',
+  'emitenteNome',
+  'emitenteCpfCnpj',
   'contratosVinculados',
   'itens',
 ] as const
