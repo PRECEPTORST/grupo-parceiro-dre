@@ -151,3 +151,53 @@ export function fundirLancamentos(
 export function linhasOrfas(resultado: ResultadoFusao): ResumoFusao[] {
   return resultado.porLinha.filter((r) => r.aceitos === 0 && r.descartados > 0)
 }
+
+/** Cobertura de uma competência: quais fontes têm dados nela. */
+export interface CoberturaCompetencia {
+  competencia: string
+  temPlanilha: boolean
+  temEnoki: boolean
+  /** true quando as duas fontes têm dados — só aí a fusão descreve o mesmo fato. */
+  fundivel: boolean
+}
+
+function competenciasDe(lancs: LancamentoCanonico[]): Set<string> {
+  const s = new Set<string>()
+  for (const l of lancs) if (l.data) s.add(l.data.slice(0, 7))
+  return s
+}
+
+/**
+ * Onde a fusão é honesta e onde ela mente.
+ *
+ * A FUSÃO SÓ DESCREVE UM FATO QUANDO AS DUAS FONTES COBREM O MÊS.
+ *
+ * Cada linha do DRE vem de UMA fonte: receita e CPV do Enoki, folha e
+ * depreciação da planilha. Num mês em que só a planilha tem dados, isso deixa de
+ * ser "duas visões do mesmo período" e vira subtração de coisas diferentes — e o
+ * acumulado propaga o estrago em silêncio.
+ *
+ * Aconteceu, e o número era grande: com o Enoki cobrindo só julho e a planilha
+ * jan–jul, o resultado acumulado do modo fundido deu −R$ 1.615.888,01. Um mês de
+ * margem bruta contra sete meses de estrutura. Nada na tela dizia isso.
+ */
+export function coberturaFusao(
+  planilha: LancamentoCanonico[],
+  enoki: LancamentoCanonico[],
+): CoberturaCompetencia[] {
+  const cp = competenciasDe(planilha)
+  const ce = competenciasDe(enoki)
+  return [...new Set([...cp, ...ce])].sort().map((competencia) => {
+    const temPlanilha = cp.has(competencia)
+    const temEnoki = ce.has(competencia)
+    return { competencia, temPlanilha, temEnoki, fundivel: temPlanilha && temEnoki }
+  })
+}
+
+/** Competências em que a fusão NÃO pode ser lida — uma das fontes está vazia. */
+export function competenciasNaoFundiveis(
+  planilha: LancamentoCanonico[],
+  enoki: LancamentoCanonico[],
+): CoberturaCompetencia[] {
+  return coberturaFusao(planilha, enoki).filter((c) => !c.fundivel)
+}

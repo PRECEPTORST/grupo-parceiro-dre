@@ -5,6 +5,8 @@ import {
   configFusaoEfetiva,
   linhasOrfas,
   type ConfigFusao,
+  coberturaFusao,
+  competenciasNaoFundiveis,
 } from './fusao'
 import { montarDre } from './dre'
 import { mapaEfetivo } from './planoContas'
@@ -158,5 +160,51 @@ describe('linhasOrfas', () => {
   it('sem órfãs na configuração padrão com as duas fontes completas', () => {
     const r = fundirLancamentos(PLANILHA, ENOKI, mapa, configFusaoPadrao())
     expect(linhasOrfas(r)).toHaveLength(0)
+  })
+})
+
+describe('coberturaFusao — a fusão só vale onde as duas fontes cobrem', () => {
+  // Regressão do −R$ 1.615.888,01: o Enoki cobria só julho, a planilha jan–jul,
+  // e o acumulado do modo fundido subtraiu sete meses de estrutura de um mês de
+  // margem bruta. Nada na tela dizia isso.
+  const l = (data: string, conta = '3.1.01', valor = 100): LancamentoCanonico => ({
+    id: `x-${data}-${conta}`, data, contaSafragold: conta, historico: '', valor,
+  })
+
+  it('marca como NÃO fundível o mês em que só uma fonte tem dados', () => {
+    const cob = coberturaFusao(
+      [l('2026-06-30'), l('2026-07-31')],
+      [l('2026-07-15')],
+    )
+    const jun = cob.find((c) => c.competencia === '2026-06')!
+    const jul = cob.find((c) => c.competencia === '2026-07')!
+    expect(jun.fundivel).toBe(false)
+    expect(jun.temPlanilha).toBe(true)
+    expect(jun.temEnoki).toBe(false)
+    expect(jul.fundivel).toBe(true)
+  })
+
+  it('o mês só do Enoki também não é fundível', () => {
+    const cob = coberturaFusao([], [l('2026-08-10')])
+    expect(cob[0].fundivel).toBe(false)
+    expect(cob[0].temPlanilha).toBe(false)
+  })
+
+  it('competenciasNaoFundiveis lista exatamente o que não pode ser lido', () => {
+    const nf = competenciasNaoFundiveis(
+      [l('2026-05-31'), l('2026-06-30'), l('2026-07-31')],
+      [l('2026-07-15')],
+    )
+    expect(nf.map((c) => c.competencia)).toEqual(['2026-05', '2026-06'])
+  })
+
+  it('com as duas fontes cobrindo tudo, não sobra nada em aberto', () => {
+    expect(
+      competenciasNaoFundiveis([l('2026-07-31')], [l('2026-07-15')]),
+    ).toEqual([])
+  })
+
+  it('sem dado nenhum não quebra', () => {
+    expect(coberturaFusao([], [])).toEqual([])
   })
 })

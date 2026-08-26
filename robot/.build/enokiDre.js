@@ -488,7 +488,7 @@ function processarNfs(nfs, raizes, acc) {
       (natureza === "compra" || natureza === "frete_compra" ? nf?.emitenteNome : nf?.destinatarioNome) ?? ""
     ).trim();
     const numero = nf?.numeroNf ?? nf?.idNf ?? "";
-    const itens = (nf?.itens ?? []).length ? nf.itens : (natureza === "venda" || natureza === "compra" || natureza === "frete_compra") && Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 5e-3 ? [{ idItem: "total", produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }] : [];
+    const itens = (nf?.itens ?? []).length ? nf.itens : Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 5e-3 ? [{ idItem: "total", produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }] : [];
     for (const [i, item] of itens.entries()) {
       const produto = String(item?.produto ?? "").trim();
       const valor = numeroEnoki(item?.valorTotal);
@@ -501,7 +501,7 @@ function processarNfs(nfs, raizes, acc) {
         continue;
       }
       const grao = graoDeProduto(produto);
-      const conta = natureza === "frete_compra" ? "4.1.10" : produto === SEM_DETALHE_PRODUTO ? natureza === "compra" ? CONTA_SEM_DETALHE_COMPRA : CONTA_SEM_DETALHE : natureza === "compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : natureza === "devolucao_venda" ? "3.2.06" : natureza === "devolucao_compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : grao ? CONTA_RECEITA_GRAO[grao] : "3.4.02";
+      const conta = natureza === "frete_compra" ? "4.1.10" : produto === SEM_DETALHE_PRODUTO ? natureza === "compra" ? CONTA_SEM_DETALHE_COMPRA : natureza === "devolucao_venda" ? "3.2.06" : natureza === "devolucao_compra" ? CONTA_SEM_DETALHE_COMPRA : CONTA_SEM_DETALHE : natureza === "compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : natureza === "devolucao_venda" ? "3.2.06" : natureza === "devolucao_compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : grao ? CONTA_RECEITA_GRAO[grao] : "3.4.02";
       const sinal = natureza === "devolucao_compra" ? -1 : 1;
       const rotulo = natureza === "venda" ? `NF ${numero}` : natureza === "compra" ? `NF entrada ${numero}` : natureza === "frete_compra" ? `CT-e ${numero}` : `NF ${numero} \xB7 devolu\xE7\xE3o`;
       const historico = [rotulo, produto, destinatario].filter(Boolean).join(" \xB7 ").slice(0, 160);

@@ -6,12 +6,12 @@
 //   • fundido  — cada linha do DRE lê da fonte configurada (trading da Enoki,
 //                estrutura da planilha). As duas NUNCA são somadas.
 // Só aparece quando existe mais de uma fonte carregada.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
 import { Select } from './ui'
 import { ModalFusao } from './ModalFusao'
-import { fonteDreDe, ROTULO_FONTE, type FonteDre } from '../lib/tipos'
-import { linhasOrfas } from '../lib/fusao'
+import { fonteDreDe, lancamentosPlanilha, ROTULO_FONTE, type FonteDre } from '../lib/tipos'
+import { linhasOrfas, competenciasNaoFundiveis } from '../lib/fusao'
 
 export function SeletorFonteDre() {
   const { estado, salvarFonteDre, fusao } = useDre()
@@ -22,6 +22,17 @@ export function SeletorFonteDre() {
 
   const fonte = fonteDreDe(estado)
   const orfas = fusao ? linhasOrfas(fusao) : []
+
+  // A fusão lê cada linha de UMA fonte. Num mês em que só uma delas tem dados,
+  // isso deixa de ser "duas visões do mesmo período" e vira subtração de coisas
+  // diferentes — foi assim que o acumulado deu −R$ 1,6M de prejuízo inventado,
+  // um mês de margem bruta contra sete meses de estrutura.
+  const planilha = useMemo(() => lancamentosPlanilha(estado), [estado])
+  const enoki = useMemo(() => estado.lancamentosEnoki ?? [], [estado.lancamentosEnoki])
+  const semPar = useMemo(
+    () => competenciasNaoFundiveis(planilha, enoki),
+    [planilha, enoki],
+  )
 
   return (
     <div>
@@ -49,6 +60,14 @@ export function SeletorFonteDre() {
           </button>
         )}
       </div>
+      {fonte === 'fundido' && semPar.length > 0 && (
+        <p className="mt-2 max-w-md rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <b>Não leia o acumulado neste modo.</b> {semPar.length} mês(es) têm dados de só uma
+          fonte ({semPar.map((c) => c.competencia).join(', ')}), então o fundido subtrai
+          estrutura de meses que não têm receita do ERP. Use <b>{ROTULO_FONTE.planilha}</b> para o
+          resultado e <b>{ROTULO_FONTE.enoki}</b> para auditar os meses já carregados.
+        </p>
+      )}
       {configurando && <ModalFusao aoFechar={() => setConfigurando(false)} />}
     </div>
   )
