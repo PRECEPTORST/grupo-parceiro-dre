@@ -139,6 +139,46 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   'OUTRAS DESPESAS': { saida: '4.3.20', natural: 'saida' },
 
   SEGUROS: { saida: '4.3.15', natural: 'saida' },
+  'SEGURO DE VEICULOS': { saida: '4.3.15', natural: 'saida' },
+
+  // ---- Centros vistos só no ERP de PRODUÇÃO, a partir de agosto/2026 ----
+  // A folha EXISTE — ela só não usava estes rótulos em homologação, e por isso
+  // eu disse ao cliente que o ERP não tinha folha. Tinha: "PESSOAL" são 54
+  // títulos, e ainda SENAR, CSRF, vale-alimentação e ajuda de custo.
+  PESSOAL: { saida: '4.3.01', natural: 'saida' },
+  'AJUDA DE CUSTO': { saida: '4.3.01', natural: 'saida' },
+  SENAR: { saida: '4.3.02', natural: 'saida' },
+  'CSRF - CONTRIBUICAO SOCIAIS RETIDA NA FONTE': { saida: '4.3.02', natural: 'saida' },
+  'VALE ALIMENTACAO': { saida: '4.3.04', natural: 'saida' },
+  'COPA E COZINHA': { saida: '4.3.04', natural: 'saida' },
+  'UNIFORMES E EPI': { saida: '4.3.04', natural: 'saida' },
+  CONTABILIDADE: { saida: '4.3.05', natural: 'saida' },
+  JURIDICO: { saida: '4.3.06', natural: 'saida' },
+  'ASSESSORIA/CONSULTORIA': { saida: '4.3.06', natural: 'saida' },
+  'TELEFONE & CELULARES': { saida: '4.3.10', natural: 'saida' },
+  'TI - TECNOLOGIA DA INFORMACAO': { saida: '4.3.11', natural: 'saida' },
+  HOSPEDAGEM: { saida: '4.3.16', natural: 'saida' },
+  'CURSOS & TREINAMENTOS': { saida: '4.3.18', natural: 'saida' },
+  'TAXAS BANCARIAS': { saida: '4.4.03', natural: 'saida' },
+  IOF: { saida: '4.4.04', natural: 'saida' },
+  // Classificação de grão é CPV, não despesa: mede umidade e impureza do lote.
+  'CLASSIFICACAO MILHO': { saida: '4.1.13', natural: 'saida' },
+  'CLASSIFICACAO SOJA': { saida: '4.1.13', natural: 'saida' },
+  'CLASSIFICACAO SORGO': { saida: '4.1.13', natural: 'saida' },
+  'CLASSIFICACAO CAFE': { saida: '4.1.13', natural: 'saida' },
+  'ICMS - DIFAL': { saida: '3.2.01', natural: 'saida' },
+  'PARCELAMENTO ICMS': { saida: '3.2.01', natural: 'saida' },
+  'RECEITA SOJA - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
+  'RECEITA MILHO - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
+  'RECEITA SORGO - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
+  'RECEITA CAFE - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
+  'EMPRESTIMO ENTRE GRUPO': { natural: 'saida', ignorar: true },
+  'COMISSAO ORIGINADORES GRUPO': {
+    saida: '4.2.01',
+    natural: 'saida',
+    confirmar:
+      'Comissão dos originadores tratada como despesa comercial. Se "GRUPO" significar outra empresa do grupo, vira eliminação intragrupo.',
+  },
   GRATIFICACOES: { saida: '4.3.01', natural: 'saida' },
   FUNRURAL: { saida: '3.2.04', natural: 'saida' },
   'COMISSAO TERCEIROS': { saida: '4.2.01', natural: 'saida' },

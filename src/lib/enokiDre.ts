@@ -243,6 +243,7 @@ export type MotivoDescarte =
   | 'receita_vem_da_nf'
   | 'custo_vem_da_nf'
   | 'patrimonial_ou_intragrupo'
+  | 'transferencia_entre_contas'
 
 export interface ResumoDescarte {
   motivo: MotivoDescarte
@@ -574,6 +575,19 @@ function processarTitulos(
         competencia: data.slice(0, 7),
         valor,
       })
+    }
+
+    // TRANSFERÊNCIA ENTRE CONTAS PRÓPRIAS NÃO É RESULTADO — e o centro de custo
+    // do ERP não protege contra isso: em agosto/2026 nove transferências
+    // Bradesco↔Sicoob, R$ 2,13M, estavam carimbadas como "GRATIFICAÇÕES" e
+    // entraram no DRE como SALÁRIOS. O rótulo estava errado no cadastro; a
+    // descrição, não.
+    //
+    // A frase inteira é exigida ("transferência ENTRE CONTAS"), e não a palavra
+    // solta: "transferência" sozinha aparece em operação de mercadoria legítima.
+    if (/TRANSFERENCIA ENTRE CONTAS/.test(normalizarRotulo(descricao))) {
+      descartar(acc, 'transferencia_entre_contas', valor)
+      continue
     }
 
     const destino = destinoDeCentroCusto(centroCusto, fluxo)

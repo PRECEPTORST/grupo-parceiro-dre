@@ -625,3 +625,58 @@ describe('nota sem itens abertos: nenhuma natureza viva pode sumir', () => {
     expect(lancamentos).toHaveLength(0)
   })
 })
+
+describe('transferência entre contas próprias não é resultado', () => {
+  // Regressão de agosto/2026: nove transferências Bradesco↔Sicoob, R$ 2,13M,
+  // carimbadas no ERP com centro de custo "GRATIFICAÇÕES", entraram no DRE como
+  // salários e sozinhas dobraram a despesa administrativa do mês.
+  function tit(over: Record<string, unknown> = {}) {
+    return {
+      idItemLancamento: 900,
+      dataLancamento: '2026-08-10T00:00:00-03:00',
+      valor: '500000',
+      parceiroNome: 'PARCEIRO DO GRAO',
+      descricao: 'TRANSFERENCIA ENTRE CONTAS  BRADESCO X SICOOB',
+      centroCusto: 'GRATIFICAÇÕES',
+      ...over,
+    }
+  }
+
+  it('sai do DRE mesmo com centro de custo de despesa', () => {
+    const r = normalizarEnokiDre({ pagar: [tit()] })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.find((d) => d.motivo === 'transferencia_entre_contas')?.valor)
+      .toBeCloseTo(500000, 2)
+  })
+
+  it('pega com e sem acento, em qualquer caixa', () => {
+    for (const d of [
+      'TRANSFERÊNCIA ENTRE CONTAS BRADESCO X SICOOB',
+      'transferencia entre contas sicoob x bradesco',
+    ]) {
+      expect(normalizarEnokiDre({ pagar: [tit({ descricao: d })] }).lancamentos).toHaveLength(0)
+    }
+  })
+
+  it('NÃO derruba operação de mercadoria que só cita "transferência"', () => {
+    // A frase inteira é exigida de propósito: a palavra solta aparece em
+    // transferência de mercadoria, que é operação de verdade.
+    const r = normalizarEnokiDre({
+      pagar: [tit({ descricao: 'Transferencia de mercadoria filial MG', centroCusto: 'PESSOAL' })],
+    })
+    expect(r.lancamentos).toHaveLength(1)
+    expect(r.lancamentos[0].contaSafragold).toBe('4.3.01')
+  })
+
+  it('a folha do ERP de produção tem conta — não é mais resíduo', () => {
+    const r = normalizarEnokiDre({
+      pagar: [
+        tit({ descricao: 'Folha', centroCusto: 'PESSOAL', valor: '1000' }),
+        tit({ idItemLancamento: 2, descricao: 'x', centroCusto: 'SENAR', valor: '100' }),
+        tit({ idItemLancamento: 3, descricao: 'x', centroCusto: 'VALE ALIMENTAÇÃO', valor: '50' }),
+      ],
+    })
+    expect(r.lancamentos.map((l) => l.contaSafragold)).toEqual(['4.3.01', '4.3.02', '4.3.04'])
+    expect(r.residuos).toHaveLength(0)
+  })
+})

@@ -139,6 +139,17 @@ const EXPLICACAO: Record<
       'Se um mês vier sem nota de entrada, este balde fica cheio e o CPV vai a zero. É o alarme: valor alto aqui com CPV baixo significa carga incompleta.',
     quemDecide: 'Fechado, mas vale conferir o alarme a cada carga.',
   },
+  transferencia_entre_contas: {
+    titulo: 'Transferência entre contas bancárias próprias',
+    situacao: 'decidida',
+    linha: 'estrutura',
+    oQueE:
+      'Dinheiro andando entre contas da empresa (Bradesco ↔ Sicoob). Não é receita nem despesa — só muda de lugar.',
+    valendoHoje:
+      'Fora do DRE, identificadas pela descrição. O centro de custo não serve aqui: em agosto R$ 2,13M vinham carimbados como "GRATIFICAÇÕES" e entravam como salários.',
+    seMudar: '—',
+    quemDecide: 'Fechado. Vale avisar quem opera o Enoki que o centro de custo está errado no cadastro.',
+  },
   patrimonial_ou_intragrupo: {
     titulo: 'Adiantamentos e rateio entre empresas',
     situacao: 'decidida',

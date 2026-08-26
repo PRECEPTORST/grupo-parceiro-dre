@@ -16,6 +16,7 @@ import type { ProgressoSync } from '../lib/enokiSync'
 const ROTULO_DESCARTE: Record<string, string> = {
   receita_vem_da_nf: 'Título de receita (a receita vem da nota fiscal de saída)',
   custo_vem_da_nf: 'Título de compra (o custo vem da nota fiscal de entrada)',
+  transferencia_entre_contas: 'Transferência entre contas do próprio caixa (não é resultado)',
   nf_intragrupo: 'Venda entre empresas do grupo (eliminada)',
   nf_remessa: 'Remessa/retorno de armazém — não é venda',
   nf_transferencia: 'Transferência entre estabelecimentos',
