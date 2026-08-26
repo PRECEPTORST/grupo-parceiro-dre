@@ -446,10 +446,15 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     // A grade de NF do scraper não traz itens. Sem eles não há cereal nem sacas,
     // mas a RECEITA existe e não pode sumir: vira um item sintético que cai numa
     // conta própria (3.1.15), visível no DRE como "produto não detalhado".
+    //
+    // A lista é o COMPLEMENTO das naturezas já descartadas acima, e não uma
+    // enumeração paralela do que interessa: quem chega aqui já passou pelos
+    // filtros, então TODA nota viva precisa de item. Enquanto isto listava só
+    // venda e compra, as 63 notas de DEVOLUÇÃO de julho — R$ 1,80M, nenhuma
+    // com item aberto — sumiam sem aparecer em descarte nenhum.
     const itens = (nf?.itens ?? []).length
       ? nf.itens
-      : (natureza === 'venda' || natureza === 'compra' || natureza === 'frete_compra') &&
-          Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
+      : Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
         ? [{ idItem: 'total', produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }]
         : []
 
@@ -471,9 +476,13 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
         natureza === 'frete_compra'
           ? '4.1.10'
           : produto === SEM_DETALHE_PRODUTO
-          ? natureza === 'compra'
-            ? CONTA_SEM_DETALHE_COMPRA
-            : CONTA_SEM_DETALHE
+            ? natureza === 'compra'
+              ? CONTA_SEM_DETALHE_COMPRA
+              : natureza === 'devolucao_venda'
+                ? '3.2.06'
+                : natureza === 'devolucao_compra'
+                  ? CONTA_SEM_DETALHE_COMPRA
+                  : CONTA_SEM_DETALHE
           : natureza === 'compra'
             ? grao
               ? CONTA_AQUISICAO_GRAO[grao]

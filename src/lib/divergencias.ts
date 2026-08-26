@@ -184,7 +184,7 @@ const DECISOES_ABERTAS: Divergencia[] = [
     oQueE:
       'Nenhum título de salário, encargo ou pró-labore foi encontrado na carga. Uma operação deste porte não roda sem folha.',
     valendoHoje:
-      'O DRE do ERP sai sem folha. Ela precisa vir da planilha ou de lançamento manual.',
+      'O DRE do ERP sai sem folha. Em julho a planilha do cliente traz R$ 0,19M de despesa administrativa (salários R$ 78k, pró-labore R$ 27k, mais estrutura) que o ERP não entrega. Precisa vir da planilha ou de lançamento manual.',
     seMudar:
       'Se a folha passar pelo financeiro do Enoki sob outro nome, ela entra automática e o resultado cai pelo valor dela.',
     quemDecide: 'Juliano / Daiane.',
@@ -202,6 +202,35 @@ const DECISOES_ABERTAS: Divergencia[] = [
       'Contados como venda. Os títulos a receber confirmam: batem com os recebíveis de grão.',
     seMudar: 'Se forem remessa mesmo, a receita cai e o resultado do período muda de sinal.',
     quemDecide: 'Contador.',
+  },
+  {
+    id: 'devolucoes-quais-deduzem',
+    titulo: 'Quais devoluções reduzem a receita',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'deducoes',
+    oQueE:
+      'Julho teve R$ 1,80M em notas de devolução e retorno: devolução de venda (CFOP 1202/2202) e retorno de lote de exportação (1503/2504). Nós deduzimos todas.',
+    valendoHoje:
+      'Todas reduzem a receita. Com isso nossa receita LÍQUIDA fica ~R$ 0,89M abaixo da planilha, que parece deduzir só parte.',
+    seMudar:
+      'Se o retorno de lote de exportação não for dedução, a receita líquida sobe e o EBITDA sobe junto. É a diferença entre estarmos conservadores demais ou na medida.',
+    quemDecide: 'Contador.',
+  },
+  {
+    id: 'cfop-1907',
+    titulo: 'Retorno de armazém geral (CFOP 1907) contado como compra',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'custo',
+    oQueE:
+      'R$ 0,59M em julho. Formalmente é retorno de grão que já era nosso, não aquisição — mas a planilha do cliente soma esse valor dentro de COMPRA DE CEREAIS.',
+    valendoHoje:
+      'Fora do CPV, tratado como remessa. É o que a natureza fiscal do CFOP indica.',
+    seMudar: 'Contado como compra, o CPV sobe R$ 0,59M e o EBITDA cai na mesma medida.',
+    quemDecide: 'Contador — é divergência direta com a planilha.',
   },
   {
     id: 'gap-contratos',

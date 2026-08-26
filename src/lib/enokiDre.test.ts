@@ -576,3 +576,52 @@ describe('CPV vem da NOTA DE COMPRA, não dos títulos', () => {
     expect(lancamentos).toHaveLength(0)
   })
 })
+
+describe('nota sem itens abertos: nenhuma natureza viva pode sumir', () => {
+  // Regressão: o item sintético era criado só para venda e compra, então as 63
+  // notas de DEVOLUÇÃO de julho (R$ 1,80M, nenhuma com item aberto) sumiam sem
+  // sequer aparecer em descarte — a receita ficava R$ 1M acima da planilha.
+  function nfSemItens(over: Record<string, unknown>) {
+    return {
+      idNf: 700, numeroNf: 700, dataEmissao: '2026-07-10', status: 'Finalizada',
+      statusNfe: 'Enviada', finalidade: 'Normal', valorTotalNf: 100_000,
+      destinatarioNome: 'CLIENTE X', destinatarioCpfCnpj: '11222333000144',
+      itens: [], ...over,
+    }
+  }
+
+  it('devolução de VENDA sem itens vira dedução', () => {
+    const { lancamentos } = normalizarEnokiDre({
+      nfs: [nfSemItens({ cfop: '1202', tipoOperacao: 'ENTRADA' })],
+    })
+    expect(lancamentos).toHaveLength(1)
+    expect(lancamentos[0].contaSafragold).toBe('3.2.06')
+    expect(lancamentos[0].valor).toBe(100_000)
+  })
+
+  it('retorno de lote de exportação sem itens também reduz a receita', () => {
+    const { lancamentos } = normalizarEnokiDre({
+      nfs: [nfSemItens({ cfop: '2504', tipoOperacao: 'ENTRADA' })],
+    })
+    expect(lancamentos[0].contaSafragold).toBe('3.2.06')
+  })
+
+  it('devolução de COMPRA sem itens REDUZ o CPV', () => {
+    const { lancamentos } = normalizarEnokiDre({
+      nfs: [nfSemItens({ cfop: '5202' })],
+    })
+    expect(lancamentos[0].contaSafragold.startsWith('4.')).toBe(true)
+    expect(lancamentos[0].valor).toBeLessThan(0)
+  })
+
+  it('o que é descartado continua descartado — o item sintético não ressuscita nada', () => {
+    const { lancamentos } = normalizarEnokiDre({
+      nfs: [
+        nfSemItens({ cfop: '5905' }), // remessa
+        nfSemItens({ idNf: 701, cfop: '6152' }), // transferência
+        nfSemItens({ idNf: 702, cfop: '5106', status: 'Cancelada' }),
+      ],
+    })
+    expect(lancamentos).toHaveLength(0)
+  })
+})
