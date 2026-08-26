@@ -16,23 +16,22 @@ import { linhasOrfas, competenciasNaoFundiveis } from '../lib/fusao'
 export function SeletorFonteDre() {
   const { estado, salvarFonteDre, fusao } = useDre()
   const [configurando, setConfigurando] = useState(false)
-  const temEnoki = !!estado.lancamentosEnoki?.length
-  const temPlanilha = !!estado.lancamentos.length
-  if (!temEnoki || !temPlanilha) return null
 
-  const fonte = fonteDreDe(estado)
-  const orfas = fusao ? linhasOrfas(fusao) : []
-
+  // Os hooks vêm ANTES do early return: a ordem de chamada tem de ser a mesma em
+  // todo render, e o `return null` abaixo é condicional.
+  //
   // A fusão lê cada linha de UMA fonte. Num mês em que só uma delas tem dados,
   // isso deixa de ser "duas visões do mesmo período" e vira subtração de coisas
   // diferentes — foi assim que o acumulado deu −R$ 1,6M de prejuízo inventado,
   // um mês de margem bruta contra sete meses de estrutura.
   const planilha = useMemo(() => lancamentosPlanilha(estado), [estado])
   const enoki = useMemo(() => estado.lancamentosEnoki ?? [], [estado.lancamentosEnoki])
-  const semPar = useMemo(
-    () => competenciasNaoFundiveis(planilha, enoki),
-    [planilha, enoki],
-  )
+  const semPar = useMemo(() => competenciasNaoFundiveis(planilha, enoki), [planilha, enoki])
+
+  if (!enoki.length || !estado.lancamentos.length) return null
+
+  const fonte = fonteDreDe(estado)
+  const orfas = fusao ? linhasOrfas(fusao) : []
 
   return (
     <div>
