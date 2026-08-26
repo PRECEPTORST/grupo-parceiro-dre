@@ -220,6 +220,39 @@ async function lerNfs(page, de, ate) {
 }
 
 /**
+ * Abre uma tela sem depender do menu estar fechado.
+ *
+ * `openScreen` clica no menu e depois no submenu. Isso só funciona com o menu
+ * FECHADO: vindo de outra tela do MESMO menu, ele já está aberto e o clique o
+ * fecha — o submenu some e a varredura morre com timeout. Foi o que derrubou a
+ * primeira leitura de NF de entrada, logo depois da de saída.
+ *
+ * Aqui a ordem se inverte: tenta o submenu direto (menu aberto, caso comum
+ * quando se encadeiam telas) e só mexe no menu se ele não estiver à vista.
+ */
+async function abrirTela(page, menu, submenu, ancora) {
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const visivel = await page.locator(`span:text-is("${submenu}")`).first()
+      .isVisible().catch(() => false);
+    if (!visivel) {
+      await clickSpan(page, menu).catch(() => {});
+      await page.waitForTimeout(1800);
+    }
+    try {
+      await clickSpan(page, submenu);
+      await page.waitForSelector(`span:text-is('${ancora}')`, { timeout: 45_000 });
+      log(`Tela "${submenu}" aberta.`);
+      await page.waitForTimeout(1200);
+      return;
+    } catch {
+      // Menu no estado errado: um clique o inverte para a próxima tentativa.
+      await page.waitForTimeout(1500);
+    }
+  }
+  throw new Error(`Não consegui abrir a tela "${submenu}".`);
+}
+
+/**
  * Docs. Fiscais Entrada — as NOTAS DE COMPRA. É daqui que sai o CPV.
  *
  * POR QUE ESTA TELA EXISTE NO ROBÔ (custou uma rodada inteira descobrir)
@@ -241,7 +274,7 @@ async function lerNfs(page, de, ate) {
  * o recorte fino é feito em código sobre a data de emissão.
  */
 async function lerNfsEntrada(page, de, ate) {
-  await openScreen(page, "Doc. Fiscais", "Docs. Fiscais Entrada", "FORNECEDOR", { log });
+  await abrirTela(page, "Doc. Fiscais", "Docs. Fiscais Entrada", "FORNECEDOR");
   await page.waitForTimeout(2500);
 
   const dentro = [];
