@@ -219,6 +219,33 @@ async function lerNfs(page, de, ate) {
   return { linhas: dentro, travou };
 }
 
+/** Lupa do bloco PESQUISAR, localizada pelo rótulo "Valor" ao lado dela. */
+async function clicarLupaDoValor(page) {
+  const p = await page.evaluate(() => {
+    const rot = [...document.querySelectorAll("span")]
+      .find((e) => e.textContent.trim() === "Valor" && e.getBoundingClientRect().x > 1000);
+    if (!rot) return null;
+    const rr = rot.getBoundingClientRect();
+    const busca = [...document.querySelectorAll("input")]
+      .map((i) => ({ i, r: i.getBoundingClientRect() }))
+      .filter(({ i, r }) => i.type !== "hidden" && r.width > 40 &&
+                            Math.abs(r.x - rr.x) < 40 && r.y > rr.y && r.y < rr.y + 34)
+      .sort((a, b) => a.r.y - b.r.y)[0];
+    if (!busca) return null;
+    const alvo = [...document.querySelectorAll("div,span,img,a,td")]
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .filter(({ r }) => r.width >= 14 && r.width <= 60 && r.height >= 14 && r.height <= 46 &&
+                         r.left >= busca.r.right - 4 && r.left <= busca.r.right + 80 &&
+                         Math.abs(r.top - busca.r.top) < 28)
+      .sort((a, b) => a.r.left - b.r.left)[0];
+    return alvo ? { x: Math.round(alvo.r.x + alvo.r.width / 2), y: Math.round(alvo.r.y + alvo.r.height / 2) } : null;
+  });
+  if (!p) return false;
+  await page.mouse.click(p.x, p.y);
+  await page.waitForTimeout(7000);
+  return true;
+}
+
 /**
  * Abre uma tela sem depender do menu estar fechado.
  *
@@ -276,6 +303,47 @@ async function abrirTela(page, menu, submenu, ancora) {
 async function lerNfsEntrada(page, de, ate) {
   await abrirTela(page, "Doc. Fiscais", "Docs. Fiscais Entrada", "FORNECEDOR");
   await page.waitForTimeout(2500);
+
+  // O PERÍODO desta tela é DOIS campos mascarados de input único (dd/mm/aaaa
+  // inteiro num campo só), diferente do trio dd|mm|aaaa das outras. Os ids são
+  // dinâmicos (TRG_272/TRG_271) e vêm INVERTIDOS — o "De" tem número maior —,
+  // então a localização é pela posição do rótulo, nunca pelo id.
+  const preenchido = await page.evaluate(({ de, ate }) => {
+    const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const rotulo = (txt) => [...document.querySelectorAll("span")]
+      .find((e) => e.textContent.trim() === txt && e.getBoundingClientRect().x > 1000);
+    const campoDe = (rot) => {
+      if (!rot) return null;
+      const r = rot.getBoundingClientRect();
+      return [...document.querySelectorAll("input")]
+        .map((i) => ({ i, b: i.getBoundingClientRect() }))
+        .filter(({ i, b }) => i.type !== "hidden" && b.width > 40 &&
+                              Math.abs(b.x - r.x) < 40 && b.y > r.y && b.y < r.y + 34)
+        .sort((a, b) => a.b.y - b.b.y)[0]?.i ?? null;
+    };
+    const alvos = [[campoDe(rotulo("De")), br(de)], [campoDe(rotulo("a")), br(ate)]];
+    if (alvos.some(([el]) => !el)) return null;
+    for (const [el, valor] of alvos) {
+      el.value = valor;
+      for (const ev of ["input", "change", "keyup", "blur"]) el.dispatchEvent(new Event(ev, { bubbles: true }));
+    }
+    return alvos.map(([el]) => el.value);
+  }, { de, ate });
+
+  if (preenchido) {
+    log(`  período de entrada: ${preenchido.join(" a ")}`);
+    // A busca é a LUPA VERDE do bloco PESQUISAR. O "Ok" ao lado da grade é ação
+    // em lote sobre a seleção — clicá-lo não recarrega nada.
+    //
+    // `clicarLupa` NÃO serve aqui: ela elege o input mais largo do topo, e nesta
+    // tela isso é um auxiliar invisível do WebGUI em x=300. A âncora confiável é
+    // o rótulo "Valor" do próprio bloco PESQUISAR.
+    if (!(await clicarLupaDoValor(page))) {
+      log("  ATENCAO: nao achei a lupa — o periodo pode nao ter sido aplicado");
+    }
+  } else {
+    log("  ATENCAO: campos de periodo nao encontrados — vou paginar do mais recente");
+  }
 
   const dentro = [];
   let travou = false;

@@ -55,8 +55,12 @@ function titulo(over: Record<string, unknown> = {}) {
     valor: '24487.9459',
     valorPago: '24487.9459',
     parceiroNome: 'JOÃO EMILIO ROCHETO',
-    descricao: 'Fat. NFe entrada | Cont: 094/26M',
-    centroCusto: 'COMPRA MILHO',
+    descricao: 'Material de escritório | Cont: 094/26M',
+    // Default deliberado: uma despesa que NUNCA vem de nota fiscal, e portanto
+    // nunca vai virar caso de "ignorar, o valor vem da nota". Grão e frete já
+    // migraram para a nota; um teste de data ou de deduplicação apoiado neles
+    // passaria a exercitar o caminho do descarte sem que ninguém percebesse.
+    centroCusto: 'MATERIAL DE ESCRITORIO',
     idEmpresa: 1,
     ...over,
   }
@@ -272,7 +276,7 @@ describe('títulos → competência pela dataLancamento', () => {
   it('usa a data do LANÇAMENTO, não a da quitação', () => {
     const r = normalizarEnokiDre({ pagar: [titulo()] })
     expect(r.lancamentos[0].data).toBe('2026-06-10') // não 2026-08-01
-    expect(r.lancamentos[0].contaSafragold).toBe('4.1.02')
+    expect(r.lancamentos[0].contaSafragold).toBe('4.3.12')
     expect(r.lancamentos[0].valor).toBeCloseTo(24487.95, 2)
   })
 
@@ -285,6 +289,7 @@ describe('títulos → competência pela dataLancamento', () => {
   })
 
   it('estorno entra com valor NEGATIVO', () => {
+    // Recebimento num centro de COMPRA: devolução de dinheiro, reduz o CPV.
     const r = normalizarEnokiDre({
       receber: [titulo({ centroCusto: 'COMPRA SOJA', valor: '500' })],
     })
@@ -328,10 +333,26 @@ describe('deduplicação', () => {
 describe('integração com o motor do DRE', () => {
   it('os lançamentos montam um DRE coerente', () => {
     const r = normalizarEnokiDre({
-      nfs: [nfVenda()], // receita 88.533,33 (soja)
+      nfs: [
+        nfVenda(), // receita 88.533,33 (soja)
+        // O CPV nasce da NOTA DE ENTRADA, não do título — contar os dois
+        // contaria a mesma compra duas vezes.
+        {
+          idNf: 4242,
+          numeroNf: 4242,
+          dataEmissao: '2026-06-12',
+          status: 'Finalizada',
+          cfop: '1102',
+          entrada: true,
+          finalidade: 'Normal',
+          valorTotalNf: 60000,
+          emitenteNome: 'FORNECEDOR Y',
+          emitenteCpfCnpj: '11222333000144',
+          itens: [],
+        },
+      ],
       pagar: [
-        titulo({ centroCusto: 'COMPRA SOJA', valor: '60000' }), // CPV
-        titulo({ idItemLancamento: 2, centroCusto: 'FRETE', valor: '5000' }), // CPV
+        titulo({ idItemLancamento: 2, centroCusto: 'ARMAZENAGEM SOJA', valor: '5000' }), // CPV
         titulo({ idItemLancamento: 3, centroCusto: 'RECEITA SOJA - MERCADO INTERNO', valor: '1000' }), // devolução
         titulo({ idItemLancamento: 4, centroCusto: 'MATERIAL DE ESCRITORIO', valor: '500' }), // adm
         titulo({ idItemLancamento: 5, centroCusto: 'IMOBILIZADO', valor: '9000' }), // capex
@@ -356,12 +377,34 @@ describe('integração com o motor do DRE', () => {
   })
 
   it('estorno reduz a conta no DRE', () => {
+    // 10.000 de custo vindos da NOTA de entrada, 2.500 devolvidos pelo título.
     const r = normalizarEnokiDre({
-      pagar: [titulo({ centroCusto: 'COMPRA SOJA', valor: '10000' })],
+      nfs: [{
+        idNf: 4243, numeroNf: 4243, dataEmissao: '2026-06-12', status: 'Finalizada',
+        cfop: '1102', entrada: true, finalidade: 'Normal', valorTotalNf: 10000,
+        emitenteNome: 'FORNECEDOR Y', emitenteCpfCnpj: '11222333000144', itens: [],
+      }],
       receber: [titulo({ idItemLancamento: 77, centroCusto: 'COMPRA SOJA', valor: '2500' })],
     })
     const dre = montarDre('2026-06', r.lancamentos, mapaEfetivo([]))
     expect(dre.linhas.find((l) => l.linha === 'custo_produto')!.realizado).toBeCloseTo(7500, 2)
+  })
+
+  it('título de compra PAGO não duplica o custo da nota de entrada', () => {
+    // Regressão: em julho a mesma mercadoria aparecia como R$ 20,1M em notas
+    // de entrada MAIS R$ 3,8M em títulos de compra.
+    const notaCompra = {
+      idNf: 4244, numeroNf: 4244, dataEmissao: '2026-06-12', status: 'Finalizada',
+      cfop: '1102', entrada: true, finalidade: 'Normal', valorTotalNf: 10000,
+      emitenteNome: 'FORNECEDOR Y', emitenteCpfCnpj: '11222333000144', itens: [],
+    }
+    const r = normalizarEnokiDre({
+      nfs: [notaCompra],
+      pagar: [titulo({ centroCusto: 'COMPRA SOJA', valor: '10000' })],
+    })
+    const dre = montarDre('2026-06', r.lancamentos, mapaEfetivo([]))
+    expect(dre.linhas.find((l) => l.linha === 'custo_produto')!.realizado).toBeCloseTo(10000, 2)
+    expect(r.descartes.find((d) => d.motivo === 'custo_vem_da_nf')?.valor).toBeCloseTo(10000, 2)
   })
 })
 

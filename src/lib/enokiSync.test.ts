@@ -25,7 +25,9 @@ const TITULO = {
   dataLancamento: '2026-06-05T00:00:00-03:00',
   valor: '700',
   parceiroNome: 'FORNECEDOR Y',
-  centroCusto: 'COMPRA SOJA',
+  // Despesa que NUNCA vem de nota fiscal — o teste é sobre cursor e
+  // deduplicação, não pode cair no caminho do descarte por acidente.
+  centroCusto: 'MATERIAL DE ESCRITORIO',
 }
 
 describe('sincronizarEnokiDre', () => {
@@ -69,7 +71,7 @@ describe('sincronizarEnokiDre', () => {
     expect(passos).toEqual([50, 100])
     // Normalizou: 1 receita (NF) + 1 CPV (título).
     expect(r.lancamentos).toHaveLength(2)
-    expect(r.lancamentos.map((l) => l.contaSafragold).sort()).toEqual(['3.1.01', '4.1.01'])
+    expect(r.lancamentos.map((l) => l.contaSafragold).sort()).toEqual(['3.1.01', '4.3.12'])
     expect(r.sacas['2026-06'].soja).toBeCloseTo(100, 2)
     expect(r.meta.passos).toBe(2)
     expect(r.meta.registros).toBe(2)

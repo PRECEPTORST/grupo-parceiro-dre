@@ -92,8 +92,14 @@ describe('cobertura dos centros de custo reais', () => {
     expect(semRegra).toEqual([])
   })
 
-  it('"FRETE SOBRE COMPRA" é CPV, não despesa comercial', () => {
-    expect(destinoDeCentroCusto('FRETE SOBRE COMPRA', 'saida')).toMatchObject({ conta: '4.1.10' })
+  it('frete de COMPRA vem do CT-e; frete de VENDA continua vindo do título', () => {
+    // Assimetria proposital: o CT-e de entrada identifica com segurança o frete
+    // sobre compra (R$ 1,78M em julho); o de saída não distingue as pontas.
+    const compra = destinoDeCentroCusto('FRETE SOBRE COMPRA', 'saida')!
+    expect(compra.ignorar).toBe(true)
+    expect(compra.motivo).toBe('custo_vem_da_nf')
+    expect(destinoDeCentroCusto('FRETE SOBRE COMPRA', 'entrada')).toMatchObject({ conta: '4.1.10', sinal: -1 })
+    // Frete sobre VENDA é despesa comercial e seu título continua valendo.
     expect(destinoDeCentroCusto('FRETE SOBRE VENDA', 'saida')).toMatchObject({ conta: '4.2.03' })
   })
 
@@ -118,15 +124,24 @@ describe('cobertura dos centros de custo reais', () => {
 })
 
 describe('direção do fluxo', () => {
-  it('compra paga vira CPV do grão', () => {
-    expect(destinoDeCentroCusto('COMPRA SOJA', 'saida')).toMatchObject({ conta: '4.1.01', sinal: 1 })
-    expect(destinoDeCentroCusto('COMPRA MILHO', 'saida')).toMatchObject({ conta: '4.1.02', sinal: 1 })
-    expect(destinoDeCentroCusto('COMPRA CAFE', 'saida')).toMatchObject({ conta: '4.1.05', sinal: 1 })
+  it('compra PAGA é ignorada — o custo vem da nota de entrada', () => {
+    // Simétrico à receita: contar a nota E o título contaria a mesma compra
+    // duas vezes. Em julho isso eram R$ 20,1M em notas + R$ 3,8M em títulos da
+    // MESMA mercadoria. O motivo é próprio ('custo_vem_da_nf') justamente para
+    // denunciar no diagnóstico se a nota de entrada faltar na carga.
+    for (const cc of ['COMPRA SOJA', 'COMPRA MILHO', 'COMPRA CAFE']) {
+      const d = destinoDeCentroCusto(cc, 'saida')!
+      expect(d.ignorar, cc).toBe(true)
+      expect(d.motivo).toBe('custo_vem_da_nf')
+    }
   })
 
-  it('compra RECEBIDA é estorno: mesma conta, sinal negativo', () => {
+  it('compra RECEBIDA é estorno: reduz o CPV, com sinal negativo', () => {
+    // O pagamento é ignorado (o custo vem da nota), mas o RECEBIMENTO não tem
+    // nota que o gere — é devolução de dinheiro e tem de reduzir o custo.
     const d = destinoDeCentroCusto('COMPRA SOJA', 'entrada')!
     expect(d.conta).toBe('4.1.01')
+    expect(d.ignorar).toBe(false)
     expect(d.sinal).toBe(-1)
     expect(d.motivo).toBe('estorno')
   })

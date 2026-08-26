@@ -38,6 +38,7 @@
 export type NaturezaCfop =
   | 'venda'
   | 'compra'
+  | 'frete_compra'
   | 'devolucao_venda'
   | 'devolucao_compra'
   | 'remessa'
@@ -70,6 +71,13 @@ const REMESSA = new Set([
   '921', '923', '924', '925', '926', '927', '934', '949',
 ])
 
+/**
+ * Aquisição de SERVIÇO DE TRANSPORTE (CT-e). Entrando, é frete sobre compra —
+ * custo do produto, não despesa. Eram R$ 1,78M em julho, 489 documentos, caindo
+ * em 'outro' por não estarem em tabela nenhuma.
+ */
+const SERVICO_TRANSPORTE = new Set(['351', '352', '353', '354', '355', '356', '932'])
+
 /** Transferência entre estabelecimentos do mesmo titular. */
 const TRANSFERENCIA = new Set(['151', '152', '153', '155', '156', '551', '552', '553', '555', '556'])
 
@@ -101,6 +109,9 @@ export function naturezaDeCfop(cfop: unknown, entrada: boolean): NaturezaCfop {
   // Mesmo sufixo, sentido oposto: entrada = cliente nos devolveu (reduz receita);
   // saída = devolvemos ao fornecedor (reduz custo).
   if (DEVOLUCAO_VENDA.has(sufixo)) return entrada ? 'devolucao_venda' : 'devolucao_compra'
+  // Só na ENTRADA: o CT-e de saída é frete sobre VENDA, que continua vindo do
+  // título (a nota de saída não distingue as duas pontas com segurança).
+  if (SERVICO_TRANSPORTE.has(sufixo)) return entrada ? 'frete_compra' : 'outro'
   if (REMESSA.has(sufixo)) return 'remessa'
   // Mesmo sufixo de aquisição de mercadoria: saindo é venda, entrando é COMPRA.
   // 1102/2102 na nota de entrada é o CPV — a contrapartida exata do 5102 na de
@@ -113,6 +124,7 @@ export function naturezaDeCfop(cfop: unknown, entrada: boolean): NaturezaCfop {
 export const ROTULO_NATUREZA: Record<NaturezaCfop, string> = {
   venda: 'Venda',
   compra: 'Compra de mercadoria (CPV)',
+  frete_compra: 'Frete sobre compra — CT-e (CPV)',
   devolucao_venda: 'Devolução de venda (reduz receita)',
   devolucao_compra: 'Devolução de compra (reduz custo)',
   remessa: 'Remessa/retorno de armazém (não é venda)',

@@ -19,7 +19,7 @@ const { lancamentos, descartes } = normalizarEnokiDre(p);
 const brl = (v) => `R$ ${(v / 1e6).toFixed(2)}M`;
 const porLinha = {};
 for (const l of lancamentos) {
-  const linha = MAPA_PLANO[l.contaSafragold]?.linha ?? "(conta fora do plano)";
+  const linha = MAPA_PLANO[l.contaSafragold] ?? "(conta fora do plano)";
   (porLinha[linha] ??= { total: 0, n: 0 }).total += l.valor;
   porLinha[linha].n++;
 }

@@ -241,6 +241,7 @@ export type MotivoDescarte =
   | 'data_invalida'
   | 'valor_zero'
   | 'receita_vem_da_nf'
+  | 'custo_vem_da_nf'
   | 'patrimonial_ou_intragrupo'
 
 export interface ResumoDescarte {
@@ -422,7 +423,9 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     }
     // Na compra o outro lado é o FORNECEDOR; na venda, o destinatário.
     const contraparteDoc =
-      natureza === 'compra' ? nf?.emitenteCpfCnpj : nf?.destinatarioCpfCnpj
+      natureza === 'compra' || natureza === 'frete_compra'
+        ? nf?.emitenteCpfCnpj
+        : nf?.destinatarioCpfCnpj
     if (ehIntragrupo(contraparteDoc, raizes)) {
       descartar(acc, 'nf_intragrupo', valorNf)
       continue
@@ -434,7 +437,9 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     }
     const competencia = data.slice(0, 7)
     const destinatario = String(
-      (natureza === 'compra' ? nf?.emitenteNome : nf?.destinatarioNome) ?? '',
+      (natureza === 'compra' || natureza === 'frete_compra'
+        ? nf?.emitenteNome
+        : nf?.destinatarioNome) ?? '',
     ).trim()
     const numero = nf?.numeroNf ?? nf?.idNf ?? ''
 
@@ -443,7 +448,7 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     // conta própria (3.1.15), visível no DRE como "produto não detalhado".
     const itens = (nf?.itens ?? []).length
       ? nf.itens
-      : (natureza === 'venda' || natureza === 'compra') &&
+      : (natureza === 'venda' || natureza === 'compra' || natureza === 'frete_compra') &&
           Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
         ? [{ idItem: 'total', produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }]
         : []
@@ -463,7 +468,9 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       // Venda: conta do cereal (ou outras receitas, para sucata/equipamento).
       // Devolução de VENDA vira dedução; devolução de COMPRA reduz o CPV do grão.
       const conta =
-        produto === SEM_DETALHE_PRODUTO
+        natureza === 'frete_compra'
+          ? '4.1.10'
+          : produto === SEM_DETALHE_PRODUTO
           ? natureza === 'compra'
             ? CONTA_SEM_DETALHE_COMPRA
             : CONTA_SEM_DETALHE
@@ -487,6 +494,8 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
           ? `NF ${numero}`
           : natureza === 'compra'
             ? `NF entrada ${numero}`
+            : natureza === 'frete_compra'
+              ? `CT-e ${numero}`
             : `NF ${numero} · devolução`
       const historico = [rotulo, produto, destinatario].filter(Boolean).join(' · ').slice(0, 160)
 
@@ -511,7 +520,7 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
 
       // Sacas: só a VENDA soma; a devolução de venda devolve o volume.
       // Sacas medem o volume VENDIDO; a compra alimenta o estoque, não a venda.
-      if (grao && natureza !== 'devolucao_compra' && natureza !== 'compra') {
+      if (grao && natureza !== 'devolucao_compra' && natureza !== 'compra' && natureza !== 'frete_compra') {
         const sacas = sacasDeItem(produto, item?.quantidade, item?.valorUnitario)
         somarSacas(acc, competencia, grao, natureza === 'devolucao_venda' ? -sacas : sacas)
       }

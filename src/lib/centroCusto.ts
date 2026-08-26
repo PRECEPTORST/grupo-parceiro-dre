@@ -14,10 +14,12 @@
 // Por isso cada regra declara a conta por direção + a direção NATURAL: fluxo na
 // contramão sem conta própria vira estorno (sinal −1) na conta natural.
 //
-// RECEITA DE GRÃO é caso especial: o fato gerador é a NOTA FISCAL (ver
-// `enokiDre.ts`), então o título a receber correspondente é IGNORADO — contar os
-// dois seria dupla contagem. Só a direção contrária (pagamento num centro de
-// receita = devolução/estorno de venda) vira lançamento, em deduções.
+// GRÃO é caso especial NOS DOIS SENTIDOS: o fato gerador é a NOTA FISCAL (ver
+// `enokiDre.ts`) — a de saída para a receita, a de entrada para o custo. O
+// título financeiro correspondente é IGNORADO nos dois casos; contar os dois
+// seria dupla contagem. Só a direção contrária vira lançamento: pagamento num
+// centro de receita é devolução de venda; recebimento num centro de compra é
+// estorno de compra.
 
 /** Conta sentinela: a receita já vem da NfSaida; ignorar o título financeiro. */
 export const VEM_DA_NF = 'NF' as const
@@ -27,8 +29,17 @@ export type DirecaoFluxo = 'entrada' | 'saida'
 export interface RegraCentroCusto {
   /** Conta quando o dinheiro ENTRA (recebimento). `VEM_DA_NF` = ignorar o título. */
   entrada?: string | typeof VEM_DA_NF
-  /** Conta quando o dinheiro SAI (pagamento). */
-  saida?: string
+  /** Conta quando o dinheiro SAI (pagamento). `VEM_DA_NF` = ignorar o título. */
+  saida?: string | typeof VEM_DA_NF
+  /**
+   * Conta do ESTORNO quando o fluxo vai na contramão do natural.
+   *
+   * Existe porque a conta natural pode ser `VEM_DA_NF`: numa compra de grão o
+   * pagamento é ignorado (o custo vem da nota de entrada), mas o RECEBIMENTO
+   * não tem nota que o gere — é devolução de dinheiro e reduz o CPV. Sem este
+   * campo o estorno cairia no vazio e a redução sumiria.
+   */
+  estorno?: string
   /** Direção esperada do centro de custo. O fluxo contrário sem conta própria é estorno. */
   natural: DirecaoFluxo
   /** true = fora do DRE (conta patrimonial ou eliminação intragrupo). */
@@ -78,17 +89,26 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   'OUTRAS RECEITAS': { entrada: '3.4.04', natural: 'entrada' },
 
   // ---- CPV: aquisição de grão ----
-  'COMPRA SOJA': { saida: '4.1.01', natural: 'saida' },
-  'COMPRA MILHO': { saida: '4.1.02', natural: 'saida' },
-  'COMPRA SORGO': { saida: '4.1.03', natural: 'saida' },
-  'COMPRA CAFE': { saida: '4.1.05', natural: 'saida' },
+  // O fato gerador do CUSTO é a NOTA DE ENTRADA, exatamente como o da receita é
+  // a nota de saída. Contar também o título seria contar a mesma compra duas
+  // vezes — e era: em julho as notas davam R$ 20,1M e os títulos mais R$ 3,8M
+  // da MESMA mercadoria. O título pago sai; só a direção contrária (recebimento
+  // num centro de compra = estorno) vira lançamento.
+  'COMPRA SOJA': { saida: VEM_DA_NF, estorno: '4.1.01', natural: 'saida' },
+  'COMPRA MILHO': { saida: VEM_DA_NF, estorno: '4.1.02', natural: 'saida' },
+  'COMPRA SORGO': { saida: VEM_DA_NF, estorno: '4.1.03', natural: 'saida' },
+  'COMPRA CAFE': { saida: VEM_DA_NF, estorno: '4.1.05', natural: 'saida' },
 
   // ---- CPV: custos compartilhados (frete, armazém, beneficiamento) ----
-  FRETE: { saida: '4.1.10', entrada: '3.1.12', natural: 'saida' },
+  // Frete sobre COMPRA vem do CT-e (nota de entrada), como todo custo. O título
+  // é o pagamento do mesmo frete — mesmos transportadores, os dois lados
+  // conferidos. Frete sobre VENDA continua vindo do título: o CT-e de saída não
+  // distingue as duas pontas com segurança.
+  FRETE: { saida: VEM_DA_NF, estorno: '4.1.10', entrada: '3.1.12', natural: 'saida' },
   // Produção usa rótulos mais específicos que a homologação — descobertos ao
   // ler o ERP real em 2026-08-26. "FRETE SOBRE COMPRA" sozinho eram 155 títulos
   // num único mês; sem esta linha, todos viravam resíduo.
-  'FRETE SOBRE COMPRA': { saida: '4.1.10', natural: 'saida' },
+  'FRETE SOBRE COMPRA': { saida: VEM_DA_NF, estorno: '4.1.10', natural: 'saida' },
   'FRETE SOBRE VENDA': { saida: '4.2.03', natural: 'saida' },
   'ARMAZENAGEM SOJA': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
   'ARMAZENAGEM MILHO': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
@@ -166,11 +186,22 @@ export function destinoDeCentroCusto(cc: string, fluxo: DirecaoFluxo): DestinoLa
 
   const contaDireta = fluxo === 'entrada' ? regra.entrada : regra.saida
   if (contaDireta === VEM_DA_NF) {
-    return { conta: '', sinal: 1, ignorar: true, motivo: 'receita_vem_da_nf' }
+    // Motivos distintos de propósito: se a nota de entrada faltar na carga, o
+    // CPV vai a zero, e um balde de descarte com o nome certo é o que denuncia
+    // isso no diagnóstico. Um rótulo genérico esconderia a falha.
+    return {
+      conta: '',
+      sinal: 1,
+      ignorar: true,
+      motivo: fluxo === 'saida' ? 'custo_vem_da_nf' : 'receita_vem_da_nf',
+    }
   }
   if (contaDireta) return { conta: contaDireta, sinal: 1, ignorar: false }
 
-  // Fluxo na contramão sem conta própria = ESTORNO na conta natural.
+  // Fluxo na contramão sem conta própria = ESTORNO, sempre com sinal negativo.
+  if (regra.estorno) {
+    return { conta: regra.estorno, sinal: -1, ignorar: false, motivo: 'estorno' }
+  }
   const contaNatural = regra.natural === 'entrada' ? regra.entrada : regra.saida
   if (!contaNatural || contaNatural === VEM_DA_NF) return null
   return { conta: contaNatural, sinal: -1, ignorar: false, motivo: 'estorno' }
