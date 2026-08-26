@@ -20,14 +20,33 @@ function sync(over: Partial<EnokiSyncMeta> = {}): EnokiSyncMeta {
 describe('divergenciasDaCarga', () => {
   it('traduz cada descarte em decisão, com o valor medido pela carga', () => {
     const d = divergenciasDaCarga(
-      sync({ descartes: [{ motivo: 'nf_intragrupo', quantidade: 344, valor: 1_190_000 }] }),
+      sync({ descartes: [{ motivo: 'nf_outra_operacao', quantidade: 333, valor: 23_936 }] }),
     )
-    const intra = d.find((x) => x.id === 'nf_intragrupo')!
-    expect(intra.valor).toBe(1_190_000)
-    expect(intra.quantidade).toBe(344)
-    expect(intra.situacao).toBe('aberta')
-    expect(intra.quemDecide).toBeTruthy()
-    expect(intra.seMudar).toBeTruthy()
+    const item = d.find((x) => x.id === 'nf_outra_operacao')!
+    expect(item.valor).toBe(23_936)
+    expect(item.quantidade).toBe(333)
+    expect(item.situacao).toBe('aberta')
+    expect(item.quemDecide).toBeTruthy()
+    expect(item.seMudar).toBeTruthy()
+  })
+
+  it('o que virou convenção fechada aparece como DECIDIDO, com o critério à vista', () => {
+    // Intragrupo e retorno de lote deixaram de ser dúvida quando o DRE passou a
+    // reproduzir o fechamento do cliente — mas continuam na tela, porque o
+    // critério é o que explica o número.
+    const d = divergenciasDaCarga(
+      sync({
+        descartes: [
+          { motivo: 'nf_intragrupo', quantidade: 344, valor: 1_190_000 },
+          { motivo: 'retorno_lote_exportacao', quantidade: 10, valor: 649_908 },
+        ],
+      }),
+    )
+    for (const id of ['nf_intragrupo', 'retorno_lote_exportacao']) {
+      const x = d.find((y) => y.id === id)!
+      expect(x.situacao, id).toBe('decidida')
+      expect(x.valendoHoje, id).toBeTruthy()
+    }
   })
 
   it('o que está em ABERTO vem antes do que já foi decidido', () => {
@@ -105,11 +124,12 @@ describe('totalEmAberto', () => {
     const d = divergenciasDaCarga(
       sync({
         descartes: [
-          { motivo: 'nf_intragrupo', quantidade: 1, valor: 1_000_000 },
+          { motivo: 'nf_outra_operacao', quantidade: 1, valor: 1_000_000 },
           { motivo: 'nf_cancelada', quantidade: 1, valor: 9_000_000 },
         ],
       }),
     )
-    expect(totalEmAberto(d)).toBe(1_000_000)
+    // Só o aberto conta; as decisões fixas da lista não têm valor medido.
+    expect(totalEmAberto(d)).toBe(1_000_000 + 240_168.91)
   })
 })

@@ -51,15 +51,27 @@ const EXPLICACAO: Record<
 > = {
   nf_intragrupo: {
     titulo: 'Operações entre empresas do próprio grupo',
-    situacao: 'aberta',
+    situacao: 'decidida',
     linha: 'custo',
     oQueE:
       'Compras e fretes contratados de outra empresa do Grupo Parceiro. Num DRE consolidado do grupo elas se anulam: o custo de uma é a receita da outra.',
     valendoHoje:
-      'Eliminadas. É o certo para o DRE consolidado das cinco empresas — que é o objetivo.',
+      'CONTADAS. Este é o DRE de uma filial, e para ela a nota da irmã é custo de verdade — é assim que o financeiro fecha o mês.',
     seMudar:
-      'Enquanto só uma empresa estiver carregada, a eliminação é assimétrica: tira o custo daqui sem registrar a receita na irmã, e subestima o resultado. Carregar as outras quatro fecha isso sem mexer na regra.',
-    quemDecide: 'Depende de carregar as 5 empresas — trabalho nosso, não pergunta ao cliente.',
+      'Quando as cinco empresas estiverem carregadas, a convenção passa a "consolidado" e elas se anulam. Eliminar agora, com uma empresa só, tiraria o custo daqui sem registrar a receita lá.',
+    quemDecide: 'Nosso — muda sozinho quando as 5 empresas entrarem.',
+  },
+  retorno_lote_exportacao: {
+    titulo: 'Retorno de lote de exportação',
+    situacao: 'decidida',
+    linha: 'deducoes',
+    oQueE:
+      'Grão que voltou do porto porque a exportação não se concretizou (CFOP 1503/2504).',
+    valendoHoje:
+      'NÃO abate a receita — tratado como movimentação, que é o critério do fechamento do cliente.',
+    seMudar:
+      'Se a saída para o porto foi contada como venda, o retorno teria de desfazê-la e a receita cairia.',
+    quemDecide: 'Contador, se quiser rever o critério.',
   },
   nf_remessa: {
     titulo: 'Remessa e retorno de armazém geral',
@@ -215,19 +227,19 @@ const DECISOES_ABERTAS: Divergencia[] = [
     quemDecide: 'Contador.',
   },
   {
-    id: 'devolucoes-quais-deduzem',
-    titulo: 'Quais devoluções reduzem a receita',
-    valor: 0,
-    quantidade: 0,
+    id: 'devolucao-interestadual',
+    titulo: 'Devolução de venda interestadual (CFOP 2202) — R$ 240 mil',
+    valor: 240_168.91,
+    quantidade: 10,
     situacao: 'aberta',
     linha: 'deducoes',
     oQueE:
-      'Julho teve R$ 1,80M em notas de devolução e retorno: devolução de venda (CFOP 1202/2202) e retorno de lote de exportação (1503/2504). Nós deduzimos todas.',
+      'Devolução de venda vinda de outro estado. É a mesma operação da CFOP 1202, que o fechamento do cliente deduz normalmente — só muda o estado de origem.',
     valendoHoje:
-      'Todas reduzem a receita. Com isso nossa receita LÍQUIDA fica ~R$ 0,89M abaixo da planilha, que parece deduzir só parte.',
+      'Deduzimos. O fechamento do cliente NÃO deduz, e é a única diferença que sobra na receita líquida de julho.',
     seMudar:
-      'Se o retorno de lote de exportação não for dedução, a receita líquida sobe e o EBITDA sobe junto. É a diferença entre estarmos conservadores demais ou na medida.',
-    quemDecide: 'Contador.',
+      'Copiar o critério do cliente faria a receita líquida bater exato, mas deixaria o DRE R$ 240 mil otimista. Parece omissão do filtro manual dele, não regra — e copiar um erro para bater não é conferir.',
+    quemDecide: 'Contador. É a pergunta mais objetiva da lista.',
   },
   {
     id: 'cfop-1907',
