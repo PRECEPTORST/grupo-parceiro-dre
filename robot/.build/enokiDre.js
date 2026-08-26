@@ -1,7 +1,7 @@
-// ../src/lib/tipos.ts
+// src/lib/tipos.ts
 var GRAOS = ["soja", "milho", "sorgo", "cafe"];
 
-// ../src/lib/centroCusto.ts
+// src/lib/centroCusto.ts
 var VEM_DA_NF = "NF";
 function normalizarRotulo(s) {
   return String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
@@ -20,16 +20,25 @@ var REGRAS_CENTRO_CUSTO = {
   "RECEITA SERVICOS DE CORRETAGEM - MERCADO INTERNO": { entrada: "3.1.13", natural: "entrada" },
   "OUTRAS RECEITAS": { entrada: "3.4.04", natural: "entrada" },
   // ---- CPV: aquisição de grão ----
-  "COMPRA SOJA": { saida: "4.1.01", natural: "saida" },
-  "COMPRA MILHO": { saida: "4.1.02", natural: "saida" },
-  "COMPRA SORGO": { saida: "4.1.03", natural: "saida" },
-  "COMPRA CAFE": { saida: "4.1.05", natural: "saida" },
+  // O fato gerador do CUSTO é a NOTA DE ENTRADA, exatamente como o da receita é
+  // a nota de saída. Contar também o título seria contar a mesma compra duas
+  // vezes — e era: em julho as notas davam R$ 20,1M e os títulos mais R$ 3,8M
+  // da MESMA mercadoria. O título pago sai; só a direção contrária (recebimento
+  // num centro de compra = estorno) vira lançamento.
+  "COMPRA SOJA": { saida: VEM_DA_NF, estorno: "4.1.01", natural: "saida" },
+  "COMPRA MILHO": { saida: VEM_DA_NF, estorno: "4.1.02", natural: "saida" },
+  "COMPRA SORGO": { saida: VEM_DA_NF, estorno: "4.1.03", natural: "saida" },
+  "COMPRA CAFE": { saida: VEM_DA_NF, estorno: "4.1.05", natural: "saida" },
   // ---- CPV: custos compartilhados (frete, armazém, beneficiamento) ----
-  FRETE: { saida: "4.1.10", entrada: "3.1.12", natural: "saida" },
+  // Frete sobre COMPRA vem do CT-e (nota de entrada), como todo custo. O título
+  // é o pagamento do mesmo frete — mesmos transportadores, os dois lados
+  // conferidos. Frete sobre VENDA continua vindo do título: o CT-e de saída não
+  // distingue as duas pontas com segurança.
+  FRETE: { saida: VEM_DA_NF, estorno: "4.1.10", entrada: "3.1.12", natural: "saida" },
   // Produção usa rótulos mais específicos que a homologação — descobertos ao
   // ler o ERP real em 2026-08-26. "FRETE SOBRE COMPRA" sozinho eram 155 títulos
   // num único mês; sem esta linha, todos viravam resíduo.
-  "FRETE SOBRE COMPRA": { saida: "4.1.10", natural: "saida" },
+  "FRETE SOBRE COMPRA": { saida: VEM_DA_NF, estorno: "4.1.10", natural: "saida" },
   "FRETE SOBRE VENDA": { saida: "4.2.03", natural: "saida" },
   "ARMAZENAGEM SOJA": { saida: "4.1.11", entrada: "3.1.09", natural: "saida" },
   "ARMAZENAGEM MILHO": { saida: "4.1.11", entrada: "3.1.09", natural: "saida" },
@@ -90,15 +99,23 @@ function destinoDeCentroCusto(cc, fluxo) {
   }
   const contaDireta = fluxo === "entrada" ? regra.entrada : regra.saida;
   if (contaDireta === VEM_DA_NF) {
-    return { conta: "", sinal: 1, ignorar: true, motivo: "receita_vem_da_nf" };
+    return {
+      conta: "",
+      sinal: 1,
+      ignorar: true,
+      motivo: fluxo === "saida" ? "custo_vem_da_nf" : "receita_vem_da_nf"
+    };
   }
   if (contaDireta) return { conta: contaDireta, sinal: 1, ignorar: false };
+  if (regra.estorno) {
+    return { conta: regra.estorno, sinal: -1, ignorar: false, motivo: "estorno" };
+  }
   const contaNatural = regra.natural === "entrada" ? regra.entrada : regra.saida;
   if (!contaNatural || contaNatural === VEM_DA_NF) return null;
   return { conta: contaNatural, sinal: -1, ignorar: false, motivo: "estorno" };
 }
 
-// ../src/lib/cfop.ts
+// src/lib/cfop.ts
 var VENDA = /* @__PURE__ */ new Set([
   "101",
   "102",
@@ -176,6 +193,7 @@ var REMESSA = /* @__PURE__ */ new Set([
   "934",
   "949"
 ]);
+var SERVICO_TRANSPORTE = /* @__PURE__ */ new Set(["351", "352", "353", "354", "355", "356", "932"]);
 var TRANSFERENCIA = /* @__PURE__ */ new Set(["151", "152", "153", "155", "156", "551", "552", "553", "555", "556"]);
 function digitosCfop(cfop) {
   return String(cfop ?? "").replace(/\D/g, "");
@@ -184,17 +202,21 @@ function sufixoCfop(cfop) {
   const d = digitosCfop(cfop);
   return d.length >= 4 ? d.slice(-3) : "";
 }
+function cfopDeEntrada(cfop) {
+  return /^[123]/.test(digitosCfop(cfop));
+}
 function naturezaDeCfop(cfop, entrada) {
   const sufixo = sufixoCfop(cfop);
   if (!sufixo) return "outro";
   if (TRANSFERENCIA.has(sufixo)) return "transferencia";
   if (DEVOLUCAO_VENDA.has(sufixo)) return entrada ? "devolucao_venda" : "devolucao_compra";
+  if (SERVICO_TRANSPORTE.has(sufixo)) return entrada ? "frete_compra" : "outro";
   if (REMESSA.has(sufixo)) return "remessa";
-  if (VENDA.has(sufixo)) return entrada ? "outro" : "venda";
+  if (VENDA.has(sufixo)) return entrada ? "compra" : "venda";
   return "outro";
 }
 
-// ../src/lib/gapContratos.ts
+// src/lib/gapContratos.ts
 var TOL = 1e-3;
 function arred(v) {
   return Math.round(v * 100) / 100;
@@ -282,7 +304,7 @@ function analisarGapContratos(notas, titulos, pisoNota = 1e3) {
   };
 }
 
-// ../src/lib/enoki.ts
+// src/lib/enoki.ts
 function numeroEnoki(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   let t = String(v ?? "").replace(/\s/g, "");
@@ -291,7 +313,7 @@ function numeroEnoki(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// ../src/lib/enokiDre.ts
+// src/lib/enokiDre.ts
 var KG_POR_SACA = 60;
 var RAIZES_CNPJ_GRUPO = ["30798330", "22271113", "47591700"];
 var PRODUTOS_GRAO = [
@@ -331,6 +353,7 @@ var CONTA_RECEITA_GRAO = {
 };
 var SEM_DETALHE_PRODUTO = "__SEM_DETALHE__";
 var CONTA_SEM_DETALHE = "3.1.15";
+var CONTA_SEM_DETALHE_COMPRA = "4.1.18";
 var CONTA_AQUISICAO_GRAO = {
   soja: "4.1.01",
   milho: "4.1.02",
@@ -416,7 +439,7 @@ function somarSacas(acc, competencia, grao, sacas) {
 function naturezaDaNf(nf) {
   const finalidade = normalizarRotulo(nf?.finalidade);
   if (finalidade === "AJUSTE") return "outro";
-  const entrada = normalizarRotulo(nf?.tipoOperacao) === "ENTRADA";
+  const entrada = nf?.entrada === true || normalizarRotulo(nf?.tipoOperacao) === "ENTRADA" || cfopDeEntrada(nf?.cfop);
   return naturezaDeCfop(nf?.cfop, entrada);
 }
 function ehVenda(nf) {
@@ -450,7 +473,8 @@ function processarNfs(nfs, raizes, acc) {
       );
       continue;
     }
-    if (ehIntragrupo(nf?.destinatarioCpfCnpj, raizes)) {
+    const contraparteDoc = natureza === "compra" || natureza === "frete_compra" ? nf?.emitenteCpfCnpj : nf?.destinatarioCpfCnpj;
+    if (ehIntragrupo(contraparteDoc, raizes)) {
       descartar(acc, "nf_intragrupo", valorNf);
       continue;
     }
@@ -460,9 +484,11 @@ function processarNfs(nfs, raizes, acc) {
       continue;
     }
     const competencia = data.slice(0, 7);
-    const destinatario = String(nf?.destinatarioNome ?? "").trim();
+    const destinatario = String(
+      (natureza === "compra" || natureza === "frete_compra" ? nf?.emitenteNome : nf?.destinatarioNome) ?? ""
+    ).trim();
     const numero = nf?.numeroNf ?? nf?.idNf ?? "";
-    const itens = (nf?.itens ?? []).length ? nf.itens : natureza === "venda" && Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 5e-3 ? [{ idItem: "total", produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }] : [];
+    const itens = (nf?.itens ?? []).length ? nf.itens : (natureza === "venda" || natureza === "compra" || natureza === "frete_compra") && Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 5e-3 ? [{ idItem: "total", produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }] : [];
     for (const [i, item] of itens.entries()) {
       const produto = String(item?.produto ?? "").trim();
       const valor = numeroEnoki(item?.valorTotal);
@@ -475,9 +501,9 @@ function processarNfs(nfs, raizes, acc) {
         continue;
       }
       const grao = graoDeProduto(produto);
-      const conta = produto === SEM_DETALHE_PRODUTO ? CONTA_SEM_DETALHE : natureza === "devolucao_venda" ? "3.2.06" : natureza === "devolucao_compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : grao ? CONTA_RECEITA_GRAO[grao] : "3.4.02";
+      const conta = natureza === "frete_compra" ? "4.1.10" : produto === SEM_DETALHE_PRODUTO ? natureza === "compra" ? CONTA_SEM_DETALHE_COMPRA : CONTA_SEM_DETALHE : natureza === "compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : natureza === "devolucao_venda" ? "3.2.06" : natureza === "devolucao_compra" ? grao ? CONTA_AQUISICAO_GRAO[grao] : "4.1.10" : grao ? CONTA_RECEITA_GRAO[grao] : "3.4.02";
       const sinal = natureza === "devolucao_compra" ? -1 : 1;
-      const rotulo = natureza === "venda" ? `NF ${numero}` : `NF ${numero} \xB7 devolu\xE7\xE3o`;
+      const rotulo = natureza === "venda" ? `NF ${numero}` : natureza === "compra" ? `NF entrada ${numero}` : natureza === "frete_compra" ? `CT-e ${numero}` : `NF ${numero} \xB7 devolu\xE7\xE3o`;
       const historico = [rotulo, produto, destinatario].filter(Boolean).join(" \xB7 ").slice(0, 160);
       acc.lancamentos.push({
         id: `enoki-nf-${nf?.idNf ?? numero}-${item?.idItem ?? i}`,
@@ -485,7 +511,7 @@ function processarNfs(nfs, raizes, acc) {
         contaSafragold: conta,
         historico,
         valor: sinal * valor,
-        centroCusto: grao ? `RECEITA ${grao.toUpperCase()}` : void 0,
+        centroCusto: grao ? `${natureza === "compra" ? "COMPRA" : "RECEITA"} ${grao.toUpperCase()}` : void 0,
         origem: "enoki"
       });
       if (natureza === "venda") {
@@ -494,7 +520,7 @@ function processarNfs(nfs, raizes, acc) {
           acc.notasContrato.push({ idContrato, competencia, valor, grao });
         }
       }
-      if (grao && natureza !== "devolucao_compra") {
+      if (grao && natureza !== "devolucao_compra" && natureza !== "compra" && natureza !== "frete_compra") {
         const sacas = sacasDeItem(produto, item?.quantidade, item?.valorUnitario);
         somarSacas(acc, competencia, grao, natureza === "devolucao_venda" ? -sacas : sacas);
       }
@@ -594,6 +620,7 @@ export {
   CONTA_AQUISICAO_GRAO,
   CONTA_RECEITA_GRAO,
   CONTA_SEM_DETALHE,
+  CONTA_SEM_DETALHE_COMPRA,
   KG_POR_SACA,
   RAIZES_CNPJ_GRUPO,
   SEM_DETALHE_PRODUTO,

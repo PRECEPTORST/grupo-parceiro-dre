@@ -16,7 +16,11 @@ const token = readFileSync(path.join(raiz, ".env.local"), "utf8")
   .match(/BLOB_READ_WRITE_TOKEN="?([^"\n]+)"?/)?.[1];
 if (!token) throw new Error("BLOB_READ_WRITE_TOKEN não encontrado em .env.local");
 
-const arquivos = process.argv.slice(2);
+// --substituir-tudo: esta carga passa a ser a ÚNICA. Existe para a troca de
+// ambiente que o flag automático não pega — quando o `enokiSync` anterior já foi
+// sobrescrito e só os lançamentos velhos sobraram, sem nada que os identifique.
+const substituirTudo = process.argv.includes("--substituir-tudo");
+const arquivos = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 if (!arquivos.length) { console.error("uso: node robot/enviar-para-o-site.mjs <arquivos.json>"); process.exit(1); }
 
 const PREFIXO = "estado-enoki";
@@ -66,12 +70,27 @@ console.log(`lançamentos: ${r.lancamentos.length}`);
 const de = janelas.map((j) => j.de).sort()[0];
 const ate = janelas.map((j) => j.ate).sort().at(-1);
 const anterior = (await lerDoc(PREFIXO)) ?? {};
+
+// TROCA DE AMBIENTE APAGA TUDO.
+//
+// O normal é preservar o que está fora da janela — é o que permite carregar mês
+// a mês. Mas quando o que está gravado veio de HOMOLOGAÇÃO e o que chega vem de
+// produção, preservar significa misturar dado de teste com dado real no mesmo
+// DRE, sem nada na tela dizendo qual é qual. Aconteceu: o site ficou exibindo
+// 11.828 lançamentos de homologação enquanto eu achava que mostrava produção.
+const trocouDeAmbiente = substituirTudo || anterior.enokiSync?.homologacao === true;
+if (trocouDeAmbiente) {
+  const motivo = substituirTudo ? "--substituir-tudo" : "homologação → produção";
+  console.log(`${motivo}: descartando ${(anterior.lancamentosEnoki ?? []).length} lançamento(s) antigos`);
+}
 const dentro = (d) => d >= de && d <= ate;
-const foraDaJanela = (anterior.lancamentosEnoki ?? []).filter((l) => !dentro(l.data));
+const foraDaJanela = trocouDeAmbiente
+  ? []
+  : (anterior.lancamentosEnoki ?? []).filter((l) => !dentro(l.data));
 
 const fatia = {
   lancamentosEnoki: [...foraDaJanela, ...r.lancamentos],
-  sacasEnoki: { ...(anterior.sacasEnoki ?? {}), ...r.sacas },
+  sacasEnoki: trocouDeAmbiente ? r.sacas : { ...(anterior.sacasEnoki ?? {}), ...r.sacas },
   enokiSync: {
     atualizadoEm: new Date().toISOString(),
     de, ate,
