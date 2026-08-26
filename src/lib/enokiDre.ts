@@ -35,7 +35,7 @@ import {
   type LancamentoCanonico,
 } from './tipos'
 import { destinoDeCentroCusto, normalizarRotulo, SEM_CENTRO_CUSTO } from './centroCusto'
-import { naturezaDeCfop, type NaturezaCfop } from './cfop'
+import { cfopDeEntrada, naturezaDeCfop, type NaturezaCfop } from './cfop'
 import {
   analisarGapContratos,
   type NotaContrato,
@@ -145,6 +145,9 @@ export const SEM_DETALHE_PRODUTO = '__SEM_DETALHE__'
 
 /** Conta onde a receita sem detalhe de produto pousa — visível no DRE analítico. */
 export const CONTA_SEM_DETALHE = '3.1.15'
+
+/** Espelho do anterior no CPV: nota de COMPRA sem itens abertos. */
+export const CONTA_SEM_DETALHE_COMPRA = '4.1.18'
 
 /** Conta de AQUISIÇÃO (4.1.0x) de cada grão. */
 export const CONTA_AQUISICAO_GRAO: Record<Grao, string> = {
@@ -357,7 +360,10 @@ function somarSacas(acc: Acumulador, competencia: string, grao: Grao, sacas: num
 export function naturezaDaNf(nf: any): NaturezaCfop {
   const finalidade = normalizarRotulo(nf?.finalidade)
   if (finalidade === 'AJUSTE') return 'outro'
-  const entrada = normalizarRotulo(nf?.tipoOperacao) === 'ENTRADA'
+  const entrada =
+    nf?.entrada === true ||
+    normalizarRotulo(nf?.tipoOperacao) === 'ENTRADA' ||
+    cfopDeEntrada(nf?.cfop)
   return naturezaDeCfop(nf?.cfop, entrada)
 }
 
@@ -414,7 +420,10 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       )
       continue
     }
-    if (ehIntragrupo(nf?.destinatarioCpfCnpj, raizes)) {
+    // Na compra o outro lado é o FORNECEDOR; na venda, o destinatário.
+    const contraparteDoc =
+      natureza === 'compra' ? nf?.emitenteCpfCnpj : nf?.destinatarioCpfCnpj
+    if (ehIntragrupo(contraparteDoc, raizes)) {
       descartar(acc, 'nf_intragrupo', valorNf)
       continue
     }
@@ -424,7 +433,9 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       continue
     }
     const competencia = data.slice(0, 7)
-    const destinatario = String(nf?.destinatarioNome ?? '').trim()
+    const destinatario = String(
+      (natureza === 'compra' ? nf?.emitenteNome : nf?.destinatarioNome) ?? '',
+    ).trim()
     const numero = nf?.numeroNf ?? nf?.idNf ?? ''
 
     // A grade de NF do scraper não traz itens. Sem eles não há cereal nem sacas,
@@ -432,7 +443,8 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     // conta própria (3.1.15), visível no DRE como "produto não detalhado".
     const itens = (nf?.itens ?? []).length
       ? nf.itens
-      : natureza === 'venda' && Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
+      : (natureza === 'venda' || natureza === 'compra') &&
+          Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
         ? [{ idItem: 'total', produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }]
         : []
 
@@ -452,8 +464,14 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       // Devolução de VENDA vira dedução; devolução de COMPRA reduz o CPV do grão.
       const conta =
         produto === SEM_DETALHE_PRODUTO
-          ? CONTA_SEM_DETALHE
-          : natureza === 'devolucao_venda'
+          ? natureza === 'compra'
+            ? CONTA_SEM_DETALHE_COMPRA
+            : CONTA_SEM_DETALHE
+          : natureza === 'compra'
+            ? grao
+              ? CONTA_AQUISICAO_GRAO[grao]
+              : '4.1.10'
+            : natureza === 'devolucao_venda'
             ? '3.2.06'
             : natureza === 'devolucao_compra'
               ? grao
@@ -465,7 +483,11 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       // Devolução de compra REDUZ o custo → entra negativa na conta de aquisição.
       const sinal = natureza === 'devolucao_compra' ? -1 : 1
       const rotulo =
-        natureza === 'venda' ? `NF ${numero}` : `NF ${numero} · devolução`
+        natureza === 'venda'
+          ? `NF ${numero}`
+          : natureza === 'compra'
+            ? `NF entrada ${numero}`
+            : `NF ${numero} · devolução`
       const historico = [rotulo, produto, destinatario].filter(Boolean).join(' · ').slice(0, 160)
 
       acc.lancamentos.push({
@@ -474,7 +496,9 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
         contaSafragold: conta,
         historico,
         valor: sinal * valor,
-        centroCusto: grao ? `RECEITA ${grao.toUpperCase()}` : undefined,
+        centroCusto: grao
+          ? `${natureza === 'compra' ? 'COMPRA' : 'RECEITA'} ${grao.toUpperCase()}`
+          : undefined,
         origem: 'enoki',
       })
 
@@ -486,7 +510,8 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       }
 
       // Sacas: só a VENDA soma; a devolução de venda devolve o volume.
-      if (grao && natureza !== 'devolucao_compra') {
+      // Sacas medem o volume VENDIDO; a compra alimenta o estoque, não a venda.
+      if (grao && natureza !== 'devolucao_compra' && natureza !== 'compra') {
         const sacas = sacasDeItem(produto, item?.quantidade, item?.valorUnitario)
         somarSacas(acc, competencia, grao, natureza === 'devolucao_venda' ? -sacas : sacas)
       }

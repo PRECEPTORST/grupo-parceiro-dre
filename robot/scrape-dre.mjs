@@ -220,6 +220,66 @@ async function lerNfs(page, de, ate) {
 }
 
 /**
+ * Docs. Fiscais Entrada — as NOTAS DE COMPRA. É daqui que sai o CPV.
+ *
+ * POR QUE ESTA TELA EXISTE NO ROBÔ (custou uma rodada inteira descobrir)
+ * ---------------------------------------------------------------------
+ * O CPV vinha por um quinto do real (R$ 4,6M contra R$ 22,7M da planilha) e eu
+ * procurava o erro no lugar errado: nos títulos financeiros. Não estava lá.
+ * A receita nasce da NF de SAÍDA; o custo tinha de nascer da NF de ENTRADA, e
+ * essa tela simplesmente nunca era aberta. Os títulos só traziam a fatia das
+ * compras cujo vencimento caía na janela — daí a proporção de ~20%.
+ *
+ * Conferido na leitura da tela de saída: nenhuma das 1015 notas era compra. As
+ * 323 notas de CFOP 1949 ("ENTRADA | Ajuste") somam R$ 0,00 — são ajuste de
+ * estoque, não aquisição.
+ *
+ * BÔNUS: esta grade traz CNPJ/CPF, que a de saída não traz. Para as compras a
+ * eliminação intragrupo volta a ser por raiz de CNPJ, que é exata.
+ *
+ * Mesma armadilha da tela de saída: o filtro de período não é confiável, então
+ * o recorte fino é feito em código sobre a data de emissão.
+ */
+async function lerNfsEntrada(page, de, ate) {
+  await openScreen(page, "Doc. Fiscais", "Docs. Fiscais Entrada", "FORNECEDOR", { log });
+  await page.waitForTimeout(2500);
+
+  const dentro = [];
+  let travou = false;
+  let paginasAlem = 0;
+  let pagina = 1;
+
+  for (let i = 0; i < MAX_PAGINAS_NF; i++) {
+    const gridId = await findGridId(page, "FORNECEDOR");
+    const linhas = await extractGrid(page, gridId);
+    const isos = linhas.map((r) => (dataIso(r["EMISSÃO"]) ?? "").slice(0, 10)).filter(Boolean);
+
+    dentro.push(...linhas.filter((r) => {
+      const d = (dataIso(r["EMISSÃO"]) ?? "").slice(0, 10);
+      return d && d >= de && d <= ate;
+    }));
+
+    if (isos.length && isos.every((d) => d < de)) {
+      if (++paginasAlem >= 2) { log(`  passei da janela na página ${pagina} — parando`); break; }
+    } else paginasAlem = 0;
+
+    const pager = await readPager(page).catch(() => null);
+    if (!pager || pager.current >= pager.total) break;
+    if (!(await nextPage(page, pager.current + 1).catch(() => false))) {
+      travou = true;
+      log(`  paginação travou na página ${pager.current}/${pager.total} — salvando o parcial`);
+      break;
+    }
+    pagina = pager.current + 1;
+    await pause();
+    if (pagina % 20 === 0) log(`  …NF entrada página ${pagina} (${dentro.length} na janela)`);
+  }
+
+  log(`  NF entrada: ${dentro.length} na janela${travou ? " (PARCIAL)" : ""}`);
+  return { linhas: dentro, travou };
+}
+
+/**
  * Preenche um campo de data dividido em dd/mm/aaaa (ids `<pref>_1/_3/_5`).
  *
  * Digitar perde o último dígito do ano ("2026" vira "202") — a máscara do
@@ -365,6 +425,28 @@ function nfParaApi(row, i) {
   };
 }
 
+/** NF de compra na mesma língua da API — `entrada: true` é o que `cfop.ts` usa. */
+function nfEntradaParaApi(row, i) {
+  const numero = soDigitos(row["NÚMERO"] ?? row["NUMERO"]);
+  return {
+    idNf: Number(numero) || i,
+    numeroNf: Number(numero) || null,
+    dataEmissao: dataIso(row["EMISSÃO"]),
+    dataEntrada: dataIso(row["ENTRADA"]),
+    status: row["STATUS"] ?? "",
+    statusNfe: row["STATUS"] ?? "",
+    cfop: row["CFOP"] ?? "",
+    entrada: true,
+    tipoOperacao: "ENTRADA",
+    finalidade: row["FINALIDADE"] ?? "",
+    valorTotalNf: valorApi(row["TOTAL DOC."] ?? row["TOTAL PROD."]),
+    emitenteNome: row["FORNECEDOR"] ?? "",
+    emitenteCpfCnpj: soDigitos(row["CNPJ/CPF"]),
+    contratosVinculados: [],
+    itens: [],
+  };
+}
+
 function tituloParaApi(row, i) {
   return {
     idItemLancamento: `scrape-${soDigitos(row["DOCUMENTO"]) || i}-${i}`,
@@ -446,7 +528,11 @@ try {
     const todos = bruto.linhas.map(tituloParaApi).filter((t) => t.dataLancamento);
 
     const nf = await lerNfs(page, de, ate);
-    const nfs = nf.linhas.map(nfParaApi).filter((n) => n.dataEmissao);
+    const nfe = await lerNfsEntrada(page, de, ate);
+    const nfs = [
+      ...nf.linhas.map(nfParaApi),
+      ...nfe.linhas.map(nfEntradaParaApi),
+    ].filter((n) => n.dataEmissao);
 
     const naJanela = (lista) => lista.filter((t) => {
       const dt = t.dataLancamento.slice(0, 10);
@@ -460,7 +546,7 @@ try {
       de,
       ate,
       geradoEm: new Date().toISOString(),
-      parcial: nf.travou || titulosTravaram,
+      parcial: nf.travou || nfe.travou || titulosTravaram,
       nfs,
       pagar,
       receber,
@@ -470,6 +556,7 @@ try {
       indefinidos,
       diagnostico: {
         nfsLidas: nf.linhas.length,
+        nfsEntradaLidas: nfe.linhas.length,
         titulosLidos: bruto.linhas.length,
         indefinidos: indefinidos.length,
         semCentroCusto: [...pagar, ...receber].filter((t) => !String(t.centroCusto ?? "").trim()).length,
@@ -479,7 +566,7 @@ try {
     const arquivo = path.join(outDir, `enoki-dre-${de}_${ate}.json`);
     writeFileSync(arquivo, JSON.stringify(payload, null, 1), "utf8");
     log(`  gravado: ${arquivo}`);
-    log(`  nfs=${nfs.length} pagar=${pagar.length} receber=${receber.length} indefinidos=${indefinidos.length}`);
+    log(`  nfs=${nf.linhas.length}+${nfe.linhas.length}ent pagar=${pagar.length} receber=${receber.length} indefinidos=${indefinidos.length}`);
 
     if (process.env.APP_URL && process.env.INGEST_KEY) {
       const r = await fetch(`${process.env.APP_URL}/api/enoki-ingerir`, {

@@ -12,6 +12,11 @@
 // transferência dentro do que parecia faturamento. Tratar tudo como venda
 // inflaria a receita em ~8%.
 //
+// A NOTA DE ENTRADA é a origem do CUSTO, do mesmo jeito que a de saída é a da
+// receita. Ler só a de saída deixava o CPV em R$ 4,6M contra R$ 22,7M reais —
+// o que sobrava vinha dos títulos financeiros, e títulos só enxergam a fatia
+// que vence dentro da janela.
+//
 // Do outro lado, as notas de ENTRADA por devolução (CFOP 1202/2202) e o retorno
 // de lote de exportação (1504/2504) REDUZEM a receita e estavam sendo
 // descartadas — R$ 15,0M que não apareciam em lugar nenhum.
@@ -32,6 +37,7 @@
 /** O que a nota representa para o DRE. */
 export type NaturezaCfop =
   | 'venda'
+  | 'compra'
   | 'devolucao_venda'
   | 'devolucao_compra'
   | 'remessa'
@@ -96,13 +102,17 @@ export function naturezaDeCfop(cfop: unknown, entrada: boolean): NaturezaCfop {
   // saída = devolvemos ao fornecedor (reduz custo).
   if (DEVOLUCAO_VENDA.has(sufixo)) return entrada ? 'devolucao_venda' : 'devolucao_compra'
   if (REMESSA.has(sufixo)) return 'remessa'
-  if (VENDA.has(sufixo)) return entrada ? 'outro' : 'venda'
+  // Mesmo sufixo de aquisição de mercadoria: saindo é venda, entrando é COMPRA.
+  // 1102/2102 na nota de entrada é o CPV — a contrapartida exata do 5102 na de
+  // saída. Enquanto isso caía em 'outro', o custo do mês inteiro sumia.
+  if (VENDA.has(sufixo)) return entrada ? 'compra' : 'venda'
   return 'outro'
 }
 
 /** Rótulos legíveis para o diagnóstico da carga. */
 export const ROTULO_NATUREZA: Record<NaturezaCfop, string> = {
   venda: 'Venda',
+  compra: 'Compra de mercadoria (CPV)',
   devolucao_venda: 'Devolução de venda (reduz receita)',
   devolucao_compra: 'Devolução de compra (reduz custo)',
   remessa: 'Remessa/retorno de armazém (não é venda)',

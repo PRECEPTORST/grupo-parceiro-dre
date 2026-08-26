@@ -12,6 +12,7 @@ import {
   competenciasDeLancamentos,
   KG_POR_SACA,
   RAIZES_CNPJ_GRUPO,
+  CONTA_SEM_DETALHE_COMPRA,
 } from './enokiDre'
 import { montarDre } from './dre'
 import { mapaEfetivo } from './planoContas'
@@ -486,5 +487,49 @@ describe('NF sem itens (fonte scraper — a grade não expõe produto)', () => {
     const r = normalizarEnokiDre({ nfs: [nfVenda()] })
     expect(r.lancamentos[0].contaSafragold).toBe('3.1.01')
     expect(r.sacas['2026-06'].soja).toBeCloseTo(40000 / 60, 2)
+  })
+})
+
+describe('CPV vem da NOTA DE COMPRA, não dos títulos', () => {
+  // Regressão do bug que deixou o CPV de julho em R$ 4,6M contra R$ 22,7M reais:
+  // a tela de NF de ENTRADA nunca era lida, e o custo era montado a partir dos
+  // títulos financeiros — que só enxergam a fatia que vence dentro da janela.
+  const compra = {
+    idNf: 900,
+    numeroNf: 900,
+    dataEmissao: '2026-07-10',
+    status: 'Finalizada',
+    cfop: '1102',
+    entrada: true,
+    tipoOperacao: 'ENTRADA',
+    finalidade: 'Normal',
+    valorTotalNf: 1_000_000,
+    emitenteNome: 'FORNECEDOR X',
+    emitenteCpfCnpj: '11222333000144',
+    itens: [],
+  }
+
+  it('nota de compra sem itens vira CPV, não receita', () => {
+    const { lancamentos } = normalizarEnokiDre({ nfs: [compra], pagar: [], receber: [] })
+    expect(lancamentos).toHaveLength(1)
+    expect(lancamentos[0].contaSafragold).toBe(CONTA_SEM_DETALHE_COMPRA)
+    expect(lancamentos[0].contaSafragold.startsWith('4.')).toBe(true)
+    expect(lancamentos[0].valor).toBe(1_000_000)
+  })
+
+  it('compra NÃO soma sacas — o volume vendido é o da nota de saída', () => {
+    const comItem = {
+      ...compra,
+      itens: [{ idItem: 1, produto: 'SOJA EM GRAOS', quantidade: 1000, valorUnitario: 140, valorTotal: 140_000 }],
+    }
+    const { lancamentos, sacas } = normalizarEnokiDre({ nfs: [comItem], pagar: [], receber: [] })
+    expect(lancamentos[0].contaSafragold).toBe('4.1.01')
+    expect(sacas).toEqual({})
+  })
+
+  it('compra de empresa do próprio grupo é eliminada pelo CNPJ do EMITENTE', () => {
+    const intra = { ...compra, emitenteCpfCnpj: '30798330000199' }
+    const { lancamentos } = normalizarEnokiDre({ nfs: [intra], pagar: [], receber: [] })
+    expect(lancamentos).toHaveLength(0)
   })
 })

@@ -48,7 +48,11 @@ describe('naturezaDeCfop — CFOPs reais da extração de 2026-08-21', () => {
     expect(naturezaDeCfop(null, false)).toBe('outro')
   })
 
-  it('CFOP de venda chegando como ENTRADA não vira receita', () => {
-    expect(naturezaDeCfop('1102', true)).toBe('outro')
+  it('CFOP de venda chegando como ENTRADA é COMPRA — nunca receita', () => {
+    // 1102 é a contrapartida exata do 5102: mesma mercadoria, sentido oposto.
+    // Enquanto isso caía em 'outro', o CPV do mês inteiro desaparecia.
+    expect(naturezaDeCfop('1102', true)).toBe('compra')
+    expect(naturezaDeCfop('2101', true)).toBe('compra')
+    expect(naturezaDeCfop('1102', true)).not.toBe('venda')
   })
 })

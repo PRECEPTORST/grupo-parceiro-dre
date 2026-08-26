@@ -64,6 +64,9 @@ export const PLANO_CONTAS: PlanoConta[] = [
   { conta: '4.1.14', descricao: 'Quebra técnica e perda de estoque', linha: 'custo_produto' },
   { conta: '4.1.15', descricao: 'Seguro de mercadoria e estoque', linha: 'custo_produto' },
   { conta: '4.1.16', descricao: 'Royalties de sementes (tecnologia)', linha: 'custo_produto' },
+  // Espelho do 3.1.15 no lado do custo: a grade de NF de entrada do scraper não
+  // abre os itens, então a compra existe e o cereal não. O valor não pode sumir.
+  { conta: '4.1.18', descricao: 'Aquisição de grãos (produto não detalhado)', linha: 'custo_produto' },
   { conta: '4.1.17', descricao: 'Ensacamento e embalagem', linha: 'custo_produto' },
 
   // ---- Despesas comerciais ----
