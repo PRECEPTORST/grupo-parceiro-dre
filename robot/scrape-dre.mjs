@@ -473,10 +473,25 @@ async function lerTitulos(page, de, ate) {
   // devolve exatamente as mesmas linhas (comprovado — duas varreduras trouxeram
   // os mesmos 1840 ids). A direção sai do CENTRO DE CUSTO, em `separarPorNatureza`.
 
-  // Janela de VENCIMENTO larga o bastante para conter os lançamentos do mês:
-  // do início do mês pedido até seis meses depois.
+  // Janela de VENCIMENTO — o filtro é por VENCIMENTO, mas o recorte que importa
+  // é por LANÇAMENTO, e as duas datas se afastam bastante.
+  //
+  // ⚠ MEDIDO: ALARGAR A JANELA NÃO TRAZ MAIS NADA. Passar de [mês, mês+6] para
+  // [mês−1, mês+12] — um ano a mais — devolveu 1.812 linhas contra 1.840. A tela
+  // entrega o mesmo conjunto independentemente das datas; o filtro de vencimento
+  // aceita o valor e não restringe o resultado.
+  //
+  // Fica registrado para ninguém tentar de novo: julho não ter título de folha,
+  // comissão ou quebra (enquanto agosto tem 54 de PESSOAL) NÃO é a janela. A
+  // causa está em outro lugar — provavelmente esses lançamentos nem passam por
+  // esta tela.
+  //
+  // A janela larga fica porque é a mais defensável, não porque resolveu algo.
   const [aa, mm] = de.split("-");
-  const fim = new Date(Date.UTC(Number(aa), Number(mm) - 1 + 6, 0));
+  const antes = Number(process.env.ROBOT_VENC_MESES_ANTES ?? 1);
+  const depois = Number(process.env.ROBOT_VENC_MESES_DEPOIS ?? 12);
+  const inicioVenc = new Date(Date.UTC(Number(aa), Number(mm) - 1 - antes, 1));
+  const fim = new Date(Date.UTC(Number(aa), Number(mm) - 1 + depois, 0));
   const grupos = await page.evaluate(() => [...new Set([...document.querySelectorAll("input")]
     .map((i) => i.id.match(/^(VWG\d+)_1$/)?.[1]).filter(Boolean))]);
   if (grupos.length >= 2) {
@@ -484,13 +499,19 @@ async function lerTitulos(page, de, ate) {
     const ordenados = await page.evaluate((g) => g
       .map((p) => ({ p, x: document.getElementById(`${p}_1`)?.getBoundingClientRect().x ?? 0 }))
       .sort((a, b) => a.x - b.x).map((o) => o.p), grupos);
-    await preencherData(page, ordenados[0], de.slice(8, 10), de.slice(5, 7), de.slice(0, 4));
+    await preencherData(
+      page,
+      ordenados[0],
+      String(inicioVenc.getUTCDate()).padStart(2, "0"),
+      String(inicioVenc.getUTCMonth() + 1).padStart(2, "0"),
+      String(inicioVenc.getUTCFullYear()),
+    );
     await preencherData(page, ordenados[1],
       String(fim.getUTCDate()).padStart(2, "0"),
       String(fim.getUTCMonth() + 1).padStart(2, "0"),
       String(fim.getUTCFullYear()));
     await clicarLupa(page);
-    log(`  vencimento entre ${de} e ${fim.toISOString().slice(0, 10)}`);
+    log(`  vencimento entre ${inicioVenc.toISOString().slice(0, 10)} e ${fim.toISOString().slice(0, 10)}`);
   } else {
     log("  ATENCAO: campos de vencimento nao encontrados — a varredura sera longa");
   }
