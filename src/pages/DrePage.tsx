@@ -18,6 +18,7 @@ import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { PainelCustoMedio } from '../components/PainelCustoMedio'
 import { PrimeirosPassos } from '../components/PrimeirosPassos'
+import { AvisoCobertura } from '../components/AvisoCobertura'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
 import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
@@ -181,6 +182,8 @@ export function DrePage() {
         <PrimeirosPassos />
       ) : (
         <>
+          <AvisoCobertura competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
+
           {/* KPIs */}
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
             <StatCard i={0} rotulo="Receita líquida" valor={dre.realizado.receitaLiquida} porSaca={resumo.receitaLiquidaPorSaca} />

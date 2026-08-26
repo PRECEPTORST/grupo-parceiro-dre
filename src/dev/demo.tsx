@@ -49,6 +49,8 @@ const estado = {
     { id: 'enoki-p-12', data: '2026-02-22', contaSafragold: '3.2.06', historico: 'CLIENTE Y · devolução de venda', valor: 12_000, origem: 'enoki' },
     { id: 'enoki-p-13', data: '2026-02-25', contaSafragold: '5.1.01', historico: 'AGRO MAQ · imobilizado', valor: 30_000, origem: 'enoki' },
     { id: 'enoki-r-20', data: '2026-02-27', contaSafragold: '4.1.01', historico: 'JOSE ROSA · estorno de compra', valor: -25_000, origem: 'enoki' },
+    // Mês PARCIAL (dados só até o dia 5) — exercita o aviso de cobertura.
+    { id: 'enoki-nf-9-1', data: '2026-03-05', contaSafragold: '3.1.01', historico: 'NF 950 · SOJA EM GRÃOS · COFCO', valor: 61_000, origem: 'enoki' },
   ],
   sacasEnoki: { '2026-02': { soja: 4450, milho: 2250 } },
   // Volume comprado (informado — a API não traz) + estoque de abertura, para o

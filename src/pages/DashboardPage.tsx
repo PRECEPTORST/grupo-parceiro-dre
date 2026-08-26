@@ -15,6 +15,7 @@ import {
 import { useDre } from '../context/DreContext'
 import { Card, Kicker, Select } from '../components/ui'
 import { PrimeirosPassos } from '../components/PrimeirosPassos'
+import { AvisoCobertura } from '../components/AvisoCobertura'
 import { formatBRL, formatBRLCompact, formatPct, formatDataBR } from '../lib/format'
 import {
   montarDre,
@@ -189,6 +190,8 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+      <AvisoCobertura competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
+
 
       {/* KPIs secundários */}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
