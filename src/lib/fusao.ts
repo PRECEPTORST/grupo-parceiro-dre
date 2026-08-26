@@ -36,8 +36,13 @@ export type { ConfigFusao, FonteLinha }
  * - administrativas/depreciação/financeiras/IRPJ → planilha: na homologação a
  *   folha quase não aparece (só "FÉRIAS R$ 12k") e não há depreciação nem
  *   imposto sobre o lucro. Confirmar com o cliente (item 0.1).
- * - comerciais/outras receitas → Enoki: marketing, brindes, corretagem e
- *   armazenagem de terceiros têm centro de custo próprio no ERP.
+ * - comerciais → Enoki: marketing, brindes e comissão têm centro de custo próprio.
+ * - outras receitas/receita financeira/investimentos → planilha. Estavam em
+ *   'enoki' por suposição, e a conferência de julho mostrou o ERP com ZERO nas
+ *   três: "descontos obtidos" (R$ 21,3 mil), juros recebidos (R$ 14,6 mil) e
+ *   capex (R$ 47,0 mil contra R$ 781 no ERP) só existem na planilha. Ler de onde
+ *   não há dado é o "buraco silencioso" que `linhasOrfas` denuncia — e o padrão
+ *   não devia ser justamente o que dispara o alerta.
  */
 export function configFusaoPadrao(): ConfigFusao {
   return {
@@ -46,12 +51,12 @@ export function configFusaoPadrao(): ConfigFusao {
     custo_produto: 'enoki',
     despesas_comerciais: 'enoki',
     despesas_administrativas: 'planilha',
-    outras_receitas_operacionais: 'enoki',
+    outras_receitas_operacionais: 'planilha',
     depreciacao_amortizacao: 'planilha',
-    receita_financeira: 'enoki',
+    receita_financeira: 'planilha',
     despesa_financeira: 'planilha',
     impostos_lucro: 'planilha',
-    investimentos: 'enoki',
+    investimentos: 'planilha',
   }
 }
 

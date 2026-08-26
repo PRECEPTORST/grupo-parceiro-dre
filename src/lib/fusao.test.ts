@@ -31,6 +31,10 @@ const PLANILHA = [
   l('p-deprec', '4.5.01', 8_627, 'planilha'), // estrutura (vence)
   l('p-juros', '4.4.01', 15_000, 'planilha'), // estrutura (vence)
   l('p-irpj', '4.6.01', 5_000, 'planilha'), // estrutura (vence)
+  // Capex e "descontos obtidos" só existem na planilha — a conferência de
+  // julho/2026 mostrou o ERP com zero nas duas.
+  l('p-capex', '5.1.01', 50_000, 'planilha'), // estrutura (vence)
+  l('p-outras', '3.4.04', 21_283, 'planilha'), // estrutura (vence)
 ]
 
 const ENOKI = [
@@ -38,7 +42,7 @@ const ENOKI = [
   l('e-cpv', '4.1.01', 720_000, 'enoki'), // vence
   l('e-frete', '4.1.10', 30_000, 'enoki'), // vence
   l('e-deducao', '3.2.06', 4_000, 'enoki'), // vence
-  l('e-capex', '5.1.01', 50_000, 'enoki'), // vence
+  l('e-capex', '5.1.01', 300, 'enoki'), // preterido: capex vem da planilha
 ]
 
 describe('configFusaoPadrao', () => {
@@ -100,10 +104,11 @@ describe('fundirLancamentos', () => {
     expect(v('depreciacao_amortizacao')).toBeCloseTo(8_627, 2)
     expect(v('despesa_financeira')).toBeCloseTo(15_000, 2)
     expect(v('impostos_lucro')).toBeCloseTo(5_000, 2)
-    expect(v('investimentos')).toBeCloseTo(50_000, 2)
+    expect(v('investimentos')).toBeCloseTo(50_000, 2) // planilha, não os 300 do ERP
+    expect(v('outras_receitas_operacionais')).toBeCloseTo(21_283, 2) // planilha
 
-    // 950.000 − 4.000 − 750.000 − 120.000 − 8.627 − 15.000 − 5.000 = 47.373
-    expect(dre.realizado.resultadoLiquido).toBeCloseTo(47_373, 2)
+    // 950.000 − 4.000 − 750.000 − 120.000 + 21.283 − 8.627 − 15.000 − 5.000
+    expect(dre.realizado.resultadoLiquido).toBeCloseTo(68_656, 2)
   })
 
   it('o resumo diz o que entrou e o que foi preterido em cada linha', () => {
@@ -131,15 +136,23 @@ describe('fundirLancamentos', () => {
   })
 
   it('funciona com uma fonte vazia', () => {
+    // Do Enoki só sobrevive o que a configuração manda ler dele — capex não.
     const soEnoki = fundirLancamentos([], ENOKI, mapa, config)
-    expect(soEnoki.lancamentos).toHaveLength(ENOKI.length)
+    expect(soEnoki.lancamentos.map((x) => x.id).sort()).toEqual([
+      'e-cpv',
+      'e-deducao',
+      'e-frete',
+      'e-receita',
+    ])
     const soPlanilha = fundirLancamentos(PLANILHA, [], mapa, config)
     // Da planilha só sobrevivem as linhas configuradas como 'planilha'.
     expect(soPlanilha.lancamentos.map((x) => x.id).sort()).toEqual([
+      'p-capex',
       'p-deprec',
       'p-folha',
       'p-irpj',
       'p-juros',
+      'p-outras',
     ])
   })
 })
