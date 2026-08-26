@@ -17,6 +17,7 @@ const ROTULO_DESCARTE: Record<string, string> = {
   receita_vem_da_nf: 'Título de receita (a receita vem da nota fiscal de saída)',
   custo_vem_da_nf: 'Título de compra (o custo vem da nota fiscal de entrada)',
   transferencia_entre_contas: 'Transferência entre contas do próprio caixa (não é resultado)',
+  retorno_lote_exportacao: 'Retorno de lote de exportação (grão voltou do porto; não abate receita)',
   nf_intragrupo: 'Venda entre empresas do grupo (eliminada)',
   nf_remessa: 'Remessa/retorno de armazém — não é venda',
   nf_transferencia: 'Transferência entre estabelecimentos',

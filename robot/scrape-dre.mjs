@@ -529,8 +529,14 @@ function nfParaApi(row, i) {
 /** NF de compra na mesma língua da API — `entrada: true` é o que `cfop.ts` usa. */
 function nfEntradaParaApi(row, i) {
   const numero = soDigitos(row["NÚMERO"] ?? row["NUMERO"]);
+  // O NÚMERO da NF NÃO identifica a nota: fornecedores diferentes emitem o mesmo
+  // número, e em julho isso fez 953 notas terem só 941 ids distintos — 12 compras,
+  // R$ 785 mil, desapareceram na deduplicação do normalizador sem deixar rastro.
+  // A coluna ID é a chave interna do ERP, essa sim única. O prefixo "e" separa da
+  // numeração da tela de saída, que é outro espaço de ids.
+  const id = soDigitos(row["ID"]);
   return {
-    idNf: Number(numero) || i,
+    idNf: id ? `e${id}` : `e-${numero || i}-${i}`,
     numeroNf: Number(numero) || null,
     dataEmissao: dataIso(row["EMISSÃO"]),
     dataEntrada: dataIso(row["ENTRADA"]),

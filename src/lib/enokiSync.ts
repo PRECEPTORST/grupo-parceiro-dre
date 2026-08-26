@@ -120,6 +120,7 @@ export async function sincronizarEnokiDre(opcoes: OpcoesSyncEnoki = {}): Promise
         sacas: {},
         descartes: [],
         residuos: [],
+        colisoes: [],
         gapContratos: analisarGapContratos([], []),
       }
 

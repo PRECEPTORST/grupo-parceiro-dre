@@ -35,7 +35,7 @@ import {
   type LancamentoCanonico,
 } from './tipos'
 import { destinoDeCentroCusto, normalizarRotulo, SEM_CENTRO_CUSTO } from './centroCusto'
-import { cfopDeEntrada, naturezaDeCfop, type NaturezaCfop } from './cfop'
+import { cfopDeEntrada, naturezaDeCfop, sufixoCfop, type NaturezaCfop } from './cfop'
 import {
   analisarGapContratos,
   type NotaContrato,
@@ -64,7 +64,32 @@ export interface ConfigEnokiDre {
    * que já foi aprovado.
    */
   regras?: Record<string, string>
+  /**
+   * Convenção contábil — como o DRE trata três operações em que existe mais de
+   * uma resposta defensável. Ver `Convencao`. Ausente = 'cliente'.
+   */
+  convencao?: Convencao
 }
+
+/**
+ * Duas formas legítimas de fechar o mesmo mês.
+ *
+ * 'cliente' — reproduz o fechamento que o financeiro do Grupo Parceiro faz hoje.
+ *   É o DRE de UMA FILIAL: a nota que vem da empresa-irmã é custo de verdade
+ *   para ela, o retorno de armazém entra como compra, e o retorno de lote de
+ *   exportação não abate a receita. Conferido contra julho/2026: nosso CPV deu
+ *   R$ 22.732.059,61 contra R$ 22.730.955,23 da planilha — 0,005% de diferença.
+ *
+ * 'consolidado' — o DRE do GRUPO inteiro. Aí a operação entre irmãs se anula (o
+ *   custo de uma é a receita da outra) e contá-la dobraria o resultado. Só passa
+ *   a valer quando as cinco empresas estiverem carregadas; com uma só, ela tira
+ *   o custo daqui sem registrar a receita lá.
+ *
+ * O padrão é 'cliente' porque é o que hoje pode ser conferido linha a linha
+ * contra um fechamento que existe. Um número que ninguém consegue auditar não
+ * serve, por mais correta que seja a teoria por trás dele.
+ */
+export type Convencao = 'cliente' | 'consolidado'
 
 // ---------------------------------------------------------------------------
 // Produtos: unidade e grão
@@ -244,6 +269,7 @@ export type MotivoDescarte =
   | 'custo_vem_da_nf'
   | 'patrimonial_ou_intragrupo'
   | 'transferencia_entre_contas'
+  | 'retorno_lote_exportacao'
 
 export interface ResumoDescarte {
   motivo: MotivoDescarte
@@ -283,6 +309,19 @@ export interface ResultadoEnokiDre {
   sacas: Record<string, Partial<Record<Grao, number>>>
   descartes: ResumoDescarte[]
   residuos: ResiduoEnoki[]
+  /**
+   * Ids repetidos com valores DIFERENTES — documentos distintos brigando pela
+   * mesma chave. Não é repetição de paginação: é falha de extração, e o que foi
+   * descartado some do resultado.
+   */
+  colisoes: ColisaoId[]
+}
+
+/** Dois documentos diferentes com o mesmo id gerado. */
+export interface ColisaoId {
+  id: string
+  valorMantido: number
+  valorDescartado: number
 }
 
 interface Acumulador {
@@ -362,11 +401,24 @@ function somarSacas(acc: Acumulador, competencia: string, grao: Grao, sacas: num
 export function naturezaDaNf(nf: any): NaturezaCfop {
   const finalidade = normalizarRotulo(nf?.finalidade)
   if (finalidade === 'AJUSTE') return 'outro'
-  const entrada =
+  return naturezaDeCfop(nf?.cfop, ehEntradaDaNf(nf))
+}
+
+/** true quando a nota é de ENTRADA (mercadoria vindo para a empresa). */
+export function ehEntradaDaNf(nf: any): boolean {
+  return (
     nf?.entrada === true ||
     normalizarRotulo(nf?.tipoOperacao) === 'ENTRADA' ||
     cfopDeEntrada(nf?.cfop)
-  return naturezaDeCfop(nf?.cfop, entrada)
+  )
+}
+
+/**
+ * Retorno de mercadoria remetida para formação de lote de exportação
+ * (CFOP 1503/2503/1504/2504) — grão que voltou do porto, e não venda desfeita.
+ */
+export function ehRetornoDeLote(nf: any): boolean {
+  return ['503', '504'].includes(sufixoCfop(nf?.cfop))
 }
 
 /** true quando a NF gera receita bruta. */
@@ -397,14 +449,27 @@ export function ehAutorizada(nf: any): boolean {
   return sefaz !== 'INUTIL' && sefaz !== 'CANCELADA'
 }
 
-function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
+function processarNfs(
+  nfs: any[],
+  raizes: string[],
+  acc: Acumulador,
+  convencao: Convencao,
+): void {
   for (const nf of nfs ?? []) {
     const valorNf = numeroEnoki(nf?.valorTotalNf)
     if (ehCancelada(nf)) {
       descartar(acc, 'nf_cancelada', valorNf)
       continue
     }
-    const natureza = naturezaDaNf(nf)
+    let natureza = naturezaDaNf(nf)
+
+    // (1) RETORNO DE ARMAZÉM COMO COMPRA. O CFOP 907 é grão voltando do armazém
+    // geral — formalmente já era nosso, não é aquisição. Mas o fechamento do
+    // cliente soma esses R$ 586 mil dentro de "COMPRA DE CEREAIS", e é com o
+    // fechamento dele que o DRE precisa poder ser conferido.
+    if (convencao === 'cliente' && natureza === 'remessa' && ehEntradaDaNf(nf)) {
+      natureza = 'compra'
+    }
     // Só o que é venda precisa estar autorizado; remessa/ajuste já sai fora abaixo.
     if (natureza === 'venda' && !ehAutorizada(nf)) {
       descartar(acc, 'nf_nao_autorizada', valorNf)
@@ -427,7 +492,18 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       natureza === 'compra' || natureza === 'frete_compra'
         ? nf?.emitenteCpfCnpj
         : nf?.destinatarioCpfCnpj
-    if (ehIntragrupo(contraparteDoc, raizes)) {
+    // (2) RETORNO DE LOTE DE EXPORTAÇÃO NÃO ABATE A RECEITA. O cliente deduz
+    // apenas a devolução de venda propriamente dita; o grão que volta do porto
+    // (CFOP 503/504) ele trata como movimentação, não como venda desfeita.
+    if (convencao === 'cliente' && natureza === 'devolucao_venda' && ehRetornoDeLote(nf)) {
+      descartar(acc, 'retorno_lote_exportacao', valorNf)
+      continue
+    }
+
+    // (3) ELIMINAÇÃO INTRAGRUPO SÓ NO CONSOLIDADO. Para a filial, a nota da
+    // empresa-irmã é custo de verdade. Eliminar com uma só empresa carregada
+    // tiraria o custo daqui sem registrar a receita lá.
+    if (convencao === 'consolidado' && ehIntragrupo(contraparteDoc, raizes)) {
       descartar(acc, 'nf_intragrupo', valorNf)
       continue
     }
@@ -651,17 +727,36 @@ export function normalizarEnokiDre(
   const acc = novoAcumulador()
 
   const regras = config.regras ?? {}
-  processarNfs(entrada.nfs ?? [], raizes, acc)
+  const convencao = config.convencao ?? 'cliente'
+  processarNfs(entrada.nfs ?? [], raizes, acc, convencao)
   processarTitulos(entrada.pagar ?? [], 'saida', acc, regras)
   processarTitulos(entrada.receber ?? [], 'entrada', acc, regras)
 
-  // Dedup por id (a paginação da API pode repetir registros na borda das janelas).
-  const vistos = new Set<string>()
-  const lancamentos = acc.lancamentos.filter((l) => {
-    if (vistos.has(l.id)) return false
-    vistos.add(l.id)
-    return true
-  })
+  // Dedup por id — a paginação repete registros na borda das janelas, e essa é a
+  // razão de ela existir.
+  //
+  // MAS ELA SÓ ESTÁ CERTA SE O ID FOR MESMO ÚNICO, e por muito tempo nada
+  // conferia isso. O robô usava o NÚMERO da nota como id; fornecedores
+  // diferentes emitem o mesmo número, e 12 compras de julho — R$ 785 mil —
+  // foram descartadas como se fossem repetição de paginação. Sem erro, sem
+  // aviso, com o CPV saindo menor.
+  //
+  // Repetição de borda tem a MESMA data e o MESMO valor. Ids iguais com valores
+  // diferentes são documentos diferentes brigando pela mesma chave, e isso é um
+  // defeito de extração que precisa aparecer.
+  const vistos = new Map<string, LancamentoCanonico>()
+  const colisoes: ColisaoId[] = []
+  for (const l of acc.lancamentos) {
+    const anterior = vistos.get(l.id)
+    if (!anterior) {
+      vistos.set(l.id, l)
+      continue
+    }
+    if (Math.abs(anterior.valor - l.valor) >= 0.005 || anterior.data !== l.data) {
+      colisoes.push({ id: l.id, valorDescartado: l.valor, valorMantido: anterior.valor })
+    }
+  }
+  const lancamentos = [...vistos.values()]
 
   // Arredonda as sacas para 2 casas (a divisão por 60 gera dízima).
   const sacas: Record<string, Partial<Record<Grao, number>>> = {}
@@ -687,6 +782,7 @@ export function normalizarEnokiDre(
     sacas,
     descartes,
     residuos,
+    colisoes,
     gapContratos: analisarGapContratos(acc.notasContrato, acc.titulosContrato),
   }
 }

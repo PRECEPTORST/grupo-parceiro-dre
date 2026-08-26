@@ -150,12 +150,18 @@ describe('intragrupo (armadilha #2)', () => {
     expect(ehIntragrupo('60498706000904', RAIZES_CNPJ_GRUPO)).toBe(false)
   })
 
-  it('venda para outra empresa do grupo NÃO vira receita', () => {
-    const r = normalizarEnokiDre({
-      nfs: [nfVenda(), nfVenda({ idNf: 999, destinatarioCpfCnpj: '30798330000135' })],
-    })
+  it('venda para outra empresa do grupo NÃO vira receita no consolidado', () => {
+    const nfs = [nfVenda(), nfVenda({ idNf: 999, destinatarioCpfCnpj: '30798330000135' })]
+    const r = normalizarEnokiDre({ nfs }, { convencao: 'consolidado' })
     expect(r.lancamentos).toHaveLength(1)
     expect(r.descartes.find((d) => d.motivo === 'nf_intragrupo')?.quantidade).toBe(1)
+  })
+
+  it('na convenção da FILIAL a venda para a irmã continua sendo receita', () => {
+    // Não é descuido: é o DRE de uma empresa só, e para ela a venda aconteceu.
+    // A eliminação passa a valer quando as cinco estiverem carregadas.
+    const nfs = [nfVenda(), nfVenda({ idNf: 999, destinatarioCpfCnpj: '30798330000135' })]
+    expect(normalizarEnokiDre({ nfs }).lancamentos).toHaveLength(2)
   })
 })
 
@@ -570,10 +576,15 @@ describe('CPV vem da NOTA DE COMPRA, não dos títulos', () => {
     expect(sacas).toEqual({})
   })
 
-  it('compra de empresa do próprio grupo é eliminada pelo CNPJ do EMITENTE', () => {
+  it('compra da empresa-irmã: some no consolidado, permanece na filial', () => {
+    // As duas respostas são certas, em escopos diferentes. No DRE do GRUPO o
+    // custo de uma é a receita da outra e se anulam; no DRE da FILIAL a nota da
+    // irmã é custo de verdade — e é assim que o cliente fecha o mês.
     const intra = { ...compra, emitenteCpfCnpj: '30798330000199' }
-    const { lancamentos } = normalizarEnokiDre({ nfs: [intra], pagar: [], receber: [] })
-    expect(lancamentos).toHaveLength(0)
+    expect(
+      normalizarEnokiDre({ nfs: [intra] }, { convencao: 'consolidado' }).lancamentos,
+    ).toHaveLength(0)
+    expect(normalizarEnokiDre({ nfs: [intra] }).lancamentos).toHaveLength(1)
   })
 })
 
@@ -599,11 +610,29 @@ describe('nota sem itens abertos: nenhuma natureza viva pode sumir', () => {
     expect(lancamentos[0].valor).toBe(100_000)
   })
 
-  it('retorno de lote de exportação sem itens também reduz a receita', () => {
-    const { lancamentos } = normalizarEnokiDre({
-      nfs: [nfSemItens({ cfop: '2504', tipoOperacao: 'ENTRADA' })],
-    })
-    expect(lancamentos[0].contaSafragold).toBe('3.2.06')
+  it('retorno de lote de exportação: abate no consolidado, não abate na filial', () => {
+    const nf = nfSemItens({ cfop: '2504', tipoOperacao: 'ENTRADA' })
+    // Consolidado: o grão voltou, então a venda que o gerou desfaz-se.
+    expect(
+      normalizarEnokiDre({ nfs: [nf] }, { convencao: 'consolidado' }).lancamentos[0]
+        .contaSafragold,
+    ).toBe('3.2.06')
+    // Cliente: trata como movimentação; deduz só a devolução de venda.
+    const r = normalizarEnokiDre({ nfs: [nf] })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.find((d) => d.motivo === 'retorno_lote_exportacao')?.valor)
+      .toBeCloseTo(100_000, 2)
+  })
+
+  it('devolução de venda comum abate a receita nas DUAS convenções', () => {
+    // O que muda é só o retorno de LOTE; a devolução do cliente é dedução sempre.
+    for (const convencao of ['cliente', 'consolidado'] as const) {
+      const r = normalizarEnokiDre(
+        { nfs: [nfSemItens({ cfop: '1202', tipoOperacao: 'ENTRADA' })] },
+        { convencao },
+      )
+      expect(r.lancamentos[0].contaSafragold, convencao).toBe('3.2.06')
+    }
   })
 
   it('devolução de COMPRA sem itens REDUZ o CPV', () => {
@@ -678,5 +707,38 @@ describe('transferência entre contas próprias não é resultado', () => {
     })
     expect(r.lancamentos.map((l) => l.contaSafragold)).toEqual(['4.3.01', '4.3.02', '4.3.04'])
     expect(r.residuos).toHaveLength(0)
+  })
+})
+
+describe('deduplicação só é segura se o id for único', () => {
+  // Regressão: o robô usava o NÚMERO da nota como id. Fornecedores diferentes
+  // emitem o mesmo número, e 12 compras de julho (R$ 785 mil) foram descartadas
+  // como se fossem repetição de paginação. Sem erro e com o CPV menor.
+  function compra(idNf: unknown, valor: number) {
+    return {
+      idNf, numeroNf: 500, dataEmissao: '2026-07-10', status: 'Finalizada',
+      cfop: '1102', entrada: true, finalidade: 'Normal', valorTotalNf: valor,
+      emitenteNome: 'F', emitenteCpfCnpj: '11222333000144', itens: [],
+    }
+  }
+
+  it('repetição de borda de paginação continua sendo removida em silêncio', () => {
+    // Mesmo id, mesma data, mesmo valor: é a MESMA nota lida duas vezes.
+    const r = normalizarEnokiDre({ nfs: [compra(1, 1000), compra(1, 1000)] })
+    expect(r.lancamentos).toHaveLength(1)
+    expect(r.colisoes).toEqual([])
+  })
+
+  it('mesmo id com valores diferentes é DENUNCIADO, não engolido', () => {
+    const r = normalizarEnokiDre({ nfs: [compra(1, 1000), compra(1, 7777)] })
+    expect(r.colisoes).toHaveLength(1)
+    expect(r.colisoes[0]).toMatchObject({ valorMantido: 1000, valorDescartado: 7777 })
+  })
+
+  it('ids distintos passam inteiros — é o que a correção do robô garante', () => {
+    const r = normalizarEnokiDre({ nfs: [compra('e19684', 1000), compra('e19670', 7777)] })
+    expect(r.lancamentos).toHaveLength(2)
+    expect(r.colisoes).toEqual([])
+    expect(r.lancamentos.reduce((s, l) => s + l.valor, 0)).toBe(8777)
   })
 })
