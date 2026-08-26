@@ -477,8 +477,13 @@ function somarSacas(acc, competencia, grao, sacas) {
 function naturezaDaNf(nf) {
   const finalidade = normalizarRotulo(nf?.finalidade);
   if (finalidade === "AJUSTE") return "outro";
-  const entrada = nf?.entrada === true || normalizarRotulo(nf?.tipoOperacao) === "ENTRADA" || cfopDeEntrada(nf?.cfop);
-  return naturezaDeCfop(nf?.cfop, entrada);
+  return naturezaDeCfop(nf?.cfop, ehEntradaDaNf(nf));
+}
+function ehEntradaDaNf(nf) {
+  return nf?.entrada === true || normalizarRotulo(nf?.tipoOperacao) === "ENTRADA" || cfopDeEntrada(nf?.cfop);
+}
+function ehRetornoDeLote(nf) {
+  return ["503", "504"].includes(sufixoCfop(nf?.cfop));
 }
 function ehVenda(nf) {
   return naturezaDaNf(nf) === "venda";
@@ -491,14 +496,17 @@ function ehAutorizada(nf) {
   const sefaz = normalizarRotulo(nf?.statusNfe);
   return sefaz !== "INUTIL" && sefaz !== "CANCELADA";
 }
-function processarNfs(nfs, raizes, acc) {
+function processarNfs(nfs, raizes, acc, convencao) {
   for (const nf of nfs ?? []) {
     const valorNf = numeroEnoki(nf?.valorTotalNf);
     if (ehCancelada(nf)) {
       descartar(acc, "nf_cancelada", valorNf);
       continue;
     }
-    const natureza = naturezaDaNf(nf);
+    let natureza = naturezaDaNf(nf);
+    if (convencao === "cliente" && natureza === "remessa" && ehEntradaDaNf(nf)) {
+      natureza = "compra";
+    }
     if (natureza === "venda" && !ehAutorizada(nf)) {
       descartar(acc, "nf_nao_autorizada", valorNf);
       continue;
@@ -512,7 +520,11 @@ function processarNfs(nfs, raizes, acc) {
       continue;
     }
     const contraparteDoc = natureza === "compra" || natureza === "frete_compra" ? nf?.emitenteCpfCnpj : nf?.destinatarioCpfCnpj;
-    if (ehIntragrupo(contraparteDoc, raizes)) {
+    if (convencao === "cliente" && natureza === "devolucao_venda" && ehRetornoDeLote(nf)) {
+      descartar(acc, "retorno_lote_exportacao", valorNf);
+      continue;
+    }
+    if (convencao === "consolidado" && ehIntragrupo(contraparteDoc, raizes)) {
       descartar(acc, "nf_intragrupo", valorNf);
       continue;
     }
@@ -627,15 +639,23 @@ function normalizarEnokiDre(entrada, config = {}) {
   const raizes = config.raizesGrupo ?? RAIZES_CNPJ_GRUPO;
   const acc = novoAcumulador();
   const regras = config.regras ?? {};
-  processarNfs(entrada.nfs ?? [], raizes, acc);
+  const convencao = config.convencao ?? "cliente";
+  processarNfs(entrada.nfs ?? [], raizes, acc, convencao);
   processarTitulos(entrada.pagar ?? [], "saida", acc, regras);
   processarTitulos(entrada.receber ?? [], "entrada", acc, regras);
-  const vistos = /* @__PURE__ */ new Set();
-  const lancamentos = acc.lancamentos.filter((l) => {
-    if (vistos.has(l.id)) return false;
-    vistos.add(l.id);
-    return true;
-  });
+  const vistos = /* @__PURE__ */ new Map();
+  const colisoes = [];
+  for (const l of acc.lancamentos) {
+    const anterior = vistos.get(l.id);
+    if (!anterior) {
+      vistos.set(l.id, l);
+      continue;
+    }
+    if (Math.abs(anterior.valor - l.valor) >= 5e-3 || anterior.data !== l.data) {
+      colisoes.push({ id: l.id, valorDescartado: l.valor, valorMantido: anterior.valor });
+    }
+  }
+  const lancamentos = [...vistos.values()];
   const sacas = {};
   for (const [competencia, porGrao] of Object.entries(acc.sacas)) {
     const mes = {};
@@ -652,6 +672,7 @@ function normalizarEnokiDre(entrada, config = {}) {
     sacas,
     descartes,
     residuos,
+    colisoes,
     gapContratos: analisarGapContratos(acc.notasContrato, acc.titulosContrato)
   };
 }
@@ -671,7 +692,9 @@ export {
   digitosDoc,
   ehAutorizada,
   ehCancelada,
+  ehEntradaDaNf,
   ehIntragrupo,
+  ehRetornoDeLote,
   ehVenda,
   graoDeProduto,
   inferirUnidade,

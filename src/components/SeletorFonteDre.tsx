@@ -10,8 +10,8 @@ import { useMemo, useState } from 'react'
 import { useDre } from '../context/DreContext'
 import { Select } from './ui'
 import { ModalFusao } from './ModalFusao'
-import { fonteDreDe, lancamentosPlanilha, ROTULO_FONTE, type FonteDre } from '../lib/tipos'
-import { linhasOrfas, competenciasNaoFundiveis } from '../lib/fusao'
+import { fonteDreDe, lancamentosPlanilha, META_LINHAS, ROTULO_FONTE, type FonteDre } from '../lib/tipos'
+import { linhasSubstituidas, competenciasNaoFundiveis } from '../lib/fusao'
 
 export function SeletorFonteDre() {
   const { estado, salvarFonteDre, fusao } = useDre()
@@ -31,7 +31,7 @@ export function SeletorFonteDre() {
   if (!enoki.length || !estado.lancamentos.length) return null
 
   const fonte = fonteDreDe(estado)
-  const orfas = fusao ? linhasOrfas(fusao) : []
+  const trocadas = fusao ? linhasSubstituidas(fusao) : []
 
   return (
     <div>
@@ -55,7 +55,7 @@ export function SeletorFonteDre() {
             title="Escolher de qual fonte cada linha do DRE é lida"
           >
             ⚙ Linhas
-            {orfas.length > 0 && <span className="ml-1 text-gold-deep">⚠ {orfas.length}</span>}
+            {trocadas.length > 0 && <span className="ml-1 text-gold-deep">⚠ {trocadas.length}</span>}
           </button>
         )}
       </div>
@@ -65,6 +65,13 @@ export function SeletorFonteDre() {
           fonte ({semPar.map((c) => c.competencia).join(', ')}), então o fundido subtrai
           estrutura de meses que não têm receita do ERP. Use <b>{ROTULO_FONTE.planilha}</b> para o
           resultado e <b>{ROTULO_FONTE.enoki}</b> para auditar os meses já carregados.
+        </p>
+      )}
+      {fonte === 'fundido' && trocadas.length > 0 && (
+        <p className="mt-2 max-w-md rounded-lg border border-warn/40 bg-warn/5 p-2 text-xs text-gold-deep">
+          {trocadas.length} linha(s) leram de outra fonte em algum mês, porque a configurada
+          estava vazia: {trocadas.map((t) => META_LINHAS[t.linha].rotulo).join(', ')}. Sem isso o
+          mês sairia com a linha zerada.
         </p>
       )}
       {configurando && <ModalFusao aoFechar={() => setConfigurando(false)} />}

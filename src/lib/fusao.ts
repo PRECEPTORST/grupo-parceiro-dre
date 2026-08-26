@@ -83,9 +83,26 @@ export interface ResumoFusao {
   valorDescartado: number
 }
 
+/** Linha em que a fonte configurada estava vazia e a outra foi usada no lugar. */
+export interface SubstituicaoFonte {
+  linha: LinhaDRE
+  competencia: string
+  configurada: FonteLinha
+  usada: FonteLinha
+  valor: number
+}
+
 export interface ResultadoFusao {
   lancamentos: LancamentoCanonico[]
   porLinha: ResumoFusao[]
+  /**
+   * Onde a fonte escolhida não tinha dado NAQUELE mês e a outra entrou no lugar.
+   * Não é detalhe: sem isso, agosto/2026 saía com despesa administrativa ZERO —
+   * a planilha ainda não cobria o mês, e a regra mandava ler dela, então os
+   * R$ 161.567,21 que o ERP trouxe (a folha inclusive) eram jogados fora e o
+   * EBITDA aparecia como se a empresa não tivesse despesa.
+   */
+  substituicoes: SubstituicaoFonte[]
   /**
    * Lançamentos sem conta no mapa. Vêm SÓ da planilha: os da Enoki sempre caem
    * numa conta do plano, então uma conta desconhecida aqui é da importação
@@ -111,9 +128,16 @@ export function fundirLancamentos(
     ]),
   )
   const lancamentos: LancamentoCanonico[] = []
+  const substituicoes: SubstituicaoFonte[] = []
   let naoClassificados = 0
 
-  const processar = (lista: LancamentoCanonico[], origem: FonteLinha) => {
+  // Índice (linha × competência × fonte). A escolha é feita POR MÊS porque a
+  // cobertura das fontes é diferente em cada um: a planilha chega com atraso, o
+  // ERP só tem o que já foi raspado.
+  const porChave = new Map<string, LancamentoCanonico[]>()
+  const chave = (linha: LinhaDRE, comp: string, fonte: FonteLinha) => `${linha}|${comp}|${fonte}`
+
+  const indexar = (lista: LancamentoCanonico[], origem: FonteLinha) => {
     for (const l of lista) {
       const linha = mapa[l.contaSafragold]
       if (!linha) {
@@ -124,20 +148,55 @@ export function fundirLancamentos(
         }
         continue
       }
-      const r = resumo.get(linha)!
-      if (config[linha] === origem) {
+      const k = chave(linha, (l.data ?? '').slice(0, 7), origem)
+      const atual = porChave.get(k)
+      if (atual) atual.push(l)
+      else porChave.set(k, [l])
+    }
+  }
+
+  indexar(planilha, 'planilha')
+  indexar(enoki, 'enoki')
+
+  const competencias = [
+    ...new Set([...planilha, ...enoki].map((l) => (l.data ?? '').slice(0, 7)).filter(Boolean)),
+  ]
+  const outra = (f: FonteLinha): FonteLinha => (f === 'enoki' ? 'planilha' : 'enoki')
+
+  for (const linha of LINHAS_DRE) {
+    const r = resumo.get(linha)!
+    for (const competencia of competencias) {
+      const escolhida = config[linha]
+      const daEscolhida = porChave.get(chave(linha, competencia, escolhida)) ?? []
+      const daOutra = porChave.get(chave(linha, competencia, outra(escolhida))) ?? []
+
+      // A fonte configurada manda. Só quando ela está VAZIA neste mês a outra
+      // entra — e a troca fica registrada, nunca em silêncio.
+      const usar = daEscolhida.length ? daEscolhida : daOutra
+      const fonteUsada = daEscolhida.length ? escolhida : outra(escolhida)
+      const preteridos = daEscolhida.length ? daOutra : []
+
+      if (!daEscolhida.length && daOutra.length) {
+        substituicoes.push({
+          linha,
+          competencia,
+          configurada: escolhida,
+          usada: fonteUsada,
+          valor: daOutra.reduce((s, l) => s + l.valor, 0),
+        })
+      }
+
+      for (const l of usar) {
         lancamentos.push(l)
         r.aceitos++
         r.valorAceito += l.valor
-      } else {
+      }
+      for (const l of preteridos) {
         r.descartados++
         r.valorDescartado += l.valor
       }
     }
   }
-
-  processar(planilha, 'planilha')
-  processar(enoki, 'enoki')
 
   const arred = (v: number) => Math.round(v * 100) / 100
   const porLinha = LINHAS_DRE.map((linha) => {
@@ -145,16 +204,33 @@ export function fundirLancamentos(
     return { ...r, valorAceito: arred(r.valorAceito), valorDescartado: arred(r.valorDescartado) }
   })
 
-  return { lancamentos, porLinha, naoClassificados }
+  return { lancamentos, porLinha, naoClassificados, substituicoes }
 }
 
 /**
- * Linhas cuja fonte escolhida não tem NENHUM lançamento, embora a outra fonte
- * tenha. É o alerta de "linha órfã": a configuração está mandando ler de onde
- * não há dado, e o DRE sairia com um buraco silencioso.
+ * Resumo das substituições por linha — quantos meses e quanto valor entraram de
+ * uma fonte que não era a configurada.
+ *
+ * Substituiu `linhasOrfas`, que só sabia AVISAR do buraco. Avisar não bastava:
+ * em agosto/2026 a linha órfã era a despesa administrativa, e o DRE saía com
+ * despesa zero enquanto o alerta piscava ao lado. Agora o buraco é preenchido
+ * pela fonte que tem o dado, e esta função conta o que foi trocado — a troca
+ * precisa continuar visível, senão vira dado sem procedência.
  */
-export function linhasOrfas(resultado: ResultadoFusao): ResumoFusao[] {
-  return resultado.porLinha.filter((r) => r.aceitos === 0 && r.descartados > 0)
+export function linhasSubstituidas(
+  resultado: ResultadoFusao,
+): { linha: LinhaDRE; meses: number; valor: number; usada: FonteLinha }[] {
+  const porLinha = new Map<LinhaDRE, { linha: LinhaDRE; meses: number; valor: number; usada: FonteLinha }>()
+  for (const s of resultado.substituicoes) {
+    const atual = porLinha.get(s.linha)
+    if (atual) {
+      atual.meses++
+      atual.valor += s.valor
+    } else {
+      porLinha.set(s.linha, { linha: s.linha, meses: 1, valor: s.valor, usada: s.usada })
+    }
+  }
+  return [...porLinha.values()].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
 }
 
 /** Cobertura de uma competência: quais fontes têm dados nela. */

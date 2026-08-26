@@ -3,7 +3,7 @@ import {
   fundirLancamentos,
   configFusaoPadrao,
   configFusaoEfetiva,
-  linhasOrfas,
+  linhasSubstituidas,
   type ConfigFusao,
   coberturaFusao,
   competenciasNaoFundiveis,
@@ -135,44 +135,55 @@ describe('fundirLancamentos', () => {
     expect(r.lancamentos.map((x) => x.id)).toContain('p-estranha')
   })
 
-  it('funciona com uma fonte vazia', () => {
-    // Do Enoki só sobrevive o que a configuração manda ler dele — capex não.
+  it('com UMA fonte só, ela preenche tudo — e a troca fica registrada', () => {
+    // Sem isto, agosto/2026 saía com despesa administrativa ZERO: a planilha não
+    // cobria o mês, a regra mandava ler dela, e os R$ 161 mil que o ERP trouxe
+    // eram jogados fora.
     const soEnoki = fundirLancamentos([], ENOKI, mapa, config)
     expect(soEnoki.lancamentos.map((x) => x.id).sort()).toEqual([
+      'e-capex',
       'e-cpv',
       'e-deducao',
       'e-frete',
       'e-receita',
     ])
+    expect(soEnoki.substituicoes.map((s) => s.linha)).toContain('investimentos')
+    // E o mesmo vale ao contrário: com só a planilha, ela preenche o DRE inteiro.
     const soPlanilha = fundirLancamentos(PLANILHA, [], mapa, config)
-    // Da planilha só sobrevivem as linhas configuradas como 'planilha'.
     expect(soPlanilha.lancamentos.map((x) => x.id).sort()).toEqual([
       'p-capex',
+      'p-cpv',
       'p-deprec',
       'p-folha',
       'p-irpj',
       'p-juros',
       'p-outras',
+      'p-receita',
     ])
   })
 })
 
 describe('linhasOrfas', () => {
-  it('denuncia a linha que ficaria com buraco silencioso', () => {
-    // A folha só existe na planilha, mas a config manda ler da Enoki.
+  it('PREENCHE a linha cuja fonte escolhida está vazia, em vez de zerá-la', () => {
+    // A folha só existe na planilha, mas a config manda ler da Enoki. Avisar não
+    // bastava: o DRE saía com despesa zero enquanto o alerta piscava ao lado.
     const config: ConfigFusao = { ...configFusaoPadrao(), despesas_administrativas: 'enoki' }
     const r = fundirLancamentos(PLANILHA, ENOKI, mapa, config)
-    const orfas = linhasOrfas(r)
-    expect(orfas.map((o) => o.linha)).toContain('despesas_administrativas')
-    expect(orfas.find((o) => o.linha === 'despesas_administrativas')!.valorDescartado).toBeCloseTo(
-      120_000,
-      2,
-    )
+    const dre = montarDre('2026-06', r.lancamentos, mapa)
+    expect(dre.linhas.find((l) => l.linha === 'despesas_administrativas')!.realizado)
+      .toBeCloseTo(120_000, 2)
+
+    const troca = linhasSubstituidas(r).find((t) => t.linha === 'despesas_administrativas')!
+    expect(troca.usada).toBe('planilha')
+    expect(troca.valor).toBeCloseTo(120_000, 2)
   })
 
-  it('sem órfãs na configuração padrão com as duas fontes completas', () => {
+  it('a fonte configurada VENCE quando ela tem dado — substituição é só para o vazio', () => {
     const r = fundirLancamentos(PLANILHA, ENOKI, mapa, configFusaoPadrao())
-    expect(linhasOrfas(r)).toHaveLength(0)
+    const dre = montarDre('2026-06', r.lancamentos, mapa)
+    // Receita existe nas duas; a configurada (Enoki) manda.
+    expect(dre.linhas.find((l) => l.linha === 'receita_bruta')!.realizado).toBeCloseTo(950_000, 2)
+    expect(linhasSubstituidas(r)).toHaveLength(0)
   })
 })
 

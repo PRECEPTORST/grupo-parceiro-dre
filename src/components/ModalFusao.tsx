@@ -3,13 +3,15 @@
 // Cada linha do DRE lê de UMA fonte só — nunca das duas — porque somar a
 // planilha com a Enoki contaria a mesma venda duas vezes. Aqui o usuário vê
 // exatamente de onde cada linha está vindo, quanto entrou e quanto foi preterido,
-// e é avisado quando a fonte escolhida não tem dado nenhum (linha órfã).
+// e é avisado quando a fonte escolhida estava VAZIA num mês e a outra entrou no
+// lugar — o DRE sai certo, mas a escolha dele não valeu ali, e isso precisa
+// aparecer sob pena de virar número sem procedência.
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDre } from '../context/DreContext'
 import { Botao } from './ui'
 import { formatBRL } from '../lib/format'
-import { configFusaoEfetiva, linhasOrfas } from '../lib/fusao'
+import { configFusaoEfetiva, linhasSubstituidas } from '../lib/fusao'
 import { LINHAS_DRE, META_LINHAS, type ConfigFusao, type FonteLinha } from '../lib/tipos'
 
 const ROTULO_FONTE_LINHA: Record<FonteLinha, string> = {
@@ -21,7 +23,12 @@ export function ModalFusao({ aoFechar }: { aoFechar: () => void }) {
   const { estado, salvarConfigFusao, fusao } = useDre()
   const [config, setConfig] = useState<ConfigFusao>(() => configFusaoEfetiva(estado.configFusao))
 
-  const orfas = new Set((fusao ? linhasOrfas(fusao) : []).map((o) => o.linha))
+  // Linhas em que algum mês leu da OUTRA fonte porque a configurada estava
+  // vazia. O DRE sai certo — mas quem configura precisa saber que a escolha
+  // dele não valeu ali.
+  const trocadas = new Map(
+    (fusao ? linhasSubstituidas(fusao) : []).map((t) => [t.linha, t]),
+  )
   const resumoDe = (linha: string) => fusao?.porLinha.find((p) => p.linha === linha)
 
   const trocar = (linha: keyof ConfigFusao, fonte: FonteLinha) =>
@@ -63,14 +70,15 @@ export function ModalFusao({ aoFechar }: { aoFechar: () => void }) {
             <tbody>
               {LINHAS_DRE.map((linha) => {
                 const r = resumoDe(linha)
-                const orfa = orfas.has(linha) && config[linha] === fusao?.porLinha.find((p) => p.linha === linha)?.fonte
+                const troca = trocadas.get(linha)
                 return (
                   <tr key={linha} className="border-b border-line/50">
                     <td className="py-2 pr-4 text-ink">
                       {META_LINHAS[linha].rotulo}
-                      {orfa && (
+                      {troca && (
                         <div className="text-[11px] font-semibold text-gold-deep">
-                          ⚠ a fonte escolhida não tem lançamento nesta linha
+                          ⚠ em {troca.meses} mês(es) leu de <b>{ROTULO_FONTE_LINHA[troca.usada]}</b> — a
+                          fonte escolhida estava vazia
                         </div>
                       )}
                     </td>
