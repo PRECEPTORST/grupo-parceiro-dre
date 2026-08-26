@@ -7,7 +7,8 @@
 // Uso: node robot/enviar-para-o-site.mjs out/enoki-dre-*.json
 import { readFileSync } from "node:fs";
 import { list, get, put, del } from "@vercel/blob";
-import path from "node:path"; import { fileURLToPath } from "node:url";
+import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const raiz = path.join(here, "..");
@@ -51,8 +52,14 @@ for (const j of janelas) {
 }
 console.log(`entrada: nfs=${entrada.nfs.length} pagar=${entrada.pagar.length} receber=${entrada.receber.length}`);
 
-// A normalização vive em TypeScript; aqui usamos o build já compilado do app.
-const { normalizarEnokiDre } = await import(path.join(raiz, "robot", ".build", "enokiDre.js"));
+// A normalização vive em TypeScript. Compilar AQUI, toda vez, não é zelo: um
+// `.build` velho publicaria com as regras antigas — sem erro, sem aviso, só com
+// o número errado no site. Foi assim que o CPV ficou uma rodada inteira errado.
+const saida = path.join(raiz, "robot", ".build", "enokiDre.js");
+execFileSync("npx", ["esbuild", path.join(raiz, "src", "lib", "enokiDre.ts"),
+  "--bundle", "--format=esm", "--platform=node", `--outfile=${saida}`],
+  { cwd: raiz, stdio: "inherit" });
+const { normalizarEnokiDre } = await import(`${pathToFileURL(saida).href}?v=${Date.now()}`);
 const r = normalizarEnokiDre(entrada);
 console.log(`lançamentos: ${r.lancamentos.length}`);
 
