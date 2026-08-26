@@ -1,0 +1,12 @@
+{
+  "venture": "grupo-parceiro",
+  "processo": "dre-em-tempo-real",
+  "fases": [
+    "ensaiar",
+    "realizar"
+  ],
+  "branchProducao": "main",
+  "comandoDoPortao": "npm run lint && npm test && npm run build",
+  "modo": "medindo",
+  "cerebro": "matheuscastro12-eng/opera"
+}
