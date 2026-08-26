@@ -23,6 +23,9 @@
     },
     "api/estado-enoki.ts": {
       "maxDuration": 60
+    },
+    "api/enoki-ingerir.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

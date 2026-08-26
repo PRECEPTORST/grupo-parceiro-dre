@@ -36,6 +36,10 @@ export const PLANO_CONTAS: PlanoConta[] = [
   { conta: '3.1.12', descricao: 'Receita de frete e logística', linha: 'receita_bruta' },
   { conta: '3.1.13', descricao: 'Corretagem e intermediação', linha: 'receita_bruta' },
   { conta: '3.1.14', descricao: 'Prêmios de qualidade e bonificações', linha: 'receita_bruta' },
+  // Venda sem detalhe de produto: a grade de NF do ERP (scraper) não expõe os
+  // itens, então a receita entra aqui em vez de ser rateada por cereal no chute.
+  // Fica VISÍVEL no DRE analítico — quem olha sabe que aquele valor não tem grão.
+  { conta: '3.1.15', descricao: 'Venda de grãos (produto não detalhado)', linha: 'receita_bruta' },
 
   // ---- Deduções e impostos sobre vendas ----
   { conta: '3.2.01', descricao: 'ICMS sobre vendas', linha: 'deducoes' },

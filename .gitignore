@@ -32,3 +32,8 @@ dist-ssr
 .env.*
 !.env.example
 .env*
+
+# Robô (scraper)
+robot/.env
+robot/.state/
+robot/out/

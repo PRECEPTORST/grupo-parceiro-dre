@@ -448,3 +448,43 @@ describe('só nota AUTORIZADA vira receita', () => {
     expect(r.descartes.find((d) => d.motivo === 'nf_nao_autorizada')).toBeUndefined()
   })
 })
+
+describe('NF sem itens (fonte scraper — a grade não expõe produto)', () => {
+  const semItens = (over = {}) => nfVenda({ itens: [], ...over })
+
+  it('a receita NÃO some: vira item sintético na conta 3.1.15', () => {
+    const r = normalizarEnokiDre({ nfs: [semItens()] })
+    expect(r.lancamentos).toHaveLength(1)
+    expect(r.lancamentos[0].contaSafragold).toBe('3.1.15')
+    expect(r.lancamentos[0].valor).toBeCloseTo(88533.33, 2)
+  })
+
+  it('e cai na linha de RECEITA BRUTA, não em outras receitas', () => {
+    const r = normalizarEnokiDre({ nfs: [semItens()] })
+    const dre = montarDre('2026-06', r.lancamentos, mapaEfetivo([]))
+    expect(dre.linhas.find((l) => l.linha === 'receita_bruta')!.realizado).toBeCloseTo(88533.33, 2)
+    expect(dre.linhas.find((l) => l.linha === 'outras_receitas_operacionais')!.realizado).toBe(0)
+    expect(dre.naoClassificadas).toHaveLength(0)
+  })
+
+  it('sem itens NÃO inventa sacas — o volume fica desconhecido, não zero disfarçado', () => {
+    const r = normalizarEnokiDre({ nfs: [semItens()] })
+    expect(r.sacas).toEqual({})
+  })
+
+  it('nota que não é venda continua sem gerar nada', () => {
+    const r = normalizarEnokiDre({ nfs: [semItens({ cfop: '5905' })] })
+    expect(r.lancamentos).toHaveLength(0)
+  })
+
+  it('nota sem itens E sem valor não vira lançamento fantasma', () => {
+    const r = normalizarEnokiDre({ nfs: [semItens({ valorTotalNf: '0' })] })
+    expect(r.lancamentos).toHaveLength(0)
+  })
+
+  it('com itens, o comportamento antigo é preservado (grão e sacas)', () => {
+    const r = normalizarEnokiDre({ nfs: [nfVenda()] })
+    expect(r.lancamentos[0].contaSafragold).toBe('3.1.01')
+    expect(r.sacas['2026-06'].soja).toBeCloseTo(40000 / 60, 2)
+  })
+})

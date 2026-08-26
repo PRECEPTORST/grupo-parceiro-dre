@@ -137,6 +137,15 @@ export const CONTA_RECEITA_GRAO: Record<Grao, string> = {
   cafe: '3.1.05',
 }
 
+/**
+ * Marcador de item sintético criado quando a NF não traz itens (fonte scraper).
+ * Não é nome de produto: é sinal de que o detalhe não existe.
+ */
+export const SEM_DETALHE_PRODUTO = '__SEM_DETALHE__'
+
+/** Conta onde a receita sem detalhe de produto pousa — visível no DRE analítico. */
+export const CONTA_SEM_DETALHE = '3.1.15'
+
 /** Conta de AQUISIÇÃO (4.1.0x) de cada grão. */
 export const CONTA_AQUISICAO_GRAO: Record<Grao, string> = {
   soja: '4.1.01',
@@ -418,7 +427,16 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
     const destinatario = String(nf?.destinatarioNome ?? '').trim()
     const numero = nf?.numeroNf ?? nf?.idNf ?? ''
 
-    for (const [i, item] of (nf?.itens ?? []).entries()) {
+    // A grade de NF do scraper não traz itens. Sem eles não há cereal nem sacas,
+    // mas a RECEITA existe e não pode sumir: vira um item sintético que cai numa
+    // conta própria (3.1.15), visível no DRE como "produto não detalhado".
+    const itens = (nf?.itens ?? []).length
+      ? nf.itens
+      : natureza === 'venda' && Math.abs(numeroEnoki(nf?.valorTotalNf)) >= 0.005
+        ? [{ idItem: 'total', produto: SEM_DETALHE_PRODUTO, valorTotal: nf?.valorTotalNf }]
+        : []
+
+    for (const [i, item] of itens.entries()) {
       const produto = String(item?.produto ?? '').trim()
       const valor = numeroEnoki(item?.valorTotal)
       if (ehAjusteFiscal(produto)) {
@@ -433,15 +451,17 @@ function processarNfs(nfs: any[], raizes: string[], acc: Acumulador): void {
       // Venda: conta do cereal (ou outras receitas, para sucata/equipamento).
       // Devolução de VENDA vira dedução; devolução de COMPRA reduz o CPV do grão.
       const conta =
-        natureza === 'devolucao_venda'
-          ? '3.2.06'
-          : natureza === 'devolucao_compra'
-            ? grao
-              ? CONTA_AQUISICAO_GRAO[grao]
-              : '4.1.10'
-            : grao
-              ? CONTA_RECEITA_GRAO[grao]
-              : '3.4.02'
+        produto === SEM_DETALHE_PRODUTO
+          ? CONTA_SEM_DETALHE
+          : natureza === 'devolucao_venda'
+            ? '3.2.06'
+            : natureza === 'devolucao_compra'
+              ? grao
+                ? CONTA_AQUISICAO_GRAO[grao]
+                : '4.1.10'
+              : grao
+                ? CONTA_RECEITA_GRAO[grao]
+                : '3.4.02'
       // Devolução de compra REDUZ o custo → entra negativa na conta de aquisição.
       const sinal = natureza === 'devolucao_compra' ? -1 : 1
       const rotulo =
