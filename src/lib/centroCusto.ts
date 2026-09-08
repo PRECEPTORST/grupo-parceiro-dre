@@ -206,6 +206,52 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   'RATEIO ENTRE AS EMPRESAS DO GRUPO': { natural: 'saida', ignorar: true },
 }
 
+/**
+ * Regra por FAMÍLIA, para quando o rótulo exato não está na tabela.
+ *
+ * O ERP renomeia centro de custo sem avisar, e isso já quebrou o mapa três
+ * vezes: "FRETE" virou "FRETE SOBRE COMPRA", depois "FRETE (CMV)" e
+ * "FRETE (USO & CONSUMO)"; "RECEITA MILHO - MERCADO INTERNO" virou também
+ * "RECEITA MILHO". Em agosto/2026 isso jogou R$ 9,07 MILHÕES na fila de
+ * resíduo — e a fila é para o que ninguém sabe classificar, não para o que
+ * mudou de nome.
+ *
+ * A família é lida pelo PREFIXO, que é o que carrega a natureza da operação. O
+ * sufixo ("- MERCADO INTERNO", "(CMV)", "SOBRE COMPRA") é qualificador, e um
+ * qualificador desconhecido não deve custar a classificação inteira.
+ *
+ * A tabela exata continua VENCENDO: só o que não está nela chega aqui.
+ */
+const FAMILIAS: { prefixo: RegExp; regra: RegraCentroCusto }[] = [
+  // Receita de grão: o fato gerador é a nota de saída, em qualquer variação.
+  { prefixo: /^RECEITA (SOJA|MILHO|SORGO|CAFE)\b/, regra: { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' } },
+  { prefixo: /^DEVOLUCAO (SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: '3.2.06', natural: 'saida' } },
+  // Compra e frete de compra: o custo vem da nota de entrada / do CT-e.
+  { prefixo: /^COMPRA (SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.01', natural: 'saida' } },
+  { prefixo: /^FRETE\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.10', natural: 'saida' } },
+  { prefixo: /^ARMAZENAGEM\b/, regra: { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' } },
+  { prefixo: /^CLASSIFICACAO\b/, regra: { saida: '4.1.13', natural: 'saida' } },
+  { prefixo: /^SECAGEM\b/, regra: { saida: '4.1.12', natural: 'saida' } },
+  { prefixo: /^(REFEICOES|VALE ALIMENTACAO|COPA E COZINHA|UNIFORMES|BRINDES PARA)\b/, regra: { saida: '4.3.04', natural: 'saida' } },
+  { prefixo: /^BENS DE PEQUENO VALOR\b/, regra: { saida: '4.3.20', natural: 'saida' } },
+]
+
+/**
+ * Regra por família — a compra de grão sem cereal no nome cai na conta da soja,
+ * que é o grão dominante; o valor não some e a linha do DRE é a mesma.
+ */
+function regraDeFamilia(chave: string): RegraCentroCusto | null {
+  const f = FAMILIAS.find((x) => x.prefixo.test(chave))
+  if (!f) return null
+  // A conta de estorno de compra segue o cereal quando ele está no rótulo.
+  if (/^COMPRA /.test(chave)) {
+    const contas: Record<string, string> = { SOJA: '4.1.01', MILHO: '4.1.02', SORGO: '4.1.03', CAFE: '4.1.05' }
+    const grao = Object.keys(contas).find((g) => chave.includes(g))
+    if (grao) return { ...f.regra, estorno: contas[grao] }
+  }
+  return f.regra
+}
+
 /** Rótulo do ERP para "sem centro de custo" — resíduo que vai para a fila da IA. */
 export const SEM_CENTRO_CUSTO = 'SEM CC'
 
@@ -217,7 +263,7 @@ export const SEM_CENTRO_CUSTO = 'SEM CC'
 export function destinoDeCentroCusto(cc: string, fluxo: DirecaoFluxo): DestinoLancamento | null {
   const chave = normalizarRotulo(cc)
   if (!chave || chave === SEM_CENTRO_CUSTO) return null
-  const regra = REGRAS_CENTRO_CUSTO[chave]
+  const regra = REGRAS_CENTRO_CUSTO[chave] ?? regraDeFamilia(chave)
   if (!regra) return null
 
   if (regra.ignorar) {

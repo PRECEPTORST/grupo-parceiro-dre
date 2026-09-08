@@ -197,3 +197,46 @@ describe('auditoria', () => {
     expect(lista[0].nota).toBeTruthy()
   })
 })
+
+describe('regra por FAMÍLIA — o ERP renomeia centro de custo sem avisar', () => {
+  // Em agosto/2026 o ERP passou a usar "RECEITA MILHO" (sem "- MERCADO INTERNO"),
+  // "FRETE (CMV)" e "FRETE (USO & CONSUMO)". Rótulos novos para as MESMAS
+  // operações jogaram R$ 9,07 milhões na fila de resíduo, que é para o que
+  // ninguém sabe classificar — não para o que mudou de nome.
+  it('receita de grão é ignorada em qualquer variação do rótulo', () => {
+    for (const cc of ['RECEITA MILHO', 'RECEITA SOJA - EXPORTAÇÃO', 'RECEITA SORGO']) {
+      const d = destinoDeCentroCusto(cc, 'entrada')!
+      expect(d.ignorar, cc).toBe(true)
+      expect(d.motivo).toBe('receita_vem_da_nf')
+    }
+  })
+
+  it('frete em qualquer variação vem da nota, não do título', () => {
+    for (const cc of ['FRETE (CMV)', 'FRETE (USO & CONSUMO)', 'FRETE SOBRE COMPRA']) {
+      const d = destinoDeCentroCusto(cc, 'saida')!
+      expect(d.ignorar, cc).toBe(true)
+      expect(d.motivo).toBe('custo_vem_da_nf')
+    }
+  })
+
+  it('o estorno de compra segue o cereal do rótulo, mesmo em variação nova', () => {
+    expect(destinoDeCentroCusto('COMPRA MILHO SAFRINHA', 'entrada')).toMatchObject({
+      conta: '4.1.02',
+      sinal: -1,
+    })
+  })
+
+  it('classificação de qualquer grão é CPV, não despesa', () => {
+    expect(destinoDeCentroCusto('CLASSIFICACAO SORGO', 'saida')).toMatchObject({ conta: '4.1.13' })
+  })
+
+  it('a tabela EXATA continua vencendo a família', () => {
+    // "FRETE SOBRE VENDA" é despesa comercial, e o prefixo /^FRETE/ diria o
+    // contrário. A regra específica tem de ganhar.
+    expect(destinoDeCentroCusto('FRETE SOBRE VENDA', 'saida')).toMatchObject({ conta: '4.2.03' })
+  })
+
+  it('o que não é de família nenhuma continua indo para a fila', () => {
+    expect(destinoDeCentroCusto('ALGO QUE NINGUEM VIU', 'saida')).toBeNull()
+  })
+})
