@@ -37,3 +37,7 @@ dist-ssr
 robot/.env
 robot/.state/
 robot/out/
+
+# Compilado a cada publicação por robot/enviar-para-o-site.mjs — nunca versionar:
+# um build velho no repositório aplicaria as regras antigas em silêncio.
+robot/.build/
