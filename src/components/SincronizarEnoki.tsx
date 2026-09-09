@@ -160,6 +160,15 @@ export function SincronizarEnoki() {
     return `${Math.ceil(falta / 60)} min`
   })()
 
+  // A API da Enoki só existe em HOMOLOGAÇÃO e para em 05/08/2026. Quando o que
+  // está carregado veio do ERP de PRODUÇÃO (via robô), sincronizar pela API
+  // apagaria meses de dado real e poria dado de teste no lugar.
+  //
+  // Aconteceu em 09/09/2026: um clique trocou 3.039 lançamentos de produção por
+  // 5.346 de homologação, com agosto caindo para 62 — e quem abriu o site leu
+  // "agosto não apareceu". O servidor agora recusa; aqui o botão some, porque
+  // oferecer uma ação que será recusada é pior do que não oferecer.
+  const dadoDeProducao = temCarga && sync?.homologacao === false
   const residuoTotal = (sync?.residuos ?? []).reduce((s, r) => s + r.valor, 0)
   const regras = estado.regrasEnoki ?? []
   const aRevisar = regras.filter((r) => r.origem === 'ia' && r.confianca < LIMIAR_REVISAO)
@@ -185,7 +194,7 @@ export function SincronizarEnoki() {
                 : `✨ Classificar ${sync.residuos.length} pendência(s)`}
             </Botao>
           )}
-          {temCarga && (
+          {temCarga && !dadoDeProducao && (
             <Botao
               variante="fantasma"
               onClick={() => rodar('completa')}
@@ -194,18 +203,30 @@ export function SincronizarEnoki() {
               ⬇ Recarregar o ano
             </Botao>
           )}
-          <Botao
-            onClick={() => rodar(temCarga ? 'atualizar' : 'completa')}
-            disabled={rodando || classificando}
-          >
-            {rodando
-              ? 'Carregando…'
-              : temCarga
-                ? '↻ Atualizar'
-                : `⬇ Carregar ${hoje.slice(0, 4)}`}
-          </Botao>
+          {!dadoDeProducao && (
+            <Botao
+              onClick={() => rodar(temCarga ? 'atualizar' : 'completa')}
+              disabled={rodando || classificando}
+            >
+              {rodando
+                ? 'Carregando…'
+                : temCarga
+                  ? '↻ Atualizar'
+                  : `⬇ Carregar ${hoje.slice(0, 4)}`}
+            </Botao>
+          )}
         </div>
       </div>
+
+      {dadoDeProducao && (
+        <div className="mt-4 rounded-lg border border-green/30 bg-green/5 p-3 text-sm">
+          <strong className="text-ink">Fonte: ERP de produção.</strong> Estes números vêm do robô
+          que lê o Enoki real ({sync?.de} a {sync?.ate}). A sincronização pela API está desligada
+          aqui de propósito: ela só alcança o ambiente de <strong>homologação</strong>, que para em
+          05/08/2026, e usá-la substituiria o DRE real por dado de teste. Para atualizar, rode{' '}
+          <code className="rounded bg-cream-2 px-1">robot/scrape-dre.mjs</code>.
+        </div>
+      )}
 
       {!temCarga && !rodando && (
         <div className="mt-4 rounded-lg border border-line bg-cream-2 p-3 text-sm text-muted">

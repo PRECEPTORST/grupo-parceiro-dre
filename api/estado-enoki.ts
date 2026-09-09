@@ -59,9 +59,36 @@ export default async function handler(req: any, res: any) {
     return
   }
 
-  const { enoki } = parseBody(req) as { enoki?: unknown }
+  const { enoki } = parseBody(req) as { enoki?: any }
   if (!fatiaValida(enoki)) {
     res.status(400).json({ erro: 'Envie { enoki: { lancamentosEnoki: [...] } }.' })
+    return
+  }
+
+  // DADO DE TESTE NÃO SOBRESCREVE DADO REAL.
+  //
+  // A API da Enoki só existe em HOMOLOGAÇÃO — um recorte que para em 05/08/2026.
+  // O DRE real vem do robô, que lê o ERP de produção. Enquanto os dois caminhos
+  // coexistirem, um clique em "Sincronizar" apaga meses de produção e põe dado
+  // de teste no lugar, sem erro nenhum.
+  //
+  // Aconteceu em 09/09/2026: julho e agosto de produção (3.039 lançamentos)
+  // viraram 5.346 de homologação, com agosto reduzido a 62 — e a leitura de
+  // quem abriu o site foi "agosto não apareceu".
+  //
+  // A recusa é do lado do SERVIDOR de propósito: qualquer tela, hoje ou depois,
+  // esbarra nela.
+  const atualDoc = await lerDocMaisRecente(PREFIXO, token)
+  const gravandoHomologacao = enoki?.enokiSync?.homologacao === true
+  const guardadoEhProducao =
+    !!atualDoc?.lancamentosEnoki?.length && atualDoc?.enokiSync?.homologacao === false
+  if (gravandoHomologacao && guardadoEhProducao) {
+    res.status(409).json({
+      erro:
+        'Recusado: isto é dado de HOMOLOGAÇÃO e o que está gravado veio do ERP de produção. ' +
+        'Sincronizar pela API apagaria o DRE real. Use o robô (robot/scrape-dre.mjs).',
+      guardado: { de: atualDoc.enokiSync?.de, ate: atualDoc.enokiSync?.ate, lancamentos: atualDoc.lancamentosEnoki.length },
+    })
     return
   }
 
