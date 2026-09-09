@@ -807,3 +807,48 @@ isso no `estado-enoki` que o app lê**. O robô respondia "enviado ao app" e o s
 seguia mostrando a carga velha de homologação, sem erro em lugar nenhum. Quem
 publica é `robot/enviar-para-o-site.mjs`, e ele agora **compila a normalização
 toda vez** — um `.build` defasado aplicaria as regras antigas em silêncio.
+
+---
+
+## §30 — Onde estão os itens de produto (2026-09-09)
+
+O DRE computa as compras (agosto/2026: R$ 18,34M), mas TUDO cai em contas
+genéricas — `4.1.18` "Aquisição de grãos (produto não detalhado)" e `3.1.15` no
+lado da receita. Sem produto não há quebra por cereal, não há sacas, e não há
+custo médio móvel — que é o que faria o CPV descrever a VENDA em vez da COMPRA.
+
+A causa conhecida: as grades de NF (saída e entrada) não expõem os itens.
+
+**ACHADO: o relatório existe e tem tudo.**
+`Relatórios > Estoque e Movimentação > Movimentação de Produtos por CFOP`
+(há dois com nomes quase iguais — um para ENTRADA, outro para SAÍDA).
+
+Colunas: `Emissão · Mod · Nº NFe · CFOP · Cod.Prod · Descrição do produto ·
+Contrato · Qtd. Entr. · Unit. · Desc. · Total`. Ou seja: produto, quantidade,
+preço unitário e **número do contrato**, nota a nota.
+
+Isso destrava de uma vez: compra por grão, sacas, custo médio móvel e o
+confronto por contrato (o gap de 9%).
+
+### Como chegar lá (já mapeado)
+
+1. `Relatórios` → `Estoque e Movimentação` → `Movimentação de Produtos por CFOP`.
+2. O combo de período abre em **"Todos"** e isso deixa os campos de data
+   `disabled`. Escolher **"Intervalo"** habilita (opções: Todos, Dia atual,
+   Últimos 7/30 dias, Mês Atual, Intervalo).
+3. Campos de data `VWG285_*` (de) e `VWG286_*` (à), no trio dd/mm/aaaa.
+4. Botão **GERAR**.
+
+### Os dois obstáculos que restam
+
+- **A data não chega ao servidor.** O relatório saiu com 09/09/2026 mesmo com os
+  campos exibindo 01/08–31/08. São `readonly` com handler de `onblur`
+  (`s248.sbh24(...)`); disparar input/change/keyup não bastou, e o blur sintético
+  também não. Provavelmente exige a sequência de clique real do WebGUI.
+- **O visor não entrega texto.** É um Crystal Reports em iframe
+  (`crystalreportviewers13`) que renderiza a página como imagem: `innerText` do
+  frame devolve 79 caracteres, e não há `<table>` para ler.
+
+**Caminho recomendado: não raspar o visor — usar o EXPORTAR da barra dele.**
+O Crystal exporta PDF/Excel, e um arquivo é infinitamente mais estável que um
+visor renderizado. O robô já tem `acceptDownloads` no contexto.
