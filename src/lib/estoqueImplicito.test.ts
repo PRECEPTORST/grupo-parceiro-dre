@@ -1,12 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { avisosDeEstoque, type FluxoMercadoria } from './estoqueImplicito'
+import { avisosDeEstoque, MARGEM_REFERENCIA, type FluxoMercadoria } from './estoqueImplicito'
 
 const f = (
   competencia: string,
   compras: number,
   vendas: number,
   lucroBruto: number,
-): FluxoMercadoria => ({ competencia, compras, vendas, lucroBruto })
+  receitaLiquida = vendas,
+): FluxoMercadoria => ({
+  competencia,
+  compras,
+  vendas,
+  lucroBruto,
+  receitaLiquida,
+  cpv: receitaLiquida - lucroBruto,
+})
 
 describe('avisosDeEstoque', () => {
   it('marca o mês em que a compra come a receita E o resultado fica negativo', () => {
@@ -44,6 +52,29 @@ describe('avisosDeEstoque', () => {
   it('mês sem venda fica de fora — a razão não existe', () => {
     const r = avisosDeEstoque([f('2026-09', 5_000_000, 0, -5_000_000)])
     expect(r).toEqual([])
+  })
+
+  it('traduz a margem baixa em grão a conferir no armazém', () => {
+    // Agosto/2026 real: receita líquida R$ 17,88M, CPV R$ 20,20M. Com a margem
+    // de 3% a 4% em que o negócio opera, sobram ~R$ 2,95M de mercadoria que foi
+    // lançada como despesa — número que alguém pode ir conferir fisicamente.
+    const [a] = avisosDeEstoque([
+      f('2026-08', 18_335_865, 18_387_746, -2_325_381, 17_877_681),
+    ])
+    expect(a.estoqueImplicito).toBeGreaterThan(2_800_000)
+    expect(a.estoqueImplicito).toBeLessThan(3_100_000)
+    expect(a.margem).toBeLessThan(0)
+  })
+
+  it('a régua é a margem REAL do negócio, informada pelo cliente', () => {
+    expect(MARGEM_REFERENCIA.min).toBe(0.03)
+    expect(MARGEM_REFERENCIA.max).toBe(0.04)
+  })
+
+  it('mês dentro da faixa de margem não tem estoque implícito relevante', () => {
+    const [a] = avisosDeEstoque([f('2026-07', 9_650_000, 10_000_000, 350_000)])
+    expect(Math.abs(a.estoqueImplicito)).toBeLessThan(1_000)
+    expect(a.distorcido).toBe(false)
   })
 
   it('ordena pela maior razão, que é o mês que mais precisa de explicação', () => {

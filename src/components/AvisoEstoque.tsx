@@ -11,7 +11,7 @@
 import { useMemo } from 'react'
 import { Card } from './ui'
 import { formatBRL } from '../lib/format'
-import { avisosDeEstoque } from '../lib/estoqueImplicito'
+import { avisosDeEstoque, MARGEM_REFERENCIA } from '../lib/estoqueImplicito'
 import { CONTA_SEM_DETALHE_COMPRA, CONTA_AQUISICAO_GRAO } from '../lib/enokiDre'
 import type { LancamentoCanonico, MapaClassificacao } from '../lib/tipos'
 import { montarDre } from '../lib/dre'
@@ -40,7 +40,14 @@ export function AvisoEstoque({
     const dre = montarDre(competencia, lancamentos, mapa)
     const vendas = dre.linhas.find((l) => l.linha === 'receita_bruta')?.realizado ?? 0
     const [a] = avisosDeEstoque([
-      { competencia, compras, vendas, lucroBruto: dre.realizado.lucroBruto },
+      {
+        competencia,
+        compras,
+        vendas,
+        lucroBruto: dre.realizado.lucroBruto,
+        receitaLiquida: dre.realizado.receitaLiquida,
+        cpv: dre.linhas.find((l) => l.linha === 'custo_produto')?.realizado ?? 0,
+      },
     ])
     return a?.distorcido ? a : null
   }, [competencia, lancamentos, mapa])
@@ -56,10 +63,18 @@ export function AvisoEstoque({
         <strong>{(aviso.razao * 100).toFixed(1)}%</strong> da receita bruta, então o grão que entrou
         no armazém e ainda não saiu foi lançado como despesa aqui.
       </p>
+      <p className="mt-2 text-sm text-gold-deep">
+        Na margem de <strong>{(MARGEM_REFERENCIA.min * 100).toFixed(0)}% a{' '}
+        {(MARGEM_REFERENCIA.max * 100).toFixed(0)}%</strong> em que o negócio opera, isso equivale a{' '}
+        <strong>{formatBRL(aviso.estoqueImplicito)}</strong> de mercadoria que entrou e ainda não
+        saiu. <strong>É um número para conferir no armazém</strong> — se o estoque cresceu nessa
+        ordem, o mês fechou saudável.
+      </p>
       <p className="mt-2 text-sm text-muted">
-        Fechar isso exige apropriação de estoque —{' '}
-        <em>custo = estoque inicial + compras − estoque final</em> — que depende do saldo de estoque
-        por grão. Enquanto ele não vem do ERP, o número fica assim: incompleto e dito.
+        Fechar isso no DRE exige apropriação de estoque —{' '}
+        <em>custo = estoque inicial + compras − estoque final</em> — que depende do saldo por grão.
+        Enquanto ele não vem do ERP, o número fica assim: incompleto e dito. A régua de margem NÃO
+        altera o DRE; ela só traduz a distorção em algo verificável.
       </p>
     </Card>
   )

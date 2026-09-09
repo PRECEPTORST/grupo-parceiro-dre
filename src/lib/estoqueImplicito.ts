@@ -21,6 +21,23 @@
 // frágil, e uma conclusão apoiada em referência frágil é pior que a conta crua.
 // Aqui só se afirma o que os próprios números do mês dizem.
 
+/**
+ * Margem bruta em que o negócio realmente opera, informada pelo cliente
+ * (2026-09-09): 3% a 4% da receita. Serve de RÉGUA, não de resultado.
+ *
+ * O DRE continua sendo a soma das contas — nada aqui altera uma linha dele. A
+ * régua existe só para traduzir "margem abaixo do normal" em "quanto de grão
+ * sobrou no armazém", que é um número que alguém pode ir conferir fisicamente.
+ *
+ * Vale para os DOIS lados: em julho/2026 a planilha do próprio cliente fechou em
+ * 1,97%, também abaixo da faixa. Não é um problema do nosso cálculo — é do
+ * método que ambos usam, de lançar a compra do mês como custo.
+ */
+export const MARGEM_REFERENCIA = { min: 0.03, max: 0.04 } as const
+
+/** Ponto médio da faixa — uma régua precisa de um valor, e 3,5% é o centro. */
+const MARGEM_MEDIA = (MARGEM_REFERENCIA.min + MARGEM_REFERENCIA.max) / 2
+
 export interface FluxoMercadoria {
   competencia: string
   /** Valor das notas de COMPRA (entrada de mercadoria) no mês. */
@@ -29,6 +46,10 @@ export interface FluxoMercadoria {
   vendas: number
   /** Lucro bruto apurado do mês — negativo é o sintoma que interessa. */
   lucroBruto: number
+  /** Receita líquida do mês (receita bruta − deduções). */
+  receitaLiquida: number
+  /** CPV apurado do mês. */
+  cpv: number
 }
 
 export interface AvisoEstoque {
@@ -42,6 +63,14 @@ export interface AvisoEstoque {
    * assinatura de estoque lançado como despesa, não de operação deficitária.
    */
   distorcido: boolean
+  /** Margem bruta apurada, em fração da receita líquida. */
+  margem: number
+  /**
+   * Quanto de mercadoria o mês teria comprado ALÉM do que vendeu, se a margem
+   * fosse a de referência. É o tamanho do estoque a conferir no armazém — não um
+   * ajuste contábil, e nunca entra no DRE.
+   */
+  estoqueImplicito: number
 }
 
 /**
@@ -59,11 +88,15 @@ export function avisosDeEstoque(fluxos: FluxoMercadoria[]): AvisoEstoque[] {
     .filter((f) => f.vendas > 0)
     .map((f) => {
       const razao = f.compras / f.vendas
+      const margem = f.receitaLiquida ? f.lucroBruto / f.receitaLiquida : 0
+      const cpvNaReferencia = f.receitaLiquida * (1 - MARGEM_MEDIA)
       return {
         competencia: f.competencia,
         compras: f.compras,
         vendas: f.vendas,
         razao,
+        margem,
+        estoqueImplicito: f.cpv - cpvNaReferencia,
         distorcido: f.lucroBruto < 0 && razao >= RAZAO_SUSPEITA,
       }
     })
