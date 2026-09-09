@@ -20,6 +20,7 @@ import { PainelCustoMedio } from '../components/PainelCustoMedio'
 import { PrimeirosPassos } from '../components/PrimeirosPassos'
 import { AvisoCobertura } from '../components/AvisoCobertura'
 import { AvisoEstoque } from '../components/AvisoEstoque'
+import { AvisoProjecao } from '../components/AvisoProjecao'
 import { resumoGraos, type ResumoGraos } from '../lib/graos'
 import { orcamentoAprovado, GRAOS, ROTULO_GRAO, type LinhaDRE, type Grao } from '../lib/tipos'
 
@@ -185,6 +186,7 @@ export function DrePage() {
         <>
           <AvisoCobertura competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
           <AvisoEstoque competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
+          <AvisoProjecao competencia={competencia} />
 
           {/* KPIs */}
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">

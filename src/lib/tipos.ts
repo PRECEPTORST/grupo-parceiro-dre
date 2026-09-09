@@ -111,7 +111,15 @@ export const ROTULO_GRAO: Record<Grao, string> = {
 // linha); só estornos vindos do ERP são negativos. A camada de normalização já
 // resolve débito/crédito e sinal.
 // ---------------------------------------------------------------------------
-export type OrigemLancamento = 'enoki' | 'planilha' | 'manual'
+/**
+ * De onde o lançamento veio.
+ *
+ * 'projetado' é ESTIMATIVA, não realizado: estrutura repetida do último mês
+ * fechado para o mês que a planilha ainda não cobre (ver `estruturaProjetada.ts`).
+ * Existe como origem própria justamente para nunca se passar por dado real —
+ * some sozinha quando a planilha do mês chega.
+ */
+export type OrigemLancamento = 'enoki' | 'planilha' | 'manual' | 'projetado'
 
 export interface LancamentoCanonico {
   id: string
@@ -142,9 +150,10 @@ export function origemDe(l: Pick<LancamentoCanonico, 'origem'>): OrigemLancament
 }
 
 export const ROTULO_ORIGEM: Record<OrigemLancamento, string> = {
-  enoki: 'Enoki (API)',
+  enoki: 'Enoki (ERP)',
   planilha: 'Planilha',
   manual: 'Manual',
+  projetado: 'Projetado (estrutura do mês anterior)',
 }
 
 /** Saída do agente classificador para cada conta do Safragold. */

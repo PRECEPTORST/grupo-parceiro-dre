@@ -38,6 +38,7 @@ import {
 } from '../lib/tipos'
 import { mapaEfetivo } from '../lib/planoContas'
 import { configFusaoEfetiva, fundirLancamentos, type ResultadoFusao } from '../lib/fusao'
+import { projetarEstrutura } from '../lib/estruturaProjetada'
 import { sincronizarEnokiDre as puxarEnokiDre, type ProgressoSync } from '../lib/enokiSync'
 import { gapEhEstrutural } from '../lib/gapContratos'
 import { useAuth } from './AuthContext'
@@ -413,9 +414,28 @@ export function DreProvider({ children }: { children: ReactNode }) {
           )
         : null
 
+    // ESTRUTURA PROJETADA — só nos meses que a planilha ainda não fechou.
+    //
+    // O ERP não captura folha, depreciação nem capex: agosto/2026 veio com
+    // R$ 37 mil de despesa administrativa contra os R$ 202 mil que a planilha
+    // registra em julho. Um DRE sem esses R$ 165 mil não é conservador, é
+    // errado — ele infla o resultado escondendo custo que existe.
+    //
+    // Repetir o último mês fechado é a melhor estimativa disponível para custo
+    // recorrente, e cada lançamento nasce com `origem: 'projetado'` para nunca
+    // se passar por realizado. Some sozinho quando a planilha do mês chega.
+    const base = fusao ? fusao.lancamentos : lancamentosDaFonte(estado)
+    const mapa = mapaEfetivo(estado.classificacoes)
+    const mesesDoErp = [
+      ...new Set((estado.lancamentosEnoki ?? []).map((l) => (l.data ?? '').slice(0, 7))),
+    ].filter(Boolean)
+    const projecoes = mesesDoErp.flatMap(
+      (mes) => projetarEstrutura(lancamentosPlanilha(estado), mes, mapa).lancamentos,
+    )
+
     return {
       estado,
-      lancamentos: fusao ? fusao.lancamentos : lancamentosDaFonte(estado),
+      lancamentos: [...base, ...projecoes],
       sacas: sacasDaFonte(estado),
       fusao,
       salvarClassificacoes,
