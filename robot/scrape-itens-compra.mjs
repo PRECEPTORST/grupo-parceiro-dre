@@ -243,25 +243,46 @@ try {
     await page.waitForSelector("span:text-is('Relatórios')", { timeout: 45_000 });
     await page.waitForTimeout(2500);
 
-    await clickSpan(page, "Relatórios"); await page.waitForTimeout(2200);
-    await clickSpan(page, "Estoque e Movimentação"); await page.waitForTimeout(2800);
-    await clickSpan(page, "Movimentação de Produtos por CFOP"); await page.waitForTimeout(5500);
+    // ESPERAR O ELEMENTO, NUNCA O RELÓGIO. Cada passo espera a prova de que o
+    // anterior funcionou. Com `waitForTimeout` fixo, um passo lento faz o clique
+    // seguinte errar o alvo e a falha aparece três funções depois, como
+    // "nao achei os campos de data" — que não diz nada sobre a causa.
+    const passo = async (texto, provaDoProximo) => {
+      await clickSpan(page, texto);
+      await page.waitForSelector(`span:text-is(${JSON.stringify(provaDoProximo)})`, { timeout: 45_000 });
+      await page.waitForTimeout(900);
+    };
+    await passo("Relatórios", "Estoque e Movimentação");
+    await passo("Estoque e Movimentação", "Movimentação de Produtos por CFOP");
+    await passo("Movimentação de Produtos por CFOP", "Período");
 
     // Período: "Todos" mantém os campos de data DESABILITADOS. "Intervalo" libera.
+    // O combo de período abre em "Todos", e com ele os campos de data nascem
+    // `disabled`. "Intervalo" os libera — e a prova é o campo ficar habilitado.
     const combo = await page.evaluate(() => {
+      const rot = [...document.querySelectorAll("span")].map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .find((o) => o.e.textContent.trim() === "Período" && o.r.width > 0);
+      if (!rot) return null;
       const s = [...document.querySelectorAll("span")].map((e) => ({ e, r: e.getBoundingClientRect() }))
-        .find((o) => o.e.textContent.trim() === "Todos" && o.r.x > 900 && o.r.x < 1100 && o.r.y > 450 && o.r.y < 520);
+        .find((o) => o.e.textContent.trim() === "Todos" && o.r.width > 0 &&
+                     Math.abs(o.r.y - rot.r.y) < 60 && o.r.x > rot.r.x - 60);
       return s ? { x: Math.round(s.r.x + s.r.width / 2), y: Math.round(s.r.y + s.r.height / 2) } : null;
     });
     if (combo) {
       await page.mouse.click(combo.x, combo.y);
-      await page.waitForTimeout(1400);
-      await page.locator("span:text-is('Intervalo')").first().click({ timeout: 6000 }).catch(() => {});
-      await page.waitForTimeout(1800);
+      await page.waitForSelector("span:text-is('Intervalo')", { timeout: 20_000 });
+      await page.locator("span:text-is('Intervalo')").first().click({ timeout: 8000 });
+      await page.waitForTimeout(2000);
     }
 
-    const campos = await acharCamposDeData(page);
-    if (campos.length < 2) throw new Error(`nao achei os campos de data (achei ${campos.length}: ${campos.join(",")})`);
+    // Os campos podem demorar a habilitar depois do "Intervalo".
+    let campos = [];
+    for (let t = 0; t < 15; t++) {
+      campos = await acharCamposDeData(page);
+      if (campos.length >= 2) break;
+      await page.waitForTimeout(1000);
+    }
+    if (campos.length < 2) throw new Error(`nao achei os campos de data em ${de}..${ate} (achei ${campos.length})`);
     const [prefDe, prefAte] = campos;
     const [a1, m1, d1] = de.split("-");
     const [a2, m2, d2] = ate.split("-");
@@ -286,16 +307,55 @@ try {
     }
     if (!pronto) {
       const cab = linhas.find((l) => l[0]?.startsWith("Período"));
-      throw new Error(`relatorio nao ficou pronto em 80s: ${JSON.stringify(cab)} (esperado ${br(de)} a ${br(ate)})`);
+      await page.screenshot({ path: path.join(outDir, `falha-${de}.png`), fullPage: false }).catch(() => {});
+      const visor = page.frames().some((f) => f.url() === "about:blank");
+      const primeiras = linhas.slice(0, 6).map((l) => l.join(" | ")).join(" ⏐ ");
+      throw new Error(
+        `relatorio nao ficou pronto em 80s (visor=${visor}, cab=${JSON.stringify(cab)}, tela="${primeiras.slice(0, 220)}")`,
+      );
     }
 
     const rodape = linhas.flat().join(" ").match(/P[áa]gina\s+\d+\s+de\s+(\d+)/i);
     return { itens: linhas.map(linhaDeItem).filter(Boolean), paginas: Number(rodape?.[1] ?? 1) };
   }
 
+  /** Falhas por intervalo — a varredura continua e as reporta no fim. */
+  const falhas = [];
+
+  /**
+   * Tenta o intervalo mais de uma vez antes de desistir.
+   *
+   * O ERP às vezes não devolve o relatório em 80s. Deixar a exceção subir
+   * abortava o MÊS INTEIRO e perdia tudo que já tinha sido lido — o arquivo só é
+   * gravado no fim. Uma varredura de meia hora não pode ser tudo-ou-nada por
+   * causa de uma lentidão.
+   */
+  async function rodarComTentativas(de, ate) {
+    let ultimoErro;
+    for (let t = 0; t < 3; t++) {
+      try {
+        return await rodarIntervalo(de, ate);
+      } catch (e) {
+        ultimoErro = e;
+        log(`  ${de}..${ate}: tentativa ${t + 1} falhou (${e.message.slice(0, 70)})`);
+        await page.waitForTimeout(5000);
+      }
+    }
+    throw ultimoErro;
+  }
+
   /** Lê um intervalo inteiro, partindo ao meio sempre que passar de uma página. */
   async function lerRecursivo(de, ate, nivel = 0) {
-    const { itens, paginas } = await rodarIntervalo(de, ate);
+    let itens, paginas;
+    try {
+      ({ itens, paginas } = await rodarComTentativas(de, ate));
+    } catch (e) {
+      // Um intervalo que não vai de jeito nenhum vira BURACO REGISTRADO, não o
+      // fim da varredura. O resto do mês continua, e o que faltou fica nomeado.
+      log(`  ${" ".repeat(nivel)}FALHOU ${de}..${ate}: ${e.message.slice(0, 90)}`);
+      falhas.push({ de, ate, erro: e.message.slice(0, 200) });
+      return [];
+    }
     if (paginas <= 1) {
       log(`  ${" ".repeat(nivel)}${de}..${ate}: ${itens.length} item(ns)`);
       return itens;
@@ -318,7 +378,19 @@ try {
     const itens = await lerRecursivo(`${mes}-01`, `${mes}-${ultimoDia(mes)}`);
 
     const arquivo = path.join(outDir, `itens-compra-${mes}.json`);
-    writeFileSync(arquivo, JSON.stringify({ fonte: "relatorio-cfop-entrada", mes, geradoEm: new Date().toISOString(), itens }, null, 1), "utf8");
+    writeFileSync(arquivo, JSON.stringify({
+      fonte: "relatorio-cfop-entrada",
+      mes,
+      geradoEm: new Date().toISOString(),
+      // `parcial` é o que impede o consumidor de tratar leitura incompleta como
+      // se fosse o mês inteiro — o custo médio sairia barato demais.
+      parcial: falhas.length > 0,
+      falhas,
+      itens,
+    }, null, 1), "utf8");
+    if (falhas.length) {
+      log(`  ⚠ ${falhas.length} intervalo(s) NAO lido(s): ${falhas.map((f) => `${f.de}..${f.ate}`).join(", ")}`);
+    }
     const porProduto = {};
     for (const i of itens) porProduto[i.produto] = (porProduto[i.produto] ?? 0) + i.quantidade;
     log(`  gravado: ${arquivo} — ${itens.length} itens`);

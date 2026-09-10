@@ -185,8 +185,6 @@ export function DrePage() {
       ) : (
         <>
           <AvisoCobertura competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
-          <AvisoEstoque competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
-          <AvisoProjecao competencia={competencia} />
 
           {/* KPIs */}
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -208,6 +206,13 @@ export function DrePage() {
               destaque
             />
           </div>
+
+          {/* Os avisos ficam LOGO ABAIXO dos cartões, e não acima deles: um
+              prejuízo de R$ 2,4M com a explicação fora da tela é o mesmo que
+              prejuízo sem explicação. Quem lê o número tem de ver o porquê no
+              mesmo lance de olhos. */}
+          <AvisoEstoque competencia={competencia} lancamentos={lancamentos} mapa={mapa} />
+          <AvisoProjecao competencia={competencia} />
 
           {acumuladoAno.mesesComDif.length > 0 && (
             <Card className="mb-4 animate-rise border-gold/30 bg-gold/5">
