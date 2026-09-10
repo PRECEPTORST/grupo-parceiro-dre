@@ -125,27 +125,38 @@ async function clicarLupa(page) {
   return true;
 }
 
-/** Clica na linha `i` da grade (0-based na página corrente). */
-async function selecionarLinha(page, i) {
-  const alvo = await page.evaluate((idx) => {
+/**
+ * Seleciona a linha da grade clicando no PRÓPRIO NÚMERO da nota.
+ *
+ * Calcular a posição da linha por deslocamento não funcionou: a lista de Ys
+ * inclui elementos que não são linha, e o ERP acabava abrindo sempre a nota
+ * anterior. O número da NF é único na página e é o alvo mais direto que existe.
+ */
+async function selecionarNota(page, numero) {
+  const alvo = String(numero ?? "").trim();
+  if (!alvo) return false;
+  const p = await page.evaluate((n) => {
     const cab = [...document.querySelectorAll("span")]
       .map((e) => ({ e, r: e.getBoundingClientRect() }))
       .find((o) => o.e.textContent.trim() === "FORNECEDOR");
     if (!cab) return null;
-    // Cada linha da grade fica ~22px abaixo da anterior.
-    const ys = [...new Set([...document.querySelectorAll("span")]
-      .map((e) => Math.round(e.getBoundingClientRect().y))
-      .filter((y) => y > cab.r.y + 8))].sort((a, b) => a - b);
-    const y = ys[idx];
-    return y == null ? null : { x: Math.round(cab.r.x + 30), y };
-  }, i);
-  if (!alvo) return false;
-  await page.mouse.click(alvo.x, alvo.y);
-  await page.waitForTimeout(500);
+    const cel = [...document.querySelectorAll("span")]
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .find((o) => o.e.textContent.trim() === n && o.r.y > cab.r.y + 6 && o.r.width > 0);
+    return cel ? { x: Math.round(cel.r.x + cel.r.width / 2), y: Math.round(cel.r.y + cel.r.height / 2) } : null;
+  }, alvo);
+  if (!p) return false;
+  await page.mouse.click(p.x, p.y);
+  await page.waitForTimeout(700);
   return true;
 }
 
-/** Lê a grade de itens da aba PRODUTOS da janela de detalhe. */
+/**
+ * Lê a grade de itens da aba PRODUTOS da janela de detalhe.
+ *
+ * Uma linha de item começa com o número de sequência e traz o nome do produto na
+ * terceira coluna — é o que a distingue dos cabeçalhos e dos rótulos da tela.
+ */
 async function lerItensDaNota(page) {
   await clickSpan(page, "PRODUTOS");
   await page.waitForTimeout(2200);
@@ -156,10 +167,32 @@ async function lerItensDaNota(page) {
       .filter((c) => c.x > 480);
     const porY = {};
     for (const c of cels) (porY[c.y] ??= []).push(c);
-    const linhas = Object.entries(porY).sort((a, b) => +a[0] - +b[0])
-      .map(([, cs]) => cs.sort((a, b) => a.x - b.x).map((c) => c.t));
-    // A linha de dado começa com o número de sequência e tem o produto no 3º campo.
-    return linhas.filter((l) => l.length >= 10 && /^\d+$/.test(l[0]) && /[A-Z]{3}/.test(l[2] ?? ""));
+    return Object.entries(porY).sort((a, b) => +a[0] - +b[0])
+      .map(([, cs]) => cs.sort((a, b) => a.x - b.x).map((c) => c.t))
+      .filter((l) => l.length >= 10 && /^\d+$/.test(l[0]) && /[A-Z]{3}/.test(l[2] ?? ""));
+  });
+}
+
+/**
+ * O NÚMERO da nota aberta na janela de detalhe.
+ *
+ * É a defesa contra dado velho, e ela já pagou: sem esta conferência, oito notas
+ * diferentes saíram todas com R$ 45.936,00 porque a janela não trocava e eu lia
+ * a primeira repetidamente — sem erro nenhum. Dado velho e dado certo têm
+ * exatamente a mesma cara.
+ */
+async function numeroDoDetalhe(page) {
+  return page.evaluate(() => {
+    const rot = [...document.querySelectorAll("span")]
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .find((o) => o.e.textContent.trim() === "Número" && o.r.width > 0);
+    if (!rot) return null;
+    const campo = [...document.querySelectorAll("input")]
+      .map((i) => ({ i, r: i.getBoundingClientRect() }))
+      .filter(({ i, r }) => i.type !== "hidden" && r.width > 40 &&
+                            Math.abs(r.x - rot.r.x) < 60 && r.y > rot.r.y && r.y < rot.r.y + 40)
+      .sort((a, b) => a.r.y - b.r.y)[0];
+    return campo ? String(campo.i.value ?? "").trim() : null;
   });
 }
 
@@ -171,33 +204,32 @@ async function detalheAberto(page) {
 }
 
 /**
- * Fecha a janela de detalhe, e CONFERE que fechou.
+ * Fecha a janela de detalhe pelo botão de título `title="Fechar"`.
  *
- * "Voltar" só volta uma etapa do assistente — a janela continua aberta, e o
- * clique em "Alterar" da nota seguinte cai dentro dela. O sintoma era cruel:
- * a primeira nota lia certo e todas as outras somavam zero, sem erro nenhum.
- * Só o X da barra de título fecha de verdade.
+ * "Voltar" só recua uma etapa do assistente e a janela continua aberta —
+ * e aí "Alterar" na nota seguinte reexibe a MESMA nota. O sintoma foi silencioso
+ * e quase entrou no DRE: oito notas diferentes saíram todas com R$ 45.936,00,
+ * porque eu lia a primeira repetidamente.
+ *
+ * Procurar o X por posição também não serviu: ao lado dele moram "Minimizar" e
+ * "Maximizar", do mesmo tamanho. O atributo `title` distingue sem ambiguidade.
  */
 async function fecharDetalhe(page) {
-  for (let t = 0; t < 4; t++) {
+  for (let t = 0; t < 5; t++) {
     if (!(await detalheAberto(page))) return true;
-    await page.evaluate(() => {
-      const barra = [...document.querySelectorAll("span,div")]
+    const clicou = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll("div[title='Fechar']")]
         .map((e) => ({ e, r: e.getBoundingClientRect() }))
-        .filter((o) => /Documento Fiscal de Entrada/i.test(o.e.textContent ?? "") && o.r.width > 150)
-        .sort((a, b) => a.r.width - b.r.width)[0];
-      if (!barra) return;
-      const x = [...document.querySelectorAll("div,span,img,a")]
-        .map((e) => ({ e, r: e.getBoundingClientRect() }))
-        .filter(({ r }) => Math.abs(r.top - barra.r.top) < 26 && r.width > 5 && r.width < 32 &&
-                           r.left > barra.r.right - 260)
-        .sort((a, b) => b.r.left - a.r.left)[0];
-      x?.e.click();
-    }).catch(() => {});
-    await page.waitForTimeout(1400);
+        .filter(({ r }) => r.width > 0)
+        .sort((a, b) => b.r.top - a.r.top)[0];
+      if (!btn) return false;
+      btn.e.click();
+      return true;
+    });
+    await page.waitForTimeout(1300);
     if (!(await detalheAberto(page))) return true;
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(1200);
+    if (!clicou) await page.keyboard.press("Escape");
+    await page.waitForTimeout(1000);
   }
   return !(await detalheAberto(page));
 }
@@ -265,9 +297,17 @@ try {
         const emissao = dataIso(row["EMISSÃO"]);
         if (!emissao || emissao < `${mes}-01` || emissao > `${mes}-${ultimoDia(mes)}`) continue;
         try {
-          if (!(await selecionarLinha(page, i))) throw new Error("nao selecionei a linha");
+          if (!(await selecionarNota(page, row["NÚMERO"] ?? row["NUMERO"]))) {
+            throw new Error(`nao achei a linha da NF ${row["NÚMERO"]} na grade`);
+          }
           await clickSpan(page, "Alterar");
           await page.waitForSelector("span:text-is('PRODUTOS')", { timeout: 20_000 });
+          // A janela é de ESTA nota? Sem isto, dado velho passa por bom.
+          const numAberto = await numeroDoDetalhe(page);
+          const numLinha = String(row["NÚMERO"] ?? row["NUMERO"] ?? "").trim();
+          if (numAberto && numLinha && numAberto !== numLinha) {
+            throw new Error(`detalhe mostra a NF ${numAberto}, esperava ${numLinha} (janela nao trocou)`);
+          }
           const prods = await lerItensDaNota(page);
           if (!prods.length) throw new Error("aba PRODUTOS sem linhas");
           for (const c of prods) {
@@ -285,7 +325,8 @@ try {
           // Não é erro fatal: o item JÁ foi lido, e o texto do título às vezes
           // persiste no DOM depois de a janela fechar. Registrar como falha aqui
           // marcaria o mês inteiro como parcial sem nada estar faltando.
-          if (!(await fecharDetalhe(page))) log(`  aviso: detalhe da NF ${row["NÚMERO"]} pode ter ficado aberto`);
+          // Fechar é OBRIGATÓRIO: janela aberta faz a próxima nota reexibir esta.
+          if (!(await fecharDetalhe(page))) throw new Error("nao consegui fechar o detalhe");
         } catch (e) {
           falhas.push({ nf: row["NÚMERO"], erro: e.message.slice(0, 120) });
           await fecharDetalhe(page).catch(() => {});
