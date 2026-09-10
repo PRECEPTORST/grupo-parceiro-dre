@@ -1,0 +1,257 @@
+// Itens das notas de COMPRA — produto, quantidade e preço unitário.
+//
+// POR QUE ESTE ARQUIVO É O QUE DESTRAVA O DRE
+// -------------------------------------------
+// O CPV vinha sendo a COMPRA DO MÊS, não o custo do que foi vendido. Num mês em
+// que a empresa estoca, isso vira prejuízo contábil sem prejuízo econômico:
+// agosto/2026 fechou com -13% de margem porque comprou quase tanto quanto
+// vendeu. Corrigir exige apropriação de estoque, que exige QUANTIDADE comprada.
+//
+// A quantidade não está em lugar nenhum do que já usávamos:
+//   • a grade de NF de entrada tem só o total em R$;
+//   • a API de produção NÃO tem rota de nota de entrada (testadas NfEntrada,
+//     NfsEntrada, DocumentosEntrada, NotaEntrada, NfCompra, Compras, Entradas,
+//     NfEntradas — todas 404);
+//   • os contratos de COMPRA não são expostos pela API (só os de venda: 723 de
+//     723), embora o título de compra cite `idContrato`.
+//
+// Ela está NESTE relatório: Relatórios > Estoque e Movimentação >
+// "Movimentação de Produtos por CFOP" (o de ENTRADA — há outro de saída com
+// nome quase igual).
+//
+// TRÊS COISAS QUE CUSTARAM CARO ATÉ FUNCIONAR
+// -------------------------------------------
+// 1. ESCREVER NO DOM NUNCA FUNCIONOU — em tela nenhuma. No WebGUI o estado vive
+//    no SERVIDOR; `.value = x` mais eventos sintéticos muda o que aparece e não
+//    o que o servidor sabe. O relatório saía com a data de hoje, e o filtro de
+//    vencimento dos títulos nunca filtrou de verdade (alargar a janela em um ano
+//    devolvia MENOS linhas — era ruído, não filtro). A saída é TECLAR de verdade,
+//    dígito a dígito, com pausa para a máscara acompanhar.
+// 2. A data é um trio de inputs (_1 dia, _3 mês, _5 ano). Teclar os 8 dígitos
+//    num campo só faz a máscara pular e embaralhar: "01082026" virou 26/09/2026.
+// 3. O servidor NORMALIZA o "à" quando o "de" muda. Preencher uma vez não basta;
+//    é preciso conferir e repetir até fixar.
+//
+// E o visor é um Crystal Reports que não entrega texto pelo caminho óbvio: o
+// iframe do host devolve 79 caracteres. O conteúdo vive num frame `about:blank`
+// aninhado, com cada célula em elemento absoluto — agrupar por Y reconstrói a
+// linha, ordenar por X reconstrói as colunas.
+//
+// Uso: node robot/scrape-itens-compra.mjs --meses=2026-07,2026-08
+
+import { chromium } from "playwright";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { loadDotEnv, makeLogger, ensureLoggedIn, clickSpan, setPacing } from "./lib/erp-ui.mjs";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+loadDotEnv(path.join(here, ".env"));
+const log = makeLogger("itens");
+const statePath = path.join(here, ".state", "session.json");
+const outDir = path.join(here, "out");
+mkdirSync(path.dirname(statePath), { recursive: true });
+mkdirSync(outDir, { recursive: true });
+setPacing({ minDelayMs: 500, maxDelayMs: 1200 });
+
+const arg = (n, d = null) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d;
+const meses = (arg("meses") ?? "").split(",").map((m) => m.trim()).filter((m) => /^\d{4}-\d{2}$/.test(m));
+if (!meses.length) { console.error("uso: node robot/scrape-itens-compra.mjs --meses=2026-07,2026-08"); process.exit(1); }
+
+const ultimoDia = (m) => {
+  const [a, mm] = m.split("-").map(Number);
+  return String(new Date(Date.UTC(a, mm, 0)).getUTCDate()).padStart(2, "0");
+};
+const num = (br) => {
+  const n = Number(String(br ?? "").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+};
+const dataIso = (br) => {
+  const m = String(br ?? "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+};
+
+/**
+ * Acha os DOIS grupos de campos de data (de / à) pela POSIÇÃO.
+ *
+ * Os ids do WebGUI (VWG285, VWG286…) mudam a cada sessão — fixá-los faz o robô
+ * funcionar hoje e quebrar amanhã, com a mensagem inútil "não fixei o período".
+ * O que não muda é o desenho: dois trios lado a lado, na mesma linha, à direita.
+ */
+async function acharCamposDeData(page) {
+  return page.evaluate(() => {
+    const grupos = new Map();
+    for (const i of document.querySelectorAll("input")) {
+      const m = i.id.match(/^(.+)_1$/);
+      if (!m) continue;
+      const r = i.getBoundingClientRect();
+      if (!r.width || r.x < 900 || r.y < 400 || r.y > 600) continue;
+      if (!document.getElementById(`${m[1]}_5`)) continue; // precisa ter o ano
+      grupos.set(m[1], r.x);
+    }
+    return [...grupos.entries()].sort((a, b) => a[1] - b[1]).map(([p]) => p);
+  });
+}
+
+/** Digita uma data no trio de inputs, teclando de verdade. */
+async function digitarData(page, pref, dd, mm, aaaa) {
+  for (const [suf, txt] of [["1", dd], ["3", mm], ["5", aaaa]]) {
+    const el = page.locator(`#${pref}_${suf}`);
+    if (!(await el.count().catch(() => 0))) return "";
+    await el.click({ clickCount: 3 });
+    await page.waitForTimeout(220);
+    for (const ch of txt) { await page.keyboard.press(`Digit${ch}`); await page.waitForTimeout(150); }
+    await page.waitForTimeout(320);
+  }
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(800);
+  return page.evaluate((p) => ["1", "3", "5"].map((s) => document.getElementById(`${p}_${s}`)?.value).join("/"), pref);
+}
+
+/** Preenche e CONFERE — o servidor normaliza o "à" quando o "de" muda. */
+async function fixarData(page, pref, dd, mm, aaaa) {
+  for (let t = 0; t < 5; t++) {
+    const lido = await digitarData(page, pref, dd, mm, aaaa);
+    if (lido === `${dd}/${mm}/${aaaa}`) return true;
+    await page.waitForTimeout(1000);
+  }
+  return false;
+}
+
+/** Linhas da página corrente do visor, reconstruídas por posição. */
+async function lerPaginaDoVisor(page) {
+  const frame = page.frames().find((f) => f.url() === "about:blank");
+  if (!frame) return [];
+  return frame.evaluate(() => {
+    const cels = [...document.querySelectorAll("span,div,td")]
+      .filter((e) => e.children.length === 0 && e.textContent.trim())
+      .map((e) => { const r = e.getBoundingClientRect(); return { t: e.textContent.trim(), x: r.x, y: Math.round(r.y / 3) * 3 }; });
+    const porY = {};
+    for (const c of cels) (porY[c.y] ??= []).push(c);
+    return Object.entries(porY).sort((a, b) => +a[0] - +b[0])
+      .map(([, cs]) => cs.sort((a, b) => a.x - b.x).map((c) => c.t));
+  }).catch(() => []);
+}
+
+/** Uma linha de dado tem data, CFOP e 11 colunas; cabeçalho e rodapé não têm. */
+function linhaDeItem(cols) {
+  if (cols.length < 10) return null;
+  const data = dataIso(cols[0]);
+  if (!data) return null;
+  const cfop = String(cols[3] ?? "").replace(/\D/g, "");
+  if (cfop.length !== 4) return null;
+  return {
+    dataEmissao: data,
+    modelo: cols[1],
+    numeroNf: cols[2],
+    cfop,
+    idProduto: Number(cols[4]) || null,
+    produto: cols[5],
+    contrato: cols[6],
+    quantidade: num(cols[7]),
+    valorUnitario: num(cols[8]),
+    valorDesconto: num(cols[9]),
+    valorTotal: num(cols[10] ?? cols[9]),
+  };
+}
+
+const browser = await chromium.launch({ headless: process.env.ROBOT_HEADLESS !== "false" });
+const context = await browser.newContext({
+  viewport: { width: 1920, height: 1400 },
+  storageState: existsSync(statePath) ? statePath : undefined,
+  acceptDownloads: true,
+});
+const page = await context.newPage();
+
+try {
+  await page.goto(process.env.ENOKI_URL, { waitUntil: "domcontentloaded" });
+  await ensureLoggedIn(page, context, { user: process.env.ENOKI_USER, password: process.env.ENOKI_PASSWORD, statePath, log });
+
+  /**
+   * Roda o relatório para um intervalo e devolve {itens, paginas}.
+   *
+   * Não pagina: o visor Crystal guarda a barra de navegação dentro de um iframe
+   * que muda de id a cada sessão, e clicar nela provou ser frágil. O rodapé diz
+   * "Página 1 de N" — quando N > 1 o chamador PARTE O INTERVALO AO MEIO e roda de
+   * novo. Um relatório de um dia nunca passa de uma página, então a recursão
+   * sempre termina, e cada leitura é de uma página só: nada de estado entre
+   * cliques para dar errado.
+   */
+  async function rodarIntervalo(de, ate) {
+    await clickSpan(page, "Relatórios"); await page.waitForTimeout(2200);
+    await clickSpan(page, "Estoque e Movimentação"); await page.waitForTimeout(2800);
+    await clickSpan(page, "Movimentação de Produtos por CFOP"); await page.waitForTimeout(5500);
+
+    // Período: "Todos" mantém os campos de data DESABILITADOS. "Intervalo" libera.
+    const combo = await page.evaluate(() => {
+      const s = [...document.querySelectorAll("span")].map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .find((o) => o.e.textContent.trim() === "Todos" && o.r.x > 900 && o.r.x < 1100 && o.r.y > 450 && o.r.y < 520);
+      return s ? { x: Math.round(s.r.x + s.r.width / 2), y: Math.round(s.r.y + s.r.height / 2) } : null;
+    });
+    if (combo) {
+      await page.mouse.click(combo.x, combo.y);
+      await page.waitForTimeout(1400);
+      await page.locator("span:text-is('Intervalo')").first().click({ timeout: 6000 }).catch(() => {});
+      await page.waitForTimeout(1800);
+    }
+
+    const campos = await acharCamposDeData(page);
+    if (campos.length < 2) throw new Error(`nao achei os campos de data (achei ${campos.length}: ${campos.join(",")})`);
+    const [prefDe, prefAte] = campos;
+    const [a1, m1, d1] = de.split("-");
+    const [a2, m2, d2] = ate.split("-");
+    if (!(await fixarData(page, prefDe, d1, m1, a1)) || !(await fixarData(page, prefAte, d2, m2, a2))) {
+      throw new Error(`nao fixei o periodo ${de}..${ate} (campos ${prefDe}/${prefAte})`);
+    }
+    await clickSpan(page, "GERAR");
+    await page.waitForTimeout(14000);
+
+    const linhas = await lerPaginaDoVisor(page);
+
+    // O cabeçalho confirma o período que o SERVIDOR usou — a única prova de que
+    // a data pegou. Sem conferir, um mês sairia silenciosamente errado.
+    const cab = linhas.find((l) => l[0]?.startsWith("Período"));
+    const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    if (!cab || !cab.includes(br(de)) || !cab.includes(br(ate))) {
+      throw new Error(`relatorio saiu com ${JSON.stringify(cab)}, esperado ${br(de)} a ${br(ate)}`);
+    }
+
+    const rodape = linhas.flat().join(" ").match(/P[áa]gina\s+\d+\s+de\s+(\d+)/i);
+    return { itens: linhas.map(linhaDeItem).filter(Boolean), paginas: Number(rodape?.[1] ?? 1) };
+  }
+
+  /** Lê um intervalo inteiro, partindo ao meio sempre que passar de uma página. */
+  async function lerRecursivo(de, ate, nivel = 0) {
+    const { itens, paginas } = await rodarIntervalo(de, ate);
+    if (paginas <= 1) {
+      log(`  ${" ".repeat(nivel)}${de}..${ate}: ${itens.length} item(ns)`);
+      return itens;
+    }
+    if (de === ate) {
+      log(`  ${" ".repeat(nivel)}ATENCAO: ${de} tem ${paginas} paginas num dia so — leitura PARCIAL (${itens.length})`);
+      return itens;
+    }
+    const meio = new Date(Date.UTC(...de.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))));
+    const fim = new Date(Date.UTC(...ate.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))));
+    meio.setUTCDate(meio.getUTCDate() + Math.floor((fim - meio) / 86400000 / 2));
+    const corte = meio.toISOString().slice(0, 10);
+    const seguinte = new Date(meio.getTime() + 86400000).toISOString().slice(0, 10);
+    log(`  ${" ".repeat(nivel)}${de}..${ate}: ${paginas} paginas — partindo em ${corte}`);
+    return [...(await lerRecursivo(de, corte, nivel + 1)), ...(await lerRecursivo(seguinte, ate, nivel + 1))];
+  }
+
+  for (const mes of meses) {
+    log(`=== ${mes}`);
+    const itens = await lerRecursivo(`${mes}-01`, `${mes}-${ultimoDia(mes)}`);
+
+    const arquivo = path.join(outDir, `itens-compra-${mes}.json`);
+    writeFileSync(arquivo, JSON.stringify({ fonte: "relatorio-cfop-entrada", mes, geradoEm: new Date().toISOString(), itens }, null, 1), "utf8");
+    const porProduto = {};
+    for (const i of itens) porProduto[i.produto] = (porProduto[i.produto] ?? 0) + i.quantidade;
+    log(`  gravado: ${arquivo} — ${itens.length} itens`);
+    for (const [p, q] of Object.entries(porProduto)) log(`     ${p}: ${q.toLocaleString("pt-BR")} kg`);
+  }
+} finally {
+  await context.storageState({ path: statePath }).catch(() => {});
+  await browser.close();
+}

@@ -852,3 +852,89 @@ confronto por contrato (o gap de 9%).
 **Caminho recomendado: não raspar o visor — usar o EXPORTAR da barra dele.**
 O Crystal exporta PDF/Excel, e um arquivo é infinitamente mais estável que um
 visor renderizado. O robô já tem `acceptDownloads` no contexto.
+
+---
+
+## §31 — A API de produção, e o erro que travava tudo (2026-09-10)
+
+### A API de produção mudou o desenho
+
+`https://api.parceirodograo.safracloud.com.br` · header `X-Api-Key` ·
+namespace `/api/Customizados/v1/ParceiroDoGrao`.
+
+O que ela dá e a raspagem não dava:
+
+- **ITENS da nota de saída** — produto, quantidade, valorUnitario. Com eles a
+  receita abre por grão (milho, soja, sorgo, café) e as sacas aparecem. Antes
+  tudo caía em `3.1.15` "produto não detalhado".
+- **`destinatarioCpfCnpj`** — eliminação intragrupo volta a ser por raiz de CNPJ.
+- **As CINCO empresas** (`/Empresas`), contra a única que o robô lê por sessão.
+- **`/Produtos` com `unidade` (KG/SC) e `fatorSaca`** — a resposta EXATA para a
+  conversão que hoje é inferida por faixa de preço.
+- `/Contratos`, `/Parceiros`.
+
+**O que ela NÃO dá: nota fiscal de ENTRADA.** Testadas e todas 404: NfEntrada,
+NfsEntrada, DocumentosEntrada, NotaEntrada, NfCompra, Compras, Entradas,
+NfEntradas, NfeEntrada, DocFiscalEntrada, MovimentacaoProdutos, EstoqueProdutos,
+Inventario, ItensNf, OrdensCompra, Romaneios, Pesagens. Swagger devolve 403.
+
+E **contratos de COMPRA não existem na API**: 723 de 723 são "Contrato de Venda".
+O título de compra cita `idContrato: 2131`, e 2131 simplesmente não está na
+listagem — a sequência pula de 2130 para 2134.
+
+⚠ **ARMADILHA CARA:** puxar as cinco empresas com o CPV de uma só dá receita de
+R$ 23,1M e lucro bruto de +R$ 2,27M em agosto — bonito e falso, quando o número
+honesto é NEGATIVO. `scripts/puxar-producao.mjs` só inclui empresa com nota de
+entrada coberta, e nomeia as que ficam de fora.
+
+✅ Validação forte: MG pela API bate com a raspagem **no centavo**
+(R$ 18.387.746,37 contra ,42).
+
+### O erro que travava tudo há meses
+
+**ESCREVER NO DOM NUNCA FUNCIONOU — em tela nenhuma.**
+
+No WebGUI o estado vive no SERVIDOR. `elemento.value = x` mais eventos
+sintéticos (input/change/keyup/blur) muda o que APARECE e não o que o servidor
+SABE. Consequências que eu tinha diagnosticado errado:
+
+- O relatório saía sempre com a data de hoje, mesmo com os campos exibindo o
+  período pedido.
+- **O filtro de vencimento dos títulos NUNCA filtrou.** Alargar a janela de
+  [mês, mês+6] para [mês−1, mês+12] devolveu 1.812 linhas contra 1.840 — eu
+  registrei como "o filtro não restringe" quando a verdade é que ele nunca
+  recebeu data nenhuma. A §30 e o comentário no robô diziam isso errado.
+
+**A saída:** teclar de verdade. `page.keyboard.press("Digit0")`, dígito a
+dígito, ~150ms entre um e outro. E:
+
+1. A data é um TRIO de inputs (`_1` dia, `_3` mês, `_5` ano). Teclar os 8
+   dígitos num campo só faz a máscara pular: "01082026" virou 26/09/2026.
+   É um campo por vez, com clique triplo antes para selecionar.
+2. O servidor NORMALIZA o "à" quando o "de" muda. Preencher uma vez não basta —
+   preenche, confere, repete (até 5 vezes).
+3. **Os ids mudam a cada sessão** (VWG285 hoje, outro amanhã). Localizar os dois
+   trios pela POSIÇÃO, nunca por id fixo.
+
+### Como ler o visor Crystal
+
+O relatório certo é `Relatórios > Estoque e Movimentação > Movimentação de
+Produtos por CFOP` — o de ENTRADA (há outro de saída com nome quase igual).
+Antes dele, o combo de período precisa sair de "Todos" para **"Intervalo"**,
+senão os campos de data nascem `disabled`.
+
+O conteúdo NÃO está no iframe do host (devolve 79 caracteres). Está num frame
+**`about:blank`** aninhado, com cada célula em elemento absoluto: agrupar por Y
+reconstrói a linha, ordenar por X reconstrói as colunas.
+
+**Paginação: não clicar na barra do visor.** Ela vive num iframe cujo id troca a
+cada sessão. O rodapé diz "Página 1 de N" — quando N > 1, PARTIR O INTERVALO AO
+MEIO e rodar de novo. Um dia nunca passa de uma página, então a recursão sempre
+termina, e cada leitura é de uma página só.
+
+Colunas: `Emissão · Mod · Nº NFe · CFOP · Cod.Prod · Descrição do produto ·
+Contrato · Qtd. Entr. · Unit. · Desc. · Total`.
+
+Cruza com a API no registro: a primeira linha de agosto é NFe 5217, contrato
+159/26M, R$ 38.960,25 — e o título da API traz `documento: "5217"`,
+`valor: "38960.2500"`, `descricao: "Fat. NFe entrada | Cont: 159/26M"`.
