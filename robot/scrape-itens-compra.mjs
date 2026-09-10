@@ -72,6 +72,44 @@ const dataIso = (br) => {
 };
 
 /**
+ * (não usada) Fechar o visor pelo X deixa resíduo — ver `rodarIntervalo`, que
+ * recarrega a página em vez disso. Mantida porque documenta uma tentativa que
+ * PARECE resolver e não resolve.
+ */
+// eslint-disable-next-line no-unused-vars
+async function fecharVisor(page) {
+  // Só age se o visor EXISTE. Sem esta guarda a busca pela barra de título casa
+  // com o próprio item de menu "Relatórios" numa tela limpa, e o robô sai
+  // clicando em coisa aleatória — o sintoma era um timeout no primeiro clique.
+  const existe = () => page.evaluate(() =>
+    [...document.querySelectorAll("iframe")].some((f) => /ASPXhost/.test(f.src ?? "")));
+  if (!(await existe())) return true;
+
+  for (let t = 0; t < 3; t++) {
+    const fechou = await page.evaluate(() => {
+      // O X fica na barra de título da janela, no canto superior direito.
+      const barra = [...document.querySelectorAll("span,div")]
+        .map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .find((o) => /RELAT[ÓO]RIO/i.test(o.e.textContent ?? "") && o.r.y < 60 && o.r.width > 200);
+      if (!barra) return false;
+      const alvo = [...document.querySelectorAll("div,span,img,a")]
+        .map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .filter(({ r }) => Math.abs(r.top - barra.r.top) < 26 && r.width > 6 && r.width < 30 &&
+                           r.left > barra.r.right - 120)
+        .sort((a, b) => b.r.left - a.r.left)[0];
+      if (!alvo) return false;
+      alvo.e.click();
+      return true;
+    });
+    await page.waitForTimeout(1800);
+    if (!(await existe())) return true;
+    if (!fechou) await page.keyboard.press("Escape");
+    await page.waitForTimeout(1200);
+  }
+  return false;
+}
+
+/**
  * Acha os DOIS grupos de campos de data (de / à) pela POSIÇÃO.
  *
  * Os ids do WebGUI (VWG285, VWG286…) mudam a cada sessão — fixá-los faz o robô
@@ -80,16 +118,25 @@ const dataIso = (br) => {
  */
 async function acharCamposDeData(page) {
   return page.evaluate(() => {
-    const grupos = new Map();
+    // Âncora SEMÂNTICA: o rótulo "Período" do bloco de filtro. Chutar por
+    // coordenada pegou, numa segunda leitura, um campo que nem era data.
+    const rotulo = [...document.querySelectorAll("span")]
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .filter((o) => o.e.textContent.trim() === "Período" && o.r.width > 0)
+      .sort((a, b) => a.r.y - b.r.y)[0];
+    if (!rotulo) return [];
+
+    const grupos = [];
     for (const i of document.querySelectorAll("input")) {
       const m = i.id.match(/^(.+)_1$/);
-      if (!m) continue;
+      if (!m || !document.getElementById(`${m[1]}_5`)) continue; // precisa ter o ano
       const r = i.getBoundingClientRect();
-      if (!r.width || r.x < 900 || r.y < 400 || r.y > 600) continue;
-      if (!document.getElementById(`${m[1]}_5`)) continue; // precisa ter o ano
-      grupos.set(m[1], r.x);
+      if (!r.width || r.height === 0) continue;
+      // Mesma faixa vertical do rótulo, e à direita dele.
+      if (Math.abs(r.y - rotulo.r.y) > 90 || r.x < rotulo.r.x) continue;
+      grupos.push({ pref: m[1], x: r.x });
     }
-    return [...grupos.entries()].sort((a, b) => a[1] - b[1]).map(([p]) => p);
+    return grupos.sort((a, b) => a.x - b.x).slice(0, 2).map((g) => g.pref);
   });
 }
 
@@ -167,6 +214,13 @@ try {
   await page.goto(process.env.ENOKI_URL, { waitUntil: "domcontentloaded" });
   await ensureLoggedIn(page, context, { user: process.env.ENOKI_USER, password: process.env.ENOKI_PASSWORD, statePath, log });
 
+  // A sessão reaproveitada volta na TELA ONDE PAROU — inclusive com o visor de
+  // relatório aberto por cima de tudo. Recarregar garante um começo limpo; sem
+  // isto o primeiro clique no menu morre com um timeout que não explica nada.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("span:text-is('Relatórios')", { timeout: 45_000 });
+  await page.waitForTimeout(2500);
+
   /**
    * Roda o relatório para um intervalo e devolve {itens, paginas}.
    *
@@ -178,6 +232,17 @@ try {
    * cliques para dar errado.
    */
   async function rodarIntervalo(de, ate) {
+    // RECARREGAR entre leituras, em vez de fechar o visor.
+    //
+    // Fechar deixa resíduo: o wrapper do modal continua interceptando clique
+    // mesmo depois do iframe sumir, e a leitura seguinte morre com um timeout
+    // que não diz a causa. Recarregar custa uns segundos e não deixa dúvida —
+    // e como a recursão roda o relatório muitas vezes, previsível vale mais que
+    // rápido.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector("span:text-is('Relatórios')", { timeout: 45_000 });
+    await page.waitForTimeout(2500);
+
     await clickSpan(page, "Relatórios"); await page.waitForTimeout(2200);
     await clickSpan(page, "Estoque e Movimentação"); await page.waitForTimeout(2800);
     await clickSpan(page, "Movimentação de Produtos por CFOP"); await page.waitForTimeout(5500);
