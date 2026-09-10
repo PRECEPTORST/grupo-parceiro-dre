@@ -66,7 +66,21 @@ for (const mes of meses) {
 
   const arqItens = `robot/out/itens-compra-${mes}.json`
   if (!existsSync(arqItens)) { semItens.push(mes); continue }
-  const { itens } = JSON.parse(readFileSync(arqItens, 'utf8'))
+  const bruto = JSON.parse(readFileSync(arqItens, 'utf8'))
+
+  // MÊS INCOMPLETO NÃO SERVE PARA CUSTO MÉDIO.
+  //
+  // Faltando compras, o volume de entrada fica menor do que foi e o custo médio
+  // sai BARATO — o que barateia o CPV e infla o lucro. O erro é silencioso e a
+  // conta continua fechando, então a recusa tem de ser aqui.
+  if (bruto.parcial) {
+    const falhas = (bruto.falhas ?? []).length
+    console.error(`\n✗ ${mes}: leitura PARCIAL (${falhas} intervalo(s)/nota(s) não lido(s)).`)
+    console.error('  Custo médio com compra faltando sai barato demais e infla o lucro.')
+    console.error(`  Rode de novo: node robot/scrape-itens-compra.mjs --meses=${mes}`)
+    process.exit(1)
+  }
+  const { itens } = bruto
   const r = resumirCompras(itens, cadastro)
   sacasCompradas[mes] = r.sacas[mes] ?? {}
   valorComprado[mes] = r.valor[mes] ?? {}
