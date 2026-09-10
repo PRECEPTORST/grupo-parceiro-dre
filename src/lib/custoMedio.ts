@@ -238,3 +238,39 @@ export function montarMovimentosEstoque(
   }
   return movimentos
 }
+
+/** Conta em que a apropriação de estoque entra no DRE (negativa ao formar estoque). */
+export const CONTA_VARIACAO_ESTOQUE = '4.1.19'
+
+/**
+ * Lançamentos de VARIAÇÃO DE ESTOQUE, um por competência.
+ *
+ * O DRE lança como custo a compra do mês. A diferença entre isso e o custo do
+ * que foi realmente vendido é estoque — e é ela que entra aqui, negativa quando
+ * o mês forma estoque.
+ *
+ * Por que um LANÇAMENTO em vez de corrigir o CPV direto: um custo que encolhe
+ * sem explicação é indefensável numa reunião. Como linha, ela aparece no DRE
+ * analítico, soma zero ao longo do tempo (o que entra num mês sai noutro) e pode
+ * ser conferida contra o estoque físico do armazém.
+ */
+export function lancamentosDeEstoque(rel: RelatorioCustoMedio): LancamentoCanonico[] {
+  const out: LancamentoCanonico[] = []
+  for (const competencia of Object.keys(rel.cpvPorCompetencia).sort()) {
+    const ajuste = ajusteEstoque(rel, competencia)
+    if (Math.abs(ajuste) < 0.005) continue
+    const [a, m] = competencia.split('-').map(Number)
+    out.push({
+      id: `estoque-${competencia}`,
+      data: `${competencia}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`,
+      contaSafragold: CONTA_VARIACAO_ESTOQUE,
+      historico:
+        ajuste < 0
+          ? 'Grão comprado e não vendido no mês (sai do custo, fica no estoque)'
+          : 'Grão vendido de estoque anterior (entra no custo)',
+      valor: ajuste,
+      origem: 'enoki',
+    })
+  }
+  return out
+}

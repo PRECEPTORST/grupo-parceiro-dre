@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { custoMedioMovel, ajusteEstoque, type MovimentoEstoque } from './custoMedio'
+import {
+  custoMedioMovel,
+  ajusteEstoque,
+  lancamentosDeEstoque,
+  CONTA_VARIACAO_ESTOQUE,
+  type MovimentoEstoque,
+} from './custoMedio'
 
 function mov(
   competencia: string,
@@ -141,5 +147,48 @@ describe('volume comprado sem valor de compra', () => {
   it('compra com valor e sem volume não acende este alerta', () => {
     const r = custoMedioMovel(['2026-01'], [mov('2026-01', 0, 130_000, 0)])
     expect(r.posicoes[0].volumeSemValor).toBe(false)
+  })
+})
+
+describe('lancamentosDeEstoque — a apropriação entra como LINHA do DRE', () => {
+  // Números reais de agosto/2026: comprou 215.014 sacas de milho e vendeu
+  // 195.926. O grão que sobrou estava sendo lançado como prejuízo.
+  const movimentos: MovimentoEstoque[] = [
+    { competencia: '2026-08', grao: 'milho', sacasCompradas: 215_014, valorComprado: 12_957_000, sacasVendidas: 195_926 },
+  ]
+
+  it('mês que forma estoque tira custo — lançamento NEGATIVO', () => {
+    const rel = custoMedioMovel(['2026-08'], movimentos)
+    const [l] = lancamentosDeEstoque(rel)
+    expect(l.contaSafragold).toBe(CONTA_VARIACAO_ESTOQUE)
+    expect(l.valor).toBeLessThan(0)
+    expect(l.data).toBe('2026-08-31')
+    expect(l.historico).toContain('não vendido')
+  })
+
+  it('mês que vende estoque anterior devolve o custo — lançamento POSITIVO', () => {
+    const rel = custoMedioMovel(
+      ['2026-08', '2026-09'],
+      [...movimentos, { competencia: '2026-09', grao: 'milho', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 19_088 }],
+    )
+    const set = lancamentosDeEstoque(rel).find((l) => l.data.startsWith('2026-09'))!
+    expect(set.valor).toBeGreaterThan(0)
+    expect(set.historico).toContain('estoque anterior')
+  })
+
+  it('ao longo do tempo a variação se anula — o que sai num mês entra noutro', () => {
+    const rel = custoMedioMovel(
+      ['2026-08', '2026-09'],
+      [...movimentos, { competencia: '2026-09', grao: 'milho', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 19_088 }],
+    )
+    const soma = lancamentosDeEstoque(rel).reduce((s, l) => s + l.valor, 0)
+    expect(Math.abs(soma)).toBeLessThan(1)
+  })
+
+  it('mês em que compra e venda batem não gera lançamento nenhum', () => {
+    const rel = custoMedioMovel(['2026-08'], [
+      { competencia: '2026-08', grao: 'milho', sacasCompradas: 1000, valorComprado: 60_000, sacasVendidas: 1000 },
+    ])
+    expect(lancamentosDeEstoque(rel)).toEqual([])
   })
 })

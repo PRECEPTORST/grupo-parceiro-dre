@@ -43,12 +43,29 @@ setPacing({ minDelayMs: 300, maxDelayMs: 700 });
 const arg = (n) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3);
 const limite = Number(arg("limite") ?? 0) || Infinity;
 const meses = (arg("meses") ?? "").split(",").map((m) => m.trim()).filter((m) => /^\d{4}-\d{2}$/.test(m));
-if (!meses.length) { console.error("uso: node robot/scrape-itens-nf.mjs --meses=2026-08"); process.exit(1); }
 
-const ultimoDia = (m) => {
+/**
+ * --de/--ate lê um INTERVALO qualquer, e não o mês inteiro.
+ *
+ * Serve para tapar o buraco que o relatório não alcança: quando um único dia tem
+ * mais de uma página, a leitura por recursão não pode partir mais e devolve o
+ * dia pela metade. Aí este leitor cobre só aquele dia — lento, mas são dezenas
+ * de notas, não novecentas.
+ */
+const de = arg("de"), ate = arg("ate");
+const intervalos = de && ate
+  ? [{ rotulo: `${de}_${ate}`, de, ate }]
+  : meses.map((m) => ({ rotulo: m, de: `${m}-01`, ate: `${m}-${ultimoDiaDoMes(m)}` }));
+if (!intervalos.length) {
+  console.error("uso: node robot/scrape-itens-nf.mjs --meses=2026-08");
+  console.error("     node robot/scrape-itens-nf.mjs --de=2026-08-14 --ate=2026-08-14");
+  process.exit(1);
+}
+
+function ultimoDiaDoMes(m) {
   const [a, mm] = m.split("-").map(Number);
   return String(new Date(Date.UTC(a, mm, 0)).getUTCDate()).padStart(2, "0");
-};
+}
 const num = (br) => {
   const n = Number(String(br ?? "").replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -248,8 +265,8 @@ try {
   await page.waitForSelector("span:text-is('Doc. Fiscais')", { timeout: 45_000 });
   await page.waitForTimeout(2000);
 
-  for (const mes of meses) {
-    log(`=== ${mes}`);
+  for (const { rotulo, de: dIni, ate: dFim } of intervalos) {
+    log(`=== ${rotulo}`);
     await clickSpan(page, "Doc. Fiscais");
     await page.waitForSelector("span:text-is('Docs. Fiscais Entrada')", { timeout: 30_000 });
     await clickSpan(page, "Docs. Fiscais Entrada");
@@ -279,10 +296,11 @@ try {
       log("  ATENCAO: nao achei o periodo. Tela:\n    " + dbg.join("\n    "));
       continue;
     }
-    const [aa, mm] = mes.split("-");
+    const [a1, m1, d1] = dIni.split("-");
+    const [a2, m2, d2] = dFim.split("-");
     let lidoDe = "", lidoAte = "";
-    for (let t = 0; t < 4; t++) { lidoDe = await digitarData(page, pDe, "01", mm, aa); if (lidoDe === `01/${mm}/${aa}`) break; }
-    for (let t = 0; t < 4; t++) { lidoAte = await digitarData(page, pAte, ultimoDia(mes), mm, aa); if (lidoAte === `${ultimoDia(mes)}/${mm}/${aa}`) break; }
+    for (let t = 0; t < 4; t++) { lidoDe = await digitarData(page, pDe, d1, m1, a1); if (lidoDe === `${d1}/${m1}/${a1}`) break; }
+    for (let t = 0; t < 4; t++) { lidoAte = await digitarData(page, pAte, d2, m2, a2); if (lidoAte === `${d2}/${m2}/${a2}`) break; }
     log(`  periodo: ${lidoDe} a ${lidoAte}`);
     await clicarLupa(page);
 
@@ -295,18 +313,28 @@ try {
       const linhas = await extractGrid(page, gid);
       for (const [i, row] of linhas.entries()) {
         const emissao = dataIso(row["EMISSÃO"]);
-        if (!emissao || emissao < `${mes}-01` || emissao > `${mes}-${ultimoDia(mes)}`) continue;
+        if (!emissao || emissao < dIni || emissao > dFim) continue;
         try {
           if (!(await selecionarNota(page, row["NÚMERO"] ?? row["NUMERO"]))) {
             throw new Error(`nao achei a linha da NF ${row["NÚMERO"]} na grade`);
           }
           await clickSpan(page, "Alterar");
           await page.waitForSelector("span:text-is('PRODUTOS')", { timeout: 20_000 });
-          // A janela é de ESTA nota? Sem isto, dado velho passa por bom.
-          const numAberto = await numeroDoDetalhe(page);
+          // ESPERAR A JANELA SER DESTA NOTA — e recusar se não der.
+          //
+          // A versão anterior só conferia QUANDO conseguia ler o número; nulo
+          // pulava a checagem, e era exatamente aí que o dado velho entrava.
+          // Sem confirmação não há leitura: 14/08 saiu com R$ 3,13M contra
+          // R$ 2,39M reais porque 32 notas foram lidas duas vezes.
           const numLinha = String(row["NÚMERO"] ?? row["NUMERO"] ?? "").trim();
-          if (numAberto && numLinha && numAberto !== numLinha) {
-            throw new Error(`detalhe mostra a NF ${numAberto}, esperava ${numLinha} (janela nao trocou)`);
+          let numAberto = null;
+          for (let t = 0; t < 12; t++) {
+            numAberto = await numeroDoDetalhe(page);
+            if (numAberto === numLinha) break;
+            await page.waitForTimeout(700);
+          }
+          if (numAberto !== numLinha) {
+            throw new Error(`detalhe ficou em ${numAberto ?? "(ilegivel)"}, esperava ${numLinha}`);
           }
           const prods = await lerItensDaNota(page);
           if (!prods.length) throw new Error("aba PRODUTOS sem linhas");
@@ -352,10 +380,10 @@ try {
       await page.waitForTimeout(2500);
     }
 
-    const arquivo = path.join(outDir, `itens-compra-${mes}.json`);
+    const arquivo = path.join(outDir, `itens-nf-${rotulo}.json`);
     writeFileSync(arquivo, JSON.stringify({
       fonte: "nf-entrada-detalhe",
-      mes,
+      intervalo: { de: dIni, ate: dFim },
       geradoEm: new Date().toISOString(),
       parcial: falhas.length > 0,
       falhas,

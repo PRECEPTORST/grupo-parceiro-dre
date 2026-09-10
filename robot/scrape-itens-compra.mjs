@@ -361,7 +361,16 @@ try {
       return itens;
     }
     if (de === ate) {
+      // DIA DENSO DEMAIS: a recursão não parte mais, e a página 2 fica de fora.
+      // Isso É um buraco, e tem de marcar o mês como parcial — senão o custo
+      // médio roda com compra faltando e sai barato demais, sem nada denunciar.
+      // Em agosto/2026 eram R$ 896 mil (5%) num único dia.
       log(`  ${" ".repeat(nivel)}ATENCAO: ${de} tem ${paginas} paginas num dia so — leitura PARCIAL (${itens.length})`);
+      falhas.push({
+        de, ate,
+        erro: `dia com ${paginas} paginas: so a 1a foi lida. Complete com ` +
+              `node robot/scrape-itens-nf.mjs --de=${de} --ate=${ate}`,
+      });
       return itens;
     }
     const meio = new Date(Date.UTC(...de.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))));

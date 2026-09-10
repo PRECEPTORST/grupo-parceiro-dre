@@ -5,7 +5,7 @@
 // documento que o app lê (`estado-enoki`), usando o token do Blob.
 //
 // Uso: node robot/enviar-para-o-site.mjs out/enoki-dre-*.json
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { list, get, put, del } from "@vercel/blob";
 import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -67,6 +67,14 @@ const { normalizarEnokiDre } = await import(`${pathToFileURL(saida).href}?v=${Da
 const r = normalizarEnokiDre(entrada);
 console.log(`lançamentos: ${r.lancamentos.length}`);
 
+// Lançamentos de VARIAÇÃO DE ESTOQUE, se o custo médio já foi calculado.
+// Sem eles o CPV é a compra do mês, e um mês que estoca aparece no vermelho.
+const arqEstoque = path.join(raiz, "robot", "out", "lancamentos-estoque.json");
+const ajustesEstoque = existsSync(arqEstoque)
+  ? JSON.parse(readFileSync(arqEstoque, "utf8")).ajustes ?? []
+  : [];
+if (ajustesEstoque.length) console.log(`+ ${ajustesEstoque.length} ajuste(s) de estoque`);
+
 const de = janelas.map((j) => j.de).sort()[0];
 const ate = janelas.map((j) => j.ate).sort().at(-1);
 const anterior = (await lerDoc(PREFIXO)) ?? {};
@@ -89,7 +97,7 @@ const foraDaJanela = trocouDeAmbiente
   : (anterior.lancamentosEnoki ?? []).filter((l) => !dentro(l.data));
 
 const fatia = {
-  lancamentosEnoki: [...foraDaJanela, ...r.lancamentos],
+  lancamentosEnoki: [...foraDaJanela, ...r.lancamentos, ...ajustesEstoque],
   sacasEnoki: trocouDeAmbiente ? r.sacas : { ...(anterior.sacasEnoki ?? {}), ...r.sacas },
   enokiSync: {
     atualizadoEm: new Date().toISOString(),
