@@ -269,16 +269,24 @@ try {
       throw new Error(`nao fixei o periodo ${de}..${ate} (campos ${prefDe}/${prefAte})`);
     }
     await clickSpan(page, "GERAR");
-    await page.waitForTimeout(14000);
 
-    const linhas = await lerPaginaDoVisor(page);
-
-    // O cabeçalho confirma o período que o SERVIDOR usou — a única prova de que
-    // a data pegou. Sem conferir, um mês sairia silenciosamente errado.
-    const cab = linhas.find((l) => l[0]?.startsWith("Período"));
+    // ESPERAR O RELATÓRIO, não um relógio. Com timeout fixo o robô lia a tela
+    // ainda em branco: dias vinham com "0 itens" e outros estouravam com
+    // "relatorio saiu com undefined". O cabeçalho com o período pedido é o sinal
+    // de que terminou E de que o servidor usou a data certa — as duas coisas que
+    // precisam ser verdade antes de ler uma linha.
     const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
-    if (!cab || !cab.includes(br(de)) || !cab.includes(br(ate))) {
-      throw new Error(`relatorio saiu com ${JSON.stringify(cab)}, esperado ${br(de)} a ${br(ate)}`);
+    let linhas = [];
+    let pronto = false;
+    for (let t = 0; t < 40; t++) {
+      await page.waitForTimeout(2000);
+      linhas = await lerPaginaDoVisor(page);
+      const cab = linhas.find((l) => l[0]?.startsWith("Período"));
+      if (cab && cab.includes(br(de)) && cab.includes(br(ate))) { pronto = true; break; }
+    }
+    if (!pronto) {
+      const cab = linhas.find((l) => l[0]?.startsWith("Período"));
+      throw new Error(`relatorio nao ficou pronto em 80s: ${JSON.stringify(cab)} (esperado ${br(de)} a ${br(ate)})`);
     }
 
     const rodape = linhas.flat().join(" ").match(/P[áa]gina\s+\d+\s+de\s+(\d+)/i);
