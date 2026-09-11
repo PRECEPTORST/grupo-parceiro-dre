@@ -46,11 +46,30 @@ for (const mes of meses) {
   Object.assign(sacas, e.sacas)
   sacasVendidas[mes] = e.sacas[mes] ?? {}
 
-  const arqItens = `robot/out/itens-compra-${mes}.json`
-  if (!existsSync(arqItens)) { console.error(`falta ${arqItens} — sem ele não há custo médio`); process.exit(1) }
-  const bruto = JSON.parse(readFileSync(arqItens, 'utf8'))
-  if (bruto.parcial) { console.error(`${mes}: leitura PARCIAL — recuse, o custo médio sairia barato`); process.exit(1) }
-  const r = resumirCompras(bruto.itens, cadastro)
+  // OS ITENS DE COMPRA VÊM DA PRÓPRIA NOTA (rota NfEntrada, em produção desde
+  // 2026-09-11). Antes precisavam ser extraídos de um relatório de tela, com
+  // 96,8% de cobertura no melhor caso; agora vêm completos e conferidos.
+  const notasEntrada = JSON.parse(readFileSync(arq, 'utf8')).nfs.filter((n) => n.entrada)
+  const itensCompra = []
+  for (const n of notasEntrada) {
+    if (n.status !== 'Finalizada') continue
+    for (const i of n.itens ?? []) {
+      itensCompra.push({
+        dataEmissao: String(n.dataEmissao).slice(0, 10),
+        numeroNf: String(n.numeroNf),
+        cfop: String(n.cfop ?? '').replace(/\D/g, ''),
+        idProduto: i.idProduto ?? null,
+        produto: i.produto ?? '',
+        contrato: (n.contratosVinculados ?? [])[0]?.numeroContrato ?? '',
+        quantidade: Number(i.quantidade) || 0,
+        valorUnitario: Number(i.valorUnitario) || 0,
+        valorTotal: Number(i.valorTotal) || 0,
+      })
+    }
+  }
+  const semItens = notasEntrada.filter((n) => n.status === 'Finalizada' && !(n.itens ?? []).length)
+  if (semItens.length) console.log(`   ⚠ ${semItens.length} nota(s) de entrada sem itens`)
+  const r = resumirCompras(itensCompra, cadastro)
   sacasCompradas[mes] = r.sacas[mes] ?? {}
   valorComprado[mes] = r.valor[mes] ?? {}
 }
@@ -95,6 +114,24 @@ for (const mes of meses) {
     origem: 'enoki',
   })
   console.log(`   ${mes}: aquisição no DRE ${brl(aquisicaoNoDre)} · custo do vendido ${brl(cpvCorreto)}`)
+}
+
+console.log('\n═══ MOVIMENTO DE ESTOQUE (sacas)')
+console.log('MÊS      GRÃO     inicial  compradas   vendidas      final   custo médio')
+const nSac = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })
+for (const p of rel.posicoes) {
+  if (!p.sacasCompradas && !p.sacasVendidas && !p.sacasIniciais) continue
+  console.log(
+    `  ${p.competencia}  ${p.rotulo.padEnd(7)}${nSac(p.sacasIniciais).padStart(8)}` +
+    `${nSac(p.sacasCompradas).padStart(11)}${nSac(p.sacasVendidas).padStart(11)}` +
+    `${nSac(p.sacasFinais).padStart(11)}${('R$ ' + p.custoMedio.toFixed(2)).padStart(14)}` +
+    (p.estoqueNegativo ? '  ⚠ vendeu mais do que tinha' : '') +
+    (p.volumeSemValor ? '  ⚠ volume sem valor' : ''),
+  )
+}
+if (rel.competenciasComAlerta.length) {
+  console.log(`\n⚠ ALERTA em ${rel.competenciasComAlerta.join(', ')} — estoque negativo significa`)
+  console.log('  que falta compra ou estoque de abertura; o CPV sai subavaliado.')
 }
 
 for (const mes of meses) {

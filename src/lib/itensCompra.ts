@@ -9,11 +9,23 @@
 // (custo médio móvel por grão), e só esperava as sacas compradas, que até aqui
 // tinham de ser digitadas à mão.
 //
-// UNIDADE: o ERP mistura KG e SC no mesmo relatório. A conversão NÃO é chutada
-// por faixa de preço como em `enokiDre.ts` — aqui ela vem do cadastro
-// (`/Produtos` da API: `unidade` e `fatorSaca`), que é a resposta exata.
+// ⚠ A UNIDADE VEM DO PREÇO, NÃO DO CADASTRO — o cadastro mente.
+//
+// Cheguei a usar `/Produtos` (`unidade` e `fatorSaca`) por parecer a resposta
+// exata. Não é: o produto 5 ("CAFÉ EM GRÃOS", cadastrado como SC) aparece numa
+// nota com 30.000 a R$ 33,00 (preço de QUILO) e noutra com 220,93 a R$ 1.625,00
+// (preço de SACA). Mesma ficha, duas unidades.
+//
+// Confiar no cadastro transformou 30.000 kg em 30.000 SACAS e inflou o estoque
+// de café em 58 mil sacas — a margem de agosto saltou para 18% sem que nada
+// parecesse errado.
+//
+// O preço unitário, esse, não mente: café a R$ 33 só fecha como quilo, a
+// R$ 1.625 só fecha como saca. `inferirUnidade` (testado em `enokiDre.ts`) faz
+// exatamente essa leitura, e é a mesma que a receita já usa.
 
 import { GRAOS, type Grao } from './tipos'
+import { sacasDeItem } from './enokiDre'
 
 /** Linha do relatório, como o robô a entrega. */
 export interface ItemCompra {
@@ -67,11 +79,19 @@ function sufixo(cfop: string): string {
   return d.length >= 4 ? d.slice(-3) : ''
 }
 
-/** Converte a quantidade do relatório em SACAS, pelo cadastro do produto. */
+/**
+ * Converte a quantidade em SACAS pela UNIDADE INFERIDA DO PREÇO.
+ *
+ * O `cadastro` entra só como desempate quando o preço não decide (item sem valor
+ * unitário, por exemplo) — nunca como fonte primária, pelo motivo no cabeçalho.
+ */
 export function emSacas(item: ItemCompra, cadastro: Map<number, ProdutoCadastro>): number {
+  const grao = graoDoProduto(item.produto)
+  if (grao && item.valorUnitario > 0) {
+    return sacasDeItem(item.produto, item.quantidade, item.valorUnitario)
+  }
   const p = item.idProduto != null ? cadastro.get(item.idProduto) : undefined
   const fator = p?.fatorSaca && p.fatorSaca > 0 ? p.fatorSaca : 60
-  // Já em sacas: o cadastro do café usa SC; a soja e o milho usam KG.
   if (p && p.unidade?.toUpperCase() === 'SC') return item.quantidade
   return item.quantidade / fator
 }

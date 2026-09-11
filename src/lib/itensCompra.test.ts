@@ -34,18 +34,24 @@ describe('graoDoProduto', () => {
   })
 })
 
-describe('emSacas — a unidade vem do CADASTRO, não de chute', () => {
-  it('KG divide pelo fator da saca', () => {
-    expect(emSacas(item({ quantidade: 60_000 }), cadastro)).toBe(1000)
+describe('emSacas — a unidade vem do PREÇO, porque o cadastro mente', () => {
+  it('milho em quilos: preço na casa do real por kg', () => {
+    expect(emSacas(item({ quantidade: 60_000, valorUnitario: 1.02 }), cadastro)).toBeCloseTo(1000, 0)
   })
 
-  it('SC já está em sacas e NÃO é dividido', () => {
-    // O café tem cadastro em SC; dividir por 60 daria 1/60 do volume real.
-    expect(emSacas(item({ idProduto: 5, produto: 'CAFÉ EM GRÃOS', quantidade: 500 }), cadastro)).toBe(500)
+  it('café do MESMO produto, duas unidades — decide pelo preço', () => {
+    // O produto 5 é cadastrado como SC, e aparece nas notas das duas formas:
+    // 30.000 a R$ 33,00 é QUILO (R$ 1.980/saca); 220,93 a R$ 1.625 é SACA.
+    // Seguir o cadastro transformaria 30.000 kg em 30.000 sacas.
+    const porQuilo = item({ idProduto: 5, produto: 'CAFÉ EM GRÃOS', quantidade: 30_000, valorUnitario: 33, valorTotal: 990_000 })
+    const porSaca = item({ idProduto: 5, produto: 'CAFÉ EM GRÃOS', quantidade: 220.93, valorUnitario: 1625, valorTotal: 359_011.25 })
+    expect(emSacas(porQuilo, cadastro)).toBeCloseTo(500, 0)
+    expect(emSacas(porSaca, cadastro)).toBeCloseTo(220.93, 2)
   })
 
-  it('produto fora do cadastro cai no fator 60, que é o do grão', () => {
-    expect(emSacas(item({ idProduto: 999, quantidade: 60_000 }), cadastro)).toBe(1000)
+  it('sem preço unitário, o cadastro serve de desempate', () => {
+    expect(emSacas(item({ quantidade: 60_000, valorUnitario: 0 }), cadastro)).toBe(1000)
+    expect(emSacas(item({ idProduto: 5, produto: 'CAFÉ EM GRÃOS', quantidade: 500, valorUnitario: 0 }), cadastro)).toBe(500)
   })
 })
 

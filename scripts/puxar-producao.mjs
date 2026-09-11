@@ -12,10 +12,11 @@
  *     raiz de CNPJ em vez de por nome;
  *   • cobre as CINCO empresas, e não só a que está ativa na sessão do ERP.
  *
- * O QUE A API AINDA NÃO DÁ: nota fiscal de ENTRADA. Não existe rota — testadas
- * NfEntrada, NfsEntrada, DocumentosEntrada, NotaEntrada, NfCompra, Compras,
- * Entradas e mais, todas 404. Como o CPV nasce da nota de entrada, o robô
- * continua necessário para essa peça, e este script funde as duas fontes.
+ * A NOTA DE ENTRADA CHEGOU (2026-09-11). Era a peça que faltava e o motivo de
+ * todo o trabalho de raspagem: `NfEntrada` traz os mesmos itens (produto,
+ * quantidade, valorUnitario), o `emitenteCpfCnpj` e — de brinde — o
+ * `contratosVinculados` com o contrato de COMPRA, que a rota `Contratos` não
+ * devolvia. Com ela o DRE passa a ser 100% API, e o robô vira histórico.
  *
  *   node scripts/puxar-producao.mjs 2026-07 2026-08
  */
@@ -76,26 +77,22 @@ mkdirSync(outDir, { recursive: true });
 for (const mes of meses) {
   const de = `${mes}-01`, ate = ultimoDia(mes);
   const nfs = [], pagar = [], receber = [];
+  const entradasPorEmpresa = new Map();
 
   for (const emp of empresas) {
     const id = emp.idEmpresa;
     const n = await todos("NfSaida", `idEmpresa=${id}&dataInicio=${de}&dataFim=${ate}`, "idNf");
+    // `entrada: true` é o que faz `cfop.ts` ler 1102 como COMPRA e não como venda.
+    const ne = (await todos("NfEntrada", `idEmpresa=${id}&dataInicio=${de}&dataFim=${ate}`, "idNf"))
+      .map((x) => ({ ...x, entrada: true }));
     // COMPETÊNCIA: título filtrado pela data de LANÇAMENTO, não a de quitação.
     const p = await todos("LancamentosFinanceirosPagar", `idEmpresa=${id}&dataLancInicio=${de}&dataLancFim=${ate}`, "idItemLancamento");
     const r = await todos("LancamentosFinanceiros", `idEmpresa=${id}&dataLancInicio=${de}&dataLancFim=${ate}`, "idItemLancamento");
-    nfs.push(...n); pagar.push(...p); receber.push(...r);
-    console.log(`  ${mes} empresa ${id} (${emp.nomeFantasia}): nfs=${n.length} pagar=${p.length} receber=${r.length}`);
+    nfs.push(...n, ...ne); pagar.push(...p); receber.push(...r);
+    entradasPorEmpresa.set(id, ne.length);
+    console.log(`  ${mes} empresa ${id} (${emp.nomeFantasia}): saida=${n.length} entrada=${ne.length} pagar=${p.length} receber=${r.length}`);
   }
 
-  // As notas de ENTRADA continuam vindo do robô: a API não tem rota para elas.
-  const doRobo = path.join(outDir, `enoki-dre-${de}_${ate}.json`);
-  let entradas = [];
-  if (existsSync(doRobo)) {
-    entradas = (JSON.parse(readFileSync(doRobo, "utf8")).nfs ?? []).filter((n) => n.entrada);
-    console.log(`  ${mes}: + ${entradas.length} nota(s) de entrada do robô`);
-  } else {
-    console.log(`  ${mes}: ⚠ SEM notas de entrada — o CPV sairá vazio. Rode robot/scrape-dre.mjs para este mês.`);
-  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // RECEITA DE CINCO EMPRESAS COM CUSTO DE UMA É UM LUCRO INVENTADO.
@@ -107,9 +104,8 @@ for (const mes of meses) {
   //
   // Então só entram as empresas para as quais existe nota de ENTRADA. As outras
   // ficam de fora, nomeadas, até o robô cobri-las.
-  const comCompra = new Set(entradas.map((n) => n.idEmpresa).filter((x) => x != null));
-  const soMG = !comCompra.size; // o robô antigo não carimbava idEmpresa: era MG
-  const permitida = (id) => (soMG ? id === 1 : comCompra.has(id));
+  const comCompra = new Set([...entradasPorEmpresa].filter(([, n]) => n > 0).map(([id]) => id));
+  const permitida = (id) => comCompra.has(id);
   const foraDoCorte = empresas.filter((e) => !permitida(e.idEmpresa) &&
     nfs.some((n) => n.idEmpresa === e.idEmpresa));
   if (foraDoCorte.length) {
@@ -129,9 +125,9 @@ for (const mes of meses) {
     parcial: false,
     empresasIncluidas: empresas.filter((e) => permitida(e.idEmpresa)).map((e) => e.nomeFantasia),
     empresasForaPorFaltaDeCompra: foraDoCorte.map((e) => e.nomeFantasia),
-    nfs: [...nfsFinal, ...entradas],
+    nfs: nfsFinal,
     pagar: pagarFinal,
     receber: receberFinal,
   }, null, 1), "utf8");
-  console.log(`  gravado: ${arquivo}  (nfs=${nfsFinal.length}+${entradas.length}ent pagar=${pagarFinal.length} receber=${receberFinal.length})`);
+  console.log(`  gravado: ${arquivo}  (nfs=${nfsFinal.length} pagar=${pagarFinal.length} receber=${receberFinal.length})`);
 }
