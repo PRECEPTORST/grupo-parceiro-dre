@@ -94,6 +94,34 @@ const rel = custoMedioMovel(meses, movimentos)
 //
 // O ajuste correto é: (custo do que foi vendido) − (aquisição lançada no DRE).
 const CONTAS_AQUISICAO = new Set(['4.1.18', '4.1.01', '4.1.02', '4.1.03', '4.1.05'])
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTOQUE NEGATIVO INVALIDA O CUSTO MÉDIO — E O SCRIPT RECUSA.
+//
+// A média ponderada só existe se houver estoque. Quando as vendas passam do
+// disponível, a conta divide por um saldo que não existe e devolve qualquer
+// coisa: no ano de 2026 o café saiu com custo de R$ 4.458, depois -R$ 4.019 e
+// enfim R$ 20.152/saca, e agosto apareceu com margem de -155%.
+//
+// O erro não é de arredondamento, é de premissa: falta o ESTOQUE DE ABERTURA.
+// A soja vende mais do que compra TODO mês desde janeiro, o que significa grão
+// comprado em 2025 — ou volume de venda inflado por remessa que sai e volta.
+//
+// Emitir o ajuste assim mesmo poria um número absurdo no DRE com cara de
+// apurado. Melhor um CPV admitidamente incompleto (a compra do mês, com o aviso
+// na tela) do que um inventado.
+const graosQuebrados = new Set(
+  rel.posicoes.filter((p) => p.estoqueNegativo).map((p) => p.rotulo),
+)
+if (graosQuebrados.length !== 0 && graosQuebrados.size) {
+  console.log(`\n✗ NÃO vou gerar ajuste de estoque: ${[...graosQuebrados].join(', ')} com saldo negativo.`)
+  console.log('  A média móvel precisa de estoque de abertura, que ainda não temos.')
+  console.log('  O DRE fica com o CPV = compra do mês, e o aviso na tela explica a distorção.')
+  writeFileSync('robot/out/lancamentos-estoque.json',
+    JSON.stringify({ geradoEm: new Date().toISOString(), meses, ajustes: [], motivo: 'estoque negativo' }, null, 1), 'utf8')
+  process.exit(0)
+}
+
 const ajustes = []
 for (const mes of meses) {
   const aquisicaoNoDre = lancamentos

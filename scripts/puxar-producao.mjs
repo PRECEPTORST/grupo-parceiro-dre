@@ -39,9 +39,30 @@ if (!meses.length) { console.error("uso: node scripts/puxar-producao.mjs 2026-07
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Uma chamada, com paciência.
+ *
+ * A API devolve 503 ("Service Unavailable") de vez em quando, e num puxão de
+ * vários meses isso mata a carga inteira no meio — aconteceu em abril, depois de
+ * três meses já baixados. Como cada mês é gravado ao terminar, o prejuízo era só
+ * de tempo; mas tempo aqui é dezenas de minutos.
+ *
+ * 429 (limite) e 5xx (instabilidade) são temporários e merecem espera crescente.
+ * Erro de rede também: o `fetch` estoura por timeout de conexão às vezes.
+ */
 async function api(caminho, tent = 0) {
-  const r = await fetch(`${BASE}${NS}${caminho}`, { headers: { "X-Api-Key": KEY, accept: "application/json" } });
-  if (r.status === 429 && tent < 6) { await sleep(1500 * (tent + 1)); return api(caminho, tent + 1); }
+  let r;
+  try {
+    r = await fetch(`${BASE}${NS}${caminho}`, { headers: { "X-Api-Key": KEY, accept: "application/json" } });
+  } catch (e) {
+    if (tent >= 6) throw e;
+    await sleep(2000 * (tent + 1));
+    return api(caminho, tent + 1);
+  }
+  if ((r.status === 429 || r.status >= 500) && tent < 6) {
+    await sleep(2000 * (tent + 1));
+    return api(caminho, tent + 1);
+  }
   if (!r.ok) throw new Error(`${caminho} → ${r.status} ${(await r.text()).slice(0, 160)}`);
   return r.json();
 }
