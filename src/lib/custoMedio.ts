@@ -239,38 +239,80 @@ export function montarMovimentosEstoque(
   return movimentos
 }
 
-/** Conta em que a apropriação de estoque entra no DRE (negativa ao formar estoque). */
-export const CONTA_VARIACAO_ESTOQUE = '4.1.19'
+/**
+ * A APROPRIAÇÃO ENTRA NA CONTA DE AQUISIÇÃO DO PRÓPRIO GRÃO.
+ *
+ * Havia aqui uma conta 4.1.19, "Variação de estoque (apropriação)", que eu tinha
+ * criado. O plano de contas do Grupo Parceiro vai de 4.1.01 a 4.1.17 e não tem
+ * conta de variação de estoque — inventar uma linha no plano de contas de um
+ * cliente não é decisão de quem escreve o código, e a diretoria mandou tirar.
+ *
+ * O ajuste agora entra em 4.1.01 (soja), 4.1.02 (milho), 4.1.03 (sorgo) ou
+ * 4.1.05 (café): a MESMA conta em que a compra daquele grão já está lançada.
+ * Negativo quando o mês forma estoque, positivo quando vende do estoque
+ * anterior. O efeito no resultado é idêntico; o que muda é que a conta de
+ * aquisição de cada grão passa a mostrar o custo do que foi VENDIDO em vez do
+ * que foi COMPRADO — que é justamente o que a conta deveria significar.
+ *
+ * Custo caro disso, e é bom estar dito: no sintético some a linha que deixava a
+ * apropriação visível de longe. Por isso o `historico` de cada lançamento diz
+ * explicitamente o que ele é, e o analítico da conta mostra a compra do mês e o
+ * ajuste lado a lado, na mesma conta, somando o custo do vendido. Continua
+ * conferível contra o armazém — só não salta mais aos olhos.
+ */
+const CONTA_APROPRIACAO: Record<Grao, string> = {
+  soja: '4.1.01',
+  milho: '4.1.02',
+  sorgo: '4.1.03',
+  cafe: '4.1.05',
+}
 
 /**
- * Lançamentos de VARIAÇÃO DE ESTOQUE, um por competência.
+ * Ajuste de estoque POR GRÃO numa competência: o custo do que saiu menos o valor
+ * do que foi comprado. Negativo quando o mês forma estoque.
+ */
+export function ajusteEstoquePorGrao(
+  rel: RelatorioCustoMedio,
+  competencia: string,
+): Partial<Record<Grao, number>> {
+  const out: Partial<Record<Grao, number>> = {}
+  for (const p of rel.posicoes) {
+    if (p.competencia !== competencia) continue
+    const v = arred(p.cpv - p.valorComprado)
+    if (Math.abs(v) >= 0.005) out[p.grao] = v
+  }
+  return out
+}
+
+/**
+ * Lançamentos de apropriação de estoque, um por grão por competência.
  *
  * O DRE lança como custo a compra do mês. A diferença entre isso e o custo do
- * que foi realmente vendido é estoque — e é ela que entra aqui, negativa quando
- * o mês forma estoque.
+ * que foi realmente vendido é estoque — e é ela que entra aqui.
  *
  * Por que um LANÇAMENTO em vez de corrigir o CPV direto: um custo que encolhe
- * sem explicação é indefensável numa reunião. Como linha, ela aparece no DRE
- * analítico, soma zero ao longo do tempo (o que entra num mês sai noutro) e pode
- * ser conferida contra o estoque físico do armazém.
+ * sem rastro é indefensável numa reunião. Como lançamento, ele aparece no
+ * analítico da conta, soma zero ao longo do tempo (o que sai num mês entra
+ * noutro) e pode ser conferido contra o estoque físico do armazém.
  */
 export function lancamentosDeEstoque(rel: RelatorioCustoMedio): LancamentoCanonico[] {
   const out: LancamentoCanonico[] = []
   for (const competencia of Object.keys(rel.cpvPorCompetencia).sort()) {
-    const ajuste = ajusteEstoque(rel, competencia)
-    if (Math.abs(ajuste) < 0.005) continue
     const [a, m] = competencia.split('-').map(Number)
-    out.push({
-      id: `estoque-${competencia}`,
-      data: `${competencia}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`,
-      contaSafragold: CONTA_VARIACAO_ESTOQUE,
-      historico:
-        ajuste < 0
-          ? 'Grão comprado e não vendido no mês (sai do custo, fica no estoque)'
-          : 'Grão vendido de estoque anterior (entra no custo)',
-      valor: ajuste,
-      origem: 'enoki',
-    })
+    const data = `${competencia}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
+    for (const [grao, valor] of Object.entries(ajusteEstoquePorGrao(rel, competencia))) {
+      out.push({
+        id: `estoque-${competencia}-${grao}`,
+        data,
+        contaSafragold: CONTA_APROPRIACAO[grao as Grao],
+        historico:
+          valor < 0
+            ? `Apropriação de estoque: ${grao} comprado e não vendido no mês (sai do custo, fica no estoque)`
+            : `Apropriação de estoque: ${grao} vendido de estoque anterior (entra no custo)`,
+        valor,
+        origem: 'enoki',
+      })
+    }
   }
   return out
 }

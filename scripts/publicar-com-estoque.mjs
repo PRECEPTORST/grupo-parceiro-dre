@@ -6,10 +6,16 @@
  *   • sacas vendidas dos itens da nota de saída;
  *   • sacas e valor comprados do relatório de movimentação por CFOP.
  *
- * O ajuste entra como LANÇAMENTO na conta 4.1.19 ("Variação de estoque"), e não
- * como um CPV corrigido em silêncio: um custo que encolhe sem explicação é
- * indefensável numa reunião, e como linha ele aparece no analítico e pode ser
- * conferido contra o armazém.
+ * O ajuste entra como LANÇAMENTO na conta de aquisição do próprio grão (4.1.01
+ * soja, 4.1.02 milho, 4.1.03 sorgo, 4.1.05 café), e não como um CPV corrigido em
+ * silêncio: um custo que encolhe sem rastro é indefensável numa reunião, e como
+ * lançamento ele aparece no analítico da conta e pode ser conferido contra o
+ * armazém.
+ *
+ * Existiu aqui uma conta 4.1.19 ("Variação de estoque"), criada por mim. O plano
+ * de contas do cliente vai de 4.1.01 a 4.1.17 e não tem conta de variação de
+ * estoque — a diretoria mandou tirar, e com razão: inventar linha no plano de
+ * contas de um cliente não é decisão de quem escreve o código.
  *
  *   npx tsx scripts/publicar-com-estoque.mjs 2026-08
  */
@@ -19,6 +25,7 @@ import { mapaEfetivo } from '../src/lib/planoContas.ts'
 import { resumirCompras } from '../src/lib/itensCompra.ts'
 import { custoMedioMovel, montarMovimentosEstoque, lancamentosDeEstoque, ajusteEstoque, aberturaMinima } from '../src/lib/custoMedio.ts'
 import { montarDre } from '../src/lib/dre.ts'
+import { CONTA_SEM_DETALHE_COMPRA } from '../src/lib/enokiDre.ts'
 import { recortarEmpresa } from './_apuracao.mjs'
 
 const meses = process.argv.slice(2).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort()
@@ -107,7 +114,6 @@ const rel = custoMedioMovel(meses, movimentos, abertura)
 // era -R$ 3,03M, e a margem em -5,95% em vez de +3,69%.
 //
 // O ajuste correto é: (custo do que foi vendido) − (aquisição lançada no DRE).
-const CONTAS_AQUISICAO = new Set(['4.1.18', '4.1.01', '4.1.02', '4.1.03', '4.1.05'])
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ESTOQUE NEGATIVO INVALIDA O CUSTO MÉDIO — E O SCRIPT RECUSA.
@@ -124,26 +130,53 @@ const CONTAS_AQUISICAO = new Set(['4.1.18', '4.1.01', '4.1.02', '4.1.03', '4.1.0
 // Emitir o ajuste assim mesmo poria um número absurdo no DRE com cara de
 // apurado. Melhor um CPV admitidamente incompleto (a compra do mês, com o aviso
 // na tela) do que um inventado.
+const CONTA_DO_GRAO = { soja: '4.1.01', milho: '4.1.02', sorgo: '4.1.03', cafe: '4.1.05' }
+
+// O AJUSTE É POR GRÃO, e a base de cada um é o que está NO DRE daquele grão —
+// não o que o relatório de itens leu. As duas coisas podem divergir (o resumo de
+// compras só conta CFOP de aquisição; o DRE conta a nota inteira), e usar a base
+// errada já custou caro uma vez: deu -R$ 1,31M de ajuste quando o certo era
+// -R$ 3,03M, e margem -5,95% em vez de +3,69%.
 const ajustes = []
 for (const mes of meses) {
-  const aquisicaoNoDre = lancamentos
-    .filter((l) => l.data.slice(0, 7) === mes && CONTAS_AQUISICAO.has(l.contaSafragold))
+  const noDreDoGrao = {}
+  for (const l of lancamentos) {
+    if (l.data.slice(0, 7) !== mes) continue
+    const grao = Object.keys(CONTA_DO_GRAO).find((g) => CONTA_DO_GRAO[g] === l.contaSafragold)
+    if (grao) noDreDoGrao[grao] = (noDreDoGrao[grao] ?? 0) + l.valor
+  }
+  // 4.1.18 é a compra sem detalhe de produto. Está zerada desde que a rota
+  // NfEntrada passou a entregar os itens, mas se voltar a ter valor ele não tem
+  // grão a que pertencer — e aí o ajuste por grão deixaria esse custo sem
+  // apropriação. Melhor gritar do que publicar torto.
+  const semDetalhe = lancamentos
+    .filter((l) => l.data.slice(0, 7) === mes && l.contaSafragold === CONTA_SEM_DETALHE_COMPRA)
     .reduce((s, l) => s + l.valor, 0)
-  const cpvCorreto = rel.cpvPorCompetencia[mes] ?? 0
-  const valor = Math.round((cpvCorreto - aquisicaoNoDre) * 100) / 100
-  if (Math.abs(valor) < 0.005) continue
+  if (Math.abs(semDetalhe) >= 0.005) {
+    console.log(`   ⚠ ${mes}: ${brl(semDetalhe)} em ${CONTA_SEM_DETALHE_COMPRA} (compra sem grão) fica SEM apropriação`)
+  }
+
   const [a, m] = mes.split('-').map(Number)
-  ajustes.push({
-    id: `estoque-${mes}`,
-    data: `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`,
-    contaSafragold: '4.1.19',
-    historico: valor < 0
-      ? 'Grão comprado e não vendido no mês (sai do custo, fica no estoque)'
-      : 'Grão vendido de estoque anterior (entra no custo)',
-    valor,
-    origem: 'enoki',
-  })
-  console.log(`   ${mes}: aquisição no DRE ${brl(aquisicaoNoDre)} · custo do vendido ${brl(cpvCorreto)}`)
+  const data = `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
+  let totalMes = 0
+  for (const p of rel.posicoes.filter((x) => x.competencia === mes)) {
+    const base = noDreDoGrao[p.grao] ?? 0
+    const valor = Math.round((p.cpv - base) * 100) / 100
+    if (Math.abs(valor) < 0.005) continue
+    totalMes += valor
+    ajustes.push({
+      id: `estoque-${mes}-${p.grao}`,
+      data,
+      contaSafragold: CONTA_DO_GRAO[p.grao],
+      historico: valor < 0
+        ? `Apropriação de estoque: ${p.rotulo} comprado e não vendido no mês (sai do custo, fica no estoque)`
+        : `Apropriação de estoque: ${p.rotulo} vendido de estoque anterior (entra no custo)`,
+      valor,
+      origem: 'enoki',
+    })
+  }
+  const aquisicaoNoDre = Object.values(noDreDoGrao).reduce((s, v) => s + v, 0) + semDetalhe
+  console.log(`   ${mes}: aquisição no DRE ${brl(aquisicaoNoDre)} · custo do vendido ${brl(rel.cpvPorCompetencia[mes] ?? 0)} · ajuste ${brl(totalMes)}`)
 }
 
 // A tabela vem ANTES da recusa: saber ONDE o saldo virou negativo é o que
@@ -184,8 +217,10 @@ for (const mes of meses) {
   const depois = montarDre(mes, [...lancamentos, ...ajustes], mapa)
   const m = (d) => (d.realizado.lucroBruto / d.realizado.receitaLiquida * 100).toFixed(2)
   console.log(`\n${mes}`)
-  const aj = ajustes.find((x) => x.data.startsWith(mes))?.valor ?? 0
-  console.log(`   variação de estoque      ${brl(aj).padStart(20)}`)
+  // SOMA, não `find`: agora há um lançamento por GRÃO, e mostrar o primeiro
+  // deles como se fosse o ajuste do mês subnotifica o número.
+  const aj = ajustes.filter((x) => x.data.startsWith(mes)).reduce((s, x) => s + x.valor, 0)
+  console.log(`   apropriação de estoque   ${brl(aj).padStart(20)}`)
   console.log(`   margem sem apropriação   ${(m(antes) + '%').padStart(20)}`)
   console.log(`   margem com apropriação   ${(m(depois) + '%').padStart(20)}`)
   console.log(`   lucro bruto              ${brl(depois.realizado.lucroBruto).padStart(20)}`)

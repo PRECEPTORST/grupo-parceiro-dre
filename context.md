@@ -1056,3 +1056,30 @@ isso ficou meses só em comentário de código — agora está na tela de
 divergências, onde o contador possa ver e decidir. A mais próxima que existe,
 4.1.14 "Quebra técnica e perda de estoque", é outra coisa: perda física, não
 diferimento de custo.
+
+### A 4.1.19 foi removida (mesma sessão)
+
+A diretoria mandou tirar, e a decisão está certa: inventar linha no plano de
+contas de um cliente não é decisão de quem escreve o código.
+
+A apropriação continua — o que mudou foi onde ela pousa. Agora entra na conta de
+aquisição do próprio grão (4.1.01 soja, 4.1.02 milho, 4.1.03 sorgo, 4.1.05
+café), um lançamento por grão por competência, negativo quando o mês forma
+estoque. O resultado é idêntico ao centavo: agosto/2026 fecha em 4,68% de margem
+e R$ 888.641,57 de lucro bruto nos dois desenhos.
+
+E faz mais sentido assim do que o desenho anterior: a conta "Aquisição de milho"
+passa a mostrar o custo do milho que foi VENDIDO, que é o que uma conta de CPV
+deveria significar, em vez do que foi comprado.
+
+**O custo é real e vale registrar**: no DRE sintético some a linha que deixava a
+apropriação visível de longe. Ela continua no analítico da conta, com o
+`historico` de cada lançamento dizendo o que é, e continua conferível contra o
+armazém — só não salta mais aos olhos de quem abre o sintético.
+
+A 4.1.18 ("Aquisição de grãos não detalhado"), também criada por nós, ficou de
+pé. Está com saldo ZERO nos 20 meses desde que a rota NfEntrada passou a
+entregar os itens de todas as notas de compra: existe só como rede de segurança
+para nota sem item, e o script avisa em voz alta se ela voltar a ter valor —
+porque aí seria custo sem grão a que pertencer, e o ajuste por grão o deixaria
+sem apropriação.

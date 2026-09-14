@@ -4,7 +4,6 @@ import {
   ajusteEstoque,
   lancamentosDeEstoque,
   aberturaMinima,
-  CONTA_VARIACAO_ESTOQUE,
   type MovimentoEstoque,
 } from './custoMedio'
 
@@ -151,7 +150,7 @@ describe('volume comprado sem valor de compra', () => {
   })
 })
 
-describe('lancamentosDeEstoque — a apropriação entra como LINHA do DRE', () => {
+describe('lancamentosDeEstoque — a apropriação entra na conta do próprio grão', () => {
   // Números reais de agosto/2026: comprou 215.014 sacas de milho e vendeu
   // 195.926. O grão que sobrou estava sendo lançado como prejuízo.
   const movimentos: MovimentoEstoque[] = [
@@ -161,10 +160,29 @@ describe('lancamentosDeEstoque — a apropriação entra como LINHA do DRE', () 
   it('mês que forma estoque tira custo — lançamento NEGATIVO', () => {
     const rel = custoMedioMovel(['2026-08'], movimentos)
     const [l] = lancamentosDeEstoque(rel)
-    expect(l.contaSafragold).toBe(CONTA_VARIACAO_ESTOQUE)
+    // 4.1.02 é "Aquisição de milho", conta que JÁ EXISTE no plano do cliente.
+    // A 4.1.19 que existia aqui era invenção minha e foi removida.
+    expect(l.contaSafragold).toBe('4.1.02')
     expect(l.valor).toBeLessThan(0)
     expect(l.data).toBe('2026-08-31')
     expect(l.historico).toContain('não vendido')
+  })
+
+  it('cada grão vai para a SUA conta de aquisição', () => {
+    const rel = custoMedioMovel(['2026-08'], [
+      { competencia: '2026-08', grao: 'soja', sacasCompradas: 1_000, valorComprado: 130_000, sacasVendidas: 400 },
+      { competencia: '2026-08', grao: 'milho', sacasCompradas: 1_000, valorComprado: 60_000, sacasVendidas: 300 },
+    ])
+    const contas = Object.fromEntries(lancamentosDeEstoque(rel).map((l) => [l.contaSafragold, l.valor]))
+    expect(contas['4.1.01']).toBeCloseTo(-78_000, 0) // soja: 600 sacas a R$ 130
+    expect(contas['4.1.03']).toBeUndefined() // sorgo não se moveu
+  })
+
+  it('nenhum lançamento cai numa conta fora do plano de contas do cliente', () => {
+    const rel = custoMedioMovel(['2026-08'], movimentos)
+    for (const l of lancamentosDeEstoque(rel)) {
+      expect(['4.1.01', '4.1.02', '4.1.03', '4.1.05']).toContain(l.contaSafragold)
+    }
   })
 
   it('mês que vende estoque anterior devolve o custo — lançamento POSITIVO', () => {

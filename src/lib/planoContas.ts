@@ -67,12 +67,11 @@ export const PLANO_CONTAS: PlanoConta[] = [
   // Espelho do 3.1.15 no lado do custo: a grade de NF de entrada do scraper não
   // abre os itens, então a compra existe e o cereal não. O valor não pode sumir.
   { conta: '4.1.18', descricao: 'Aquisição de grãos (produto não detalhado)', linha: 'custo_produto' },
-  // NEGATIVA quando o mês forma estoque: tira do custo o grão que entrou e não
-  // saiu. É o que transforma "compra do mês" em "custo do que foi vendido" sem
-  // esconder a conta — a linha aparece no DRE analítico e pode ser conferida
-  // contra o armazém. Em agosto/2026 foram -R$ 3,03M, e a margem saiu de -13,3%
-  // para +3,7%.
-  { conta: '4.1.19', descricao: 'Variação de estoque (apropriação)', linha: 'custo_produto' },
+  // Aqui existiu uma 4.1.19, "Variação de estoque (apropriação)", que eu criei.
+  // O plano de contas do cliente vai de 4.1.01 a 4.1.17 e não tem conta de
+  // variação de estoque; inventar linha no plano de contas de um cliente não é
+  // decisão de quem escreve o código. A apropriação passou a entrar na conta de
+  // aquisição do próprio grão (4.1.01/02/03/05) — ver `custoMedio.ts`.
   { conta: '4.1.17', descricao: 'Ensacamento e embalagem', linha: 'custo_produto' },
 
   // ---- Despesas comerciais ----

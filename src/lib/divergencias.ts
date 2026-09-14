@@ -281,9 +281,9 @@ const DECISOES_ABERTAS: Divergencia[] = [
     oQueE:
       'A linha COMPRA da planilha é a nota de entrada do mês (CFOP 1102) e nada mais: o grão comprado e não vendido vira custo na hora. Aqui ele fica no estoque e só vira custo quando sai, pela média ponderada móvel.',
     valendoHoje:
-      'APROPRIAMOS, em conta própria (4.1.19, "Variação de estoque"), visível no analítico. Agosto/2026 fecha com 3,24% de margem bruta — dentro dos 3% a 4% que a diretoria informou.',
+      'APROPRIAMOS. O ajuste entra como lançamento na conta de aquisição do próprio grão (4.1.01 soja, 4.1.02 milho, 4.1.03 sorgo), negativo quando o mês forma estoque. Agosto/2026 fecha com 4,68% de margem bruta.',
     seMudar:
-      'Sem apropriação, um mês que estoca aparece no vermelho e o seguinte, com lucro que não é dele. Com ela, o mês reflete o que de fato foi vendido. Se o cliente quiser o número igual ao da planilha, é só desligar a 4.1.19 — mas aí o mês volta a oscilar.',
+      'Sem apropriação, um mês que estoca aparece no vermelho e o seguinte, com lucro que não é dele: agosto/2026 sairia com -6,87% em vez de 4,68%. Com ela, o mês reflete o que de fato foi vendido. Desligá-la faz o número ficar igual ao da planilha, ao custo de o mês voltar a oscilar.',
     quemDecide: 'Diretoria + contador. É a escolha de MÉTODO, não de dado.',
   },
   {
@@ -303,18 +303,18 @@ const DECISOES_ABERTAS: Divergencia[] = [
   },
   {
     id: 'conta-4119-inventada',
-    titulo: 'A conta "Variação de estoque" não existe no plano de contas do cliente',
+    titulo: 'A conta "Variação de estoque" que criamos foi REMOVIDA',
     valor: 0,
     quantidade: 0,
-    situacao: 'aberta',
+    situacao: 'decidida',
     linha: 'custo',
     oQueE:
-      'O plano de contas do Grupo Parceiro vai de 4.1.01 a 4.1.17 e não tem conta de variação de estoque. Criamos duas: 4.1.19 ("Variação de estoque — apropriação") e 4.1.18 ("Aquisição de grãos — produto não detalhado").',
+      'O plano de contas do Grupo Parceiro vai de 4.1.01 a 4.1.17 e não tem conta de variação de estoque. Tínhamos criado a 4.1.19 ("Variação de estoque — apropriação") por conta própria.',
     valendoHoje:
-      'Em uso. A alternativa era encolher o CPV em silêncio, e um custo que diminui sem linha que explique é indefensável numa reunião — como conta própria, o valor aparece no analítico e pode ser conferido contra o armazém. A mais próxima que existe, 4.1.14 "Quebra técnica e perda de estoque", significa outra coisa: perda física, não diferimento.',
+      'REMOVIDA, por determinação da diretoria. A apropriação passou a entrar na conta de aquisição do próprio grão — 4.1.01 soja, 4.1.02 milho, 4.1.03 sorgo, 4.1.05 café — que é onde a compra daquele grão já está lançada. O resultado é idêntico ao centavo; o que muda é que a conta de aquisição passa a mostrar o custo do que foi VENDIDO em vez do que foi COMPRADO, que é o que ela deveria significar.',
     seMudar:
-      'Se o contador criar as contas, nada muda no cálculo — só o número passa a ser oficial. Se recusar, a apropriação tem de ser embutida nas contas de aquisição (4.1.01 a 4.1.05) e deixa de ser auditável na tela.',
-    quemDecide: 'Contador. Criar conta no plano não é decisão nossa.',
+      'O custo disso é real: no DRE sintético some a linha que deixava a apropriação visível de longe. Ela continua no analítico da conta, com o histórico dizendo o que é, e conferível contra o armazém — só não salta mais aos olhos. Permanece de pé a 4.1.18 ("Aquisição de grãos não detalhado"), também criada por nós, hoje com saldo ZERO em todos os 20 meses: existe só como rede de segurança para nota de compra sem itens.',
+    quemDecide: 'Fechado — decisão da diretoria.',
   },
   {
     id: 'escopo-empresas',
