@@ -1141,3 +1141,48 @@ movia o DRE — resíduo não entra — mas apagava o sinal: quem olhasse a fila
 R$ 19,5 milhões "não classificados" e poderia "consertar" classificando, o que
 dobraria o custo, já que ele vem da nota. Os prefixos de família agora aceitam o
 "DE" opcional e o plural. **Preferir a regra tolerante à regra bonita.**
+
+## §35 — "ICMS crédito presumido" não era imposto (2026-09-14)
+
+Pergunta do Matheus sobre a conferência de linhas: "esse impostos e devolução
+você tirou de onde?". As duas linhas tinham origens opostas.
+
+**DEVOLUÇÃO (R$ 393.817,56 em agosto) é real.** 34 notas de devolução de venda,
+com número, grão e destinatário: NF 14298 de soja da AGROFEL (R$ 105.213,00),
+NF 15068 de milho da SEARA (R$ 60.891,71), NF 14746 da SEARA (R$ 58.783,96),
+NF 14538 da MANTIQUEIRA (R$ 42.750,00). Deduzir é o correto; a planilha zera a
+linha todo mês. Divergência legítima, do contador.
+
+**IMPOSTOS (R$ 134.101,21) era erro meu.** Existe um centro de custo "ICMS
+CRÉDITO PRESUMIDO" no ERP e eu o mapeei para 3.2.01 ("ICMS sobre vendas"), pelo
+nome. São dois erros empilhados:
+
+1. Crédito presumido é BENEFÍCIO fiscal. Benefício não reduz receita bruta —
+   nem que fosse imposto de verdade, o sinal estaria errado.
+2. Não é imposto nenhum: são títulos de COMPRA DE GRÃO com o centro de custo
+   errado no ERP.
+
+A prova, e vale o método: ligando título e nota pelo `idContrato` (não pelo
+texto do contrato, que tem formato diferente dos dois lados), **18 dos 19
+títulos assim rotulados em 20 meses casam com uma nota CFOP 1102 a menos de 2%
+de distância**. Em agosto o contrato 169/26M tem três títulos — dois "COMPRA DE
+MILHO" de R$ 34.005,89 e R$ 40.799,08, e um "ICMS CRÉDITO PRESUMIDO" de
+R$ 45.074,79 — contra exatamente três notas de compra: NF 88 (R$ 34.074,04),
+NF 89 (R$ 40.880,84) e NF 90 (R$ 45.165,12). Um para cada.
+
+São R$ 985.625,60 em 20 meses saindo indevidamente da receita. Corrigido para
+`VEM_DA_NF`: o custo já vem da nota. A linha IMPOSTOS agora bate com a planilha
+(zero) em todos os meses e a receita líquida de agosto foi de -6,5% para -5,8%.
+
+**Dois testes meus fixavam a suposição errada no lugar.** Um afirmava
+literalmente "crédito presumido de ICMS recebido REDUZ a dedução" — eu tinha
+escrito o teste a partir do nome do centro de custo, não de um documento. Um
+teste que codifica uma suposição não a verifica: ele a protege. O outro prendia
+a ordenação da tela a um id específico e quebrou quando uma divergência nova
+ganhou valor medido; agora afirma a regra (ordem decrescente), não o resultado.
+
+**A lição transferível**: rótulo de centro de custo no ERP é texto que alguém
+digitou, não classificação contábil. "COMPRA DE MILHO" virou "COMPRA MILHO" na
+minha regra, "FRETES - CMV" não casou com /^FRETE\b/, e "ICMS CRÉDITO
+PRESUMIDO" não tinha nada de ICMS. Todas as três vezes o documento vinculado —
+a nota — tinha a resposta certa.

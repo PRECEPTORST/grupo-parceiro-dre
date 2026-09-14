@@ -242,19 +242,34 @@ const DECISOES_ABERTAS: Divergencia[] = [
     quemDecide: 'Contador.',
   },
   {
-    id: 'devolucao-interestadual',
-    titulo: 'Devolução de venda interestadual (CFOP 2202) — R$ 240 mil',
-    valor: 240_168.91,
-    quantidade: 10,
+    id: 'devolucao-nao-deduzida',
+    titulo: 'A planilha não deduz devolução de venda; nós deduzimos',
+    valor: 393_817.56,
+    quantidade: 34,
     situacao: 'aberta',
     linha: 'deducoes',
     oQueE:
-      'Devolução de venda vinda de outro estado. É a mesma operação da CFOP 1202, que o fechamento do cliente deduz normalmente — só muda o estado de origem.',
+      'Em agosto/2026 são 34 notas de devolução de venda, R$ 393.817,56 — grão que o cliente devolveu. As maiores: NF 14298 de soja da AGROFEL (R$ 105.213,00), NF 15068 de milho da SEARA (R$ 60.891,71), NF 14746 de milho da SEARA (R$ 58.783,96), NF 14538 da MANTIQUEIRA (R$ 42.750,00). A linha DEVOLUÇÃO da planilha é ZERO em todos os meses de 2026.',
     valendoHoje:
-      'Deduzimos. O fechamento do cliente NÃO deduz, e é a única diferença que sobra na receita líquida de julho.',
+      'DEDUZIMOS da receita bruta. São notas de devolução reais, com número, grão e destinatário — a venda não se concretizou.',
     seMudar:
-      'Copiar o critério do cliente faria a receita líquida bater exato, mas deixaria o DRE R$ 240 mil otimista. Parece omissão do filtro manual dele, não regra — e copiar um erro para bater não é conferir.',
+      'Copiar o critério da planilha faria a receita líquida bater melhor e deixaria o DRE R$ 394 mil otimista em agosto. Parece omissão do filtro manual dela, não regra — e copiar um erro para bater não é conferir.',
     quemDecide: 'Contador. É a pergunta mais objetiva da lista.',
+  },
+  {
+    id: 'icms-credito-presumido',
+    titulo: 'ICMS crédito presumido era deduzido da receita — corrigido',
+    valor: 985_625.60,
+    quantidade: 19,
+    situacao: 'decidida',
+    linha: 'deducoes',
+    oQueE:
+      'O ERP tem um centro de custo "ICMS CRÉDITO PRESUMIDO" e nós o mapeávamos para 3.2.01 ("ICMS sobre vendas"), deduzindo da receita. Eram R$ 985.625,60 em 20 meses saindo indevidamente da receita — R$ 134.101,21 só em agosto/2026.',
+    valendoHoje:
+      'FORA DA RECEITA. Não é imposto: são títulos de COMPRA DE GRÃO com o centro de custo errado no ERP. 18 dos 19 títulos assim rotulados casam, pelo idContrato, com uma nota CFOP 1102 de valor a menos de 2% de distância. Em agosto o contrato 169/26M tem três títulos — dois "COMPRA DE MILHO" e um "ICMS CRÉDITO PRESUMIDO" — contra exatamente três notas de compra, uma para cada. O custo já vem da nota, então o título é ignorado.',
+    seMudar:
+      'Nada a mudar. A linha IMPOSTOS agora bate com a planilha (zero) em todos os meses. Vale avisar o pessoal do ERP: o rótulo está errado e vai voltar a aparecer.',
+    quemDecide: 'Fechado — erro nosso, corrigido.',
   },
   {
     id: 'cfop-1907',

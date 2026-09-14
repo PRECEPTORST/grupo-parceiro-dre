@@ -165,9 +165,16 @@ describe('direção do fluxo', () => {
     })
   })
 
-  it('crédito presumido de ICMS recebido REDUZ a dedução', () => {
-    expect(destinoDeCentroCusto('ICMS CREDITO PRESUMIDO', 'saida')).toMatchObject({ conta: '3.2.01', sinal: 1 })
-    expect(destinoDeCentroCusto('ICMS CREDITO PRESUMIDO', 'entrada')).toMatchObject({ conta: '3.2.01', sinal: -1 })
+  it('crédito presumido de ICMS NÃO é dedução de receita', () => {
+    // Este teste afirmava o contrário e fixava o erro no lugar: eu tinha
+    // assumido, pelo nome, que era ICMS sobre vendas. Não é. São títulos de
+    // COMPRA DE GRÃO com o centro de custo errado no ERP — 18 dos 19 em 20
+    // meses casam com uma nota CFOP 1102 do mesmo contrato. E crédito presumido
+    // é benefício fiscal; benefício nenhum reduz receita bruta.
+    expect(destinoDeCentroCusto('ICMS CREDITO PRESUMIDO', 'saida')).toMatchObject({
+      ignorar: true,
+      motivo: 'custo_vem_da_nf',
+    })
   })
 
   it('juros: pago é despesa financeira, recebido é receita financeira', () => {
@@ -279,5 +286,22 @@ describe('o prefixo da família tolera como o ERP de fato escreve', () => {
     // "COMPRA DE MÓVEIS" não é grão e não pode virar custo-da-NF em silêncio.
     const d = destinoDeCentroCusto('COMPRA DE MOVEIS', 'saida')
     expect(d?.motivo).not.toBe('custo_vem_da_nf')
+  })
+})
+
+describe('ICMS crédito presumido não deduz receita', () => {
+  it('é compra de grão com rótulo errado — o custo vem da nota', () => {
+    // 18 dos 19 títulos assim rotulados em 20 meses casam, pelo idContrato, com
+    // uma nota CFOP 1102 a menos de 2% de distância. Crédito presumido é
+    // benefício fiscal; nunca foi dedução de receita.
+    const d = destinoDeCentroCusto('ICMS CREDITO PRESUMIDO', 'saida')
+    expect(d?.ignorar).toBe(true)
+    expect(d?.motivo).toBe('custo_vem_da_nf')
+    expect(d?.conta).not.toBe('3.2.01')
+  })
+
+  it('ICMS que É imposto continua deduzindo', () => {
+    expect(destinoDeCentroCusto('ICMS - DIFAL', 'saida')?.conta).toBe('3.2.01')
+    expect(destinoDeCentroCusto('PARCELAMENTO ICMS', 'saida')?.conta).toBe('3.2.01')
   })
 })

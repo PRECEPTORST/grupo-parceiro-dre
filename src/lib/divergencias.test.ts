@@ -72,8 +72,14 @@ describe('divergenciasDaCarga', () => {
         ],
       }),
     )
+    // Afirma a REGRA (ordem decrescente por valor), não qual id está no topo:
+    // a lista fixa ganha divergências novas com valor medido, e prender o teste
+    // a um id faz a suíte quebrar por motivo nenhum.
     const decididas = d.filter((x) => x.situacao === 'decidida')
-    expect(decididas[0].id).toBe('nf_remessa')
+    const valores = decididas.map((x) => Math.abs(x.valor))
+    expect(valores).toEqual([...valores].sort((a, b) => b - a))
+    const pos = (id: string) => decididas.findIndex((x) => x.id === id)
+    expect(pos('nf_remessa')).toBeLessThan(pos('nf_cancelada'))
   })
 
   it('as decisões que não vêm de descarte aparecem mesmo com a carga vazia', () => {

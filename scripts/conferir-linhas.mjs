@@ -91,6 +91,6 @@ for (const mes of alvos) {
   console.log(`  ${'RECEITA LÍQUIDA'.padEnd(22)}${num(liqN).padStart(15)}${num(liqP).padStart(16)}${delta(liqN, liqP)}`)
   console.log(`  ${'CUSTO TOTAL'.padEnd(22)}${num(custoN).padStart(15)}${num(custoP).padStart(16)}${delta(custoN, custoP)}`)
   console.log(`  ${'LUCRO BRUTO'.padEnd(22)}${num(liqN - custoN).padStart(15)}${num(liqP - custoP).padStart(16)}`)
-  console.log(`  ${'margem bruta'.padEnd(22)}${(liqN ? ((liqN - custoN) / liqN * 100).toFixed(2) + '%' : '—').padStart(15)}${((liqP - custoP) / liqP * 100).toFixed(2) + '%'}`)
+  console.log(`  ${'margem bruta'.padEnd(22)}${(liqN ? ((liqN - custoN) / liqN * 100).toFixed(2) + '%' : '—').padStart(15)}${(((liqP - custoP) / liqP * 100).toFixed(2) + '%').padStart(16)}`)
   console.log(`  ${'RESULTADO'.padEnd(22)}${num(liqN - custoN - nosso.despesaTotal).padStart(15)}${num(liqP - custoP - alvo.despesaTotal).padStart(16)}`)
 }

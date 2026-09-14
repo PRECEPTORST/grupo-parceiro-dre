@@ -116,8 +116,22 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   'ARMAZENAGEM CAFE': { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' },
 
   // ---- Deduções / tributos sobre a operação ----
-  'ICMS CREDITO PRESUMIDO': { saida: '3.2.01', natural: 'saida' },
-  'ICMS - SOBRE COMPRAS': { saida: '3.2.01', natural: 'saida' },
+  // ⚠ "ICMS CRÉDITO PRESUMIDO" NÃO É IMPOSTO AQUI — é compra de grão com o
+  // centro de custo errado no ERP, e eu o deduzia da receita como se fosse ICMS
+  // sobre vendas. Dois erros num só: crédito presumido é BENEFÍCIO fiscal,
+  // nunca dedução de receita; e estes títulos são faturamento de nota de
+  // ENTRADA, cujo custo já vem da nota.
+  //
+  // A prova: 18 dos 19 títulos assim rotulados em 20 meses casam, pelo
+  // idContrato, com uma nota CFOP 1102 de valor a menos de 2% de distância. Em
+  // agosto/2026 o contrato 169/26M tem três títulos — dois "COMPRA DE MILHO" e
+  // um "ICMS CRÉDITO PRESUMIDO" — contra exatamente três notas de compra, uma
+  // para cada. São R$ 985.625,60 em 20 meses saindo indevidamente da receita.
+  //
+  // Sem `estorno`: um fluxo na contramão aqui vira resíduo, e é o que se quer —
+  // não sabemos a que grão pertence, e adivinhar seria repetir o erro.
+  'ICMS CREDITO PRESUMIDO': { saida: VEM_DA_NF, natural: 'saida' },
+  'ICMS - SOBRE COMPRAS': { saida: '4.1.18', natural: 'saida' },
 
   // ---- Despesas comerciais ----
   'MARKETING / PROPAGANDA': { saida: '4.2.04', natural: 'saida' },
