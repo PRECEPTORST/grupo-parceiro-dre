@@ -73,7 +73,7 @@ const arqEstoque = path.join(raiz, "robot", "out", "lancamentos-estoque.json");
 const ajustesEstoque = existsSync(arqEstoque)
   ? JSON.parse(readFileSync(arqEstoque, "utf8")).ajustes ?? []
   : [];
-if (ajustesEstoque.length) console.log(`+ ${ajustesEstoque.length} ajuste(s) de estoque`);
+if (ajustesEstoque.length) console.log(`+ ${ajustesEstoque.length} ajuste(s) de estoque no arquivo`);
 
 const de = janelas.map((j) => j.de).sort()[0];
 const ate = janelas.map((j) => j.ate).sort().at(-1);
@@ -92,12 +92,24 @@ if (trocouDeAmbiente) {
   console.log(`${motivo}: descartando ${(anterior.lancamentosEnoki ?? []).length} lançamento(s) antigos`);
 }
 const dentro = (d) => d >= de && d <= ate;
+
+// O AJUSTE SEGUE A MESMA JANELA DOS LANÇAMENTOS.
+//
+// O arquivo de estoque cobre toda a cadeia (20 meses), porque o custo médio só
+// existe encadeado. Mas publicar uma janela de 8 meses e despejar os 20 ajustes
+// põe variação de estoque em mês que não tem lançamento nenhum — e, pior, na
+// republicação seguinte os ajustes de fora da janela entram DE NOVO, somados aos
+// que `foraDaJanela` preservou. Cada rodada dobraria o CPV daqueles meses.
+const ajustesDaJanela = ajustesEstoque.filter((a) => dentro(a.data));
+if (ajustesDaJanela.length !== ajustesEstoque.length) {
+  console.log(`  ${ajustesDaJanela.length} dentro da janela ${de}..${ate} (o resto fica de fora)`);
+}
 const foraDaJanela = trocouDeAmbiente
   ? []
   : (anterior.lancamentosEnoki ?? []).filter((l) => !dentro(l.data));
 
 const fatia = {
-  lancamentosEnoki: [...foraDaJanela, ...r.lancamentos, ...ajustesEstoque],
+  lancamentosEnoki: [...foraDaJanela, ...r.lancamentos, ...ajustesDaJanela],
   sacasEnoki: trocouDeAmbiente ? r.sacas : { ...(anterior.sacasEnoki ?? {}), ...r.sacas },
   enokiSync: {
     atualizadoEm: new Date().toISOString(),

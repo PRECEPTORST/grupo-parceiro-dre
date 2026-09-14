@@ -243,17 +243,78 @@ const DECISOES_ABERTAS: Divergencia[] = [
   },
   {
     id: 'cfop-1907',
-    titulo: 'Retorno de armazém geral (CFOP 1907) contado como compra',
+    titulo: 'Retorno de armazém geral (CFOP 1907) conta como entrada de estoque',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'decidida',
+    linha: 'custo',
+    oQueE:
+      'Grão que volta do armazém geral. Formalmente é retorno de mercadoria que já era nossa, não aquisição nova — e por isso ficava de fora do estoque.',
+    valendoHoje:
+      'CONTA como entrada. O volume provou: em 20 meses a soja comprou 2.203.640 sacas e vendeu 2.348.549 — um furo de 144.909 que nunca fechava e derrubava o custo médio. Somando o retorno, a compra vai a 2.343.689 e o saldo fecha em -4.860 sacas, 0,2%. A simetria explica: a remessa PARA o armazém também não é contada como saída.',
+    seMudar:
+      'Voltar a excluí-lo quebra a média móvel: o estoque fica negativo já no segundo mês e o CPV vira qualquer número. Em valor o 1907 é só 0,9% a 3,8% das entradas, então não há risco de dobrar custo. A planilha do cliente também o soma dentro de COMPRA DE CEREAIS.',
+    quemDecide: 'Fechado — pela conferência de volume.',
+  },
+  {
+    id: 'corte-competencia',
+    titulo: 'A mesma nota cai em meses diferentes aqui e na planilha',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'receita',
+    oQueE:
+      'Em 8 meses de 2026 (empresa 1), nossa receita soma R$ 220,72 milhões contra R$ 218,51 da planilha — 1,0%. A compra de grão, R$ 192,46 contra R$ 196,53 milhões — 2,1%. Os totais batem. Mas mês a mês a diferença vai de -27% (janeiro) a +10% (junho).',
+    valendoHoje:
+      'Usamos a DATA DE EMISSÃO da nota, que é o fato gerador. A planilha nasce do controle de carregamento, que lança a compra no mês da venda do mesmo lote — por isso a razão custo/receita dela fica presa em 87%-91% todo mês.',
+    seMudar:
+      'Adotar o corte do carregamento faria cada mês bater com a planilha, mas exige o vínculo lote-a-lote, que não está na API. Manter a emissão é o critério contábil e já fecha no acumulado.',
+    quemDecide: 'Contador — e é a maior divergência que sobrou.',
+  },
+  {
+    id: 'apropriacao-estoque',
+    titulo: 'A planilha do cliente não apropria estoque; o DRE aqui apropria',
     valor: 0,
     quantidade: 0,
     situacao: 'aberta',
     linha: 'custo',
     oQueE:
-      'R$ 0,59M em julho. Formalmente é retorno de grão que já era nosso, não aquisição — mas a planilha do cliente soma esse valor dentro de COMPRA DE CEREAIS.',
+      'A linha COMPRA da planilha é a nota de entrada do mês (CFOP 1102) e nada mais: o grão comprado e não vendido vira custo na hora. Aqui ele fica no estoque e só vira custo quando sai, pela média ponderada móvel.',
     valendoHoje:
-      'Fora do CPV, tratado como remessa. É o que a natureza fiscal do CFOP indica.',
-    seMudar: 'Contado como compra, o CPV sobe R$ 0,59M e o EBITDA cai na mesma medida.',
-    quemDecide: 'Contador — é divergência direta com a planilha.',
+      'APROPRIAMOS, em conta própria (4.1.19, "Variação de estoque"), visível no analítico. Agosto/2026 fecha com 3,24% de margem bruta — dentro dos 3% a 4% que a diretoria informou.',
+    seMudar:
+      'Sem apropriação, um mês que estoca aparece no vermelho e o seguinte, com lucro que não é dele. Com ela, o mês reflete o que de fato foi vendido. Se o cliente quiser o número igual ao da planilha, é só desligar a 4.1.19 — mas aí o mês volta a oscilar.',
+    quemDecide: 'Diretoria + contador. É a escolha de MÉTODO, não de dado.',
+  },
+  {
+    id: 'estoque-abertura',
+    titulo: 'Estoque de abertura é um piso calculado, não um inventário',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'custo',
+    oQueE:
+      'A API só devolve nota a partir de janeiro/2025, mas a empresa não começou ali: a soja vendida naquele mês veio da safra de 2024. Sem esse saldo a média móvel divide por um estoque que não existe.',
+    valendoHoje:
+      'Usamos o PISO que as próprias notas denunciam — 38.706 sacas de soja e 2.866 de café no consolidado, o mínimo sem o qual a empresa teria vendido grão que nunca comprou. Precificado pela primeira compra observada de cada grão.',
+    seMudar:
+      'Com o inventário real do armazém em 31/12/2024 o custo médio de toda a cadeia se ajusta. O piso subestima o estoque, então tende a subestimar o CPV dos primeiros meses.',
+    quemDecide: 'Armazém / Daiane — é pedir uma posição de estoque, não uma decisão.',
+  },
+  {
+    id: 'escopo-empresas',
+    titulo: 'A planilha é a empresa 1; esta tela mostra o grupo',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'estrutura',
+    oQueE:
+      'A planilha se chama "DRE ACUMULADO _CEREAIS" e cobre só a empresa 1. Em agosto/2026 a empresa 2 vendeu R$ 3,5 milhões (CFOP 5102) e a 3, R$ 1,2 milhão — outra linha de negócio.',
+    valendoHoje:
+      'O DRE desta tela soma as empresas carregadas. Comparar esse total com a planilha inflava a receita em 24% — foi o que fez a conferência culpar o CPV por um erro de escopo.',
+    seMudar:
+      'Se a comparação oficial for com a planilha, a tela precisa de um filtro por empresa. Se for o grupo, a planilha é que está incompleta.',
+    quemDecide: 'Diretoria — define qual é o DRE oficial.',
   },
   {
     id: 'gap-contratos',
