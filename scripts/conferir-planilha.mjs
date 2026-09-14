@@ -41,6 +41,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { apurar, arquivoDaCarga } from './_apuracao.mjs'
+import { EMPRESA_DA_PLANILHA } from '../src/lib/empresas.ts'
 
 /**
  * Tolerância do ACUMULADO. Passar daqui significa que estamos lendo notas a
@@ -48,8 +49,6 @@ import { apurar, arquivoDaCarga } from './_apuracao.mjs'
  */
 export const TOLERANCIA_ACUMULADO = 0.05
 
-/** Empresa 1: o escopo da planilha. Ver `recortarEmpresa`. */
-export const EMPRESA_DA_PLANILHA = 1
 
 /** DRE real do cliente (aba "DRE ACUM (2)"), por competência. */
 const PLANILHA = {

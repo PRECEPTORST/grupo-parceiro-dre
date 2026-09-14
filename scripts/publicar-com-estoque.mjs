@@ -19,6 +19,7 @@ import { mapaEfetivo } from '../src/lib/planoContas.ts'
 import { resumirCompras } from '../src/lib/itensCompra.ts'
 import { custoMedioMovel, montarMovimentosEstoque, lancamentosDeEstoque, ajusteEstoque, aberturaMinima } from '../src/lib/custoMedio.ts'
 import { montarDre } from '../src/lib/dre.ts'
+import { recortarEmpresa } from './_apuracao.mjs'
 
 const meses = process.argv.slice(2).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort()
 if (!meses.length) { console.error('uso: npx tsx scripts/publicar-com-estoque.mjs 2026-08'); process.exit(1) }
@@ -41,7 +42,8 @@ const valorComprado = {}
 for (const mes of meses) {
   const arq = `robot/out/api-producao-${mes}.json`
   if (!existsSync(arq)) { console.error(`falta ${arq}`); process.exit(1) }
-  const e = normalizarEnokiDre(JSON.parse(readFileSync(arq, 'utf8')))
+  // A MATRIZ (operação de café, outro CNPJ) fica fora. Ver src/lib/empresas.ts.
+  const e = normalizarEnokiDre(recortarEmpresa(JSON.parse(readFileSync(arq, 'utf8')), null))
   lancamentos.push(...e.lancamentos)
   Object.assign(sacas, e.sacas)
   sacasVendidas[mes] = e.sacas[mes] ?? {}
@@ -49,7 +51,7 @@ for (const mes of meses) {
   // OS ITENS DE COMPRA VÊM DA PRÓPRIA NOTA (rota NfEntrada, em produção desde
   // 2026-09-11). Antes precisavam ser extraídos de um relatório de tela, com
   // 96,8% de cobertura no melhor caso; agora vêm completos e conferidos.
-  const notasEntrada = JSON.parse(readFileSync(arq, 'utf8')).nfs.filter((n) => n.entrada)
+  const notasEntrada = recortarEmpresa(JSON.parse(readFileSync(arq, 'utf8')), null).nfs.filter((n) => n.entrada)
   const itensCompra = []
   for (const n of notasEntrada) {
     if (n.status !== 'Finalizada') continue

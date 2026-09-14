@@ -13,6 +13,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { normalizarEnokiDre } from '../src/lib/enokiDre.ts'
 import { resumirCompras } from '../src/lib/itensCompra.ts'
 import { custoMedioMovel, montarMovimentosEstoque, aberturaMinima } from '../src/lib/custoMedio.ts'
+import { noDre } from '../src/lib/empresas.ts'
 
 export const arquivoDaCarga = (mes) => `robot/out/api-producao-${mes}.json`
 
@@ -51,15 +52,17 @@ export function itensDeCompra(carga) {
 /**
  * Recorta a carga por empresa.
  *
- * A planilha do cliente ("DRE ACUMULADO _CEREAIS") é da EMPRESA 1. As outras
- * não são ruído: a empresa 2 vendeu R$ 3,5 milhões por CFOP 5102 em agosto/2026
- * e a 3, R$ 1,2 milhão por 6106 — outra linha de negócio, num DRE separado.
- * Somá-las e comparar com a planilha inflava a receita em 24% e fazia a
- * conferência culpar o CPV por um erro que era de escopo.
+ * Sem `idEmpresa` aplica o escopo padrão do DRE (`noDre`), que já deixa a
+ * MATRIZ de fora — ela é a operação de café, outro CNPJ, 97,1% do que movimenta.
+ * Ver `src/lib/empresas.ts`.
+ *
+ * Com `idEmpresa` recorta um estabelecimento só: é assim que se compara com a
+ * planilha do cliente, que é a FILIAL MG sozinha.
  */
 export function recortarEmpresa(carga, idEmpresa) {
-  if (idEmpresa == null) return carga
-  const daEmpresa = (x) => x.idEmpresa === idEmpresa
+  const daEmpresa = idEmpresa == null
+    ? (x) => noDre(x.idEmpresa)
+    : (x) => Number(x.idEmpresa) === idEmpresa
   return {
     ...carga,
     nfs: carga.nfs.filter(daEmpresa),

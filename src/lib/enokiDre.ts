@@ -105,6 +105,15 @@ export type Convencao = 'cliente' | 'consolidado'
  */
 export type UnidadeProduto = 'kg' | 'saca' | 'tonelada' | 'unidade'
 
+/**
+ * Objeto de copa e embalagem de varejo não são mercadoria. Mesma regra e mesmo
+ * motivo de `COPA_OU_VAREJO` em `itensCompra.ts`: "FILTRO P/CAFE", "XICARA ...
+ * CAFE - 70ML" e "CAFE BOM DIA ... 500G" casam com /CAFE/ e nenhum é grão. O
+ * preço não distingue (torrado de varejo e verde a granel custam a mesma ordem
+ * por quilo), então a descrição precisa distinguir.
+ */
+const COPA_OU_VAREJO = /\b(FILTRO|XICARA|CANECA|COADOR|GARRAFA|COPO|CAFETEIRA)\b|\b\d+\s?(G|ML|UN)\b/
+
 const PRODUTOS_GRAO: { re: RegExp; grao: Grao }[] = [
   // Tolerantes a typos de cadastro: "GRAOS"/"GRÃOS"/"GÃOS" e acentuação livre.
   { re: /\bSOJA\b/, grao: 'soja' },
@@ -185,6 +194,7 @@ export const CONTA_AQUISICAO_GRAO: Record<Grao, string> = {
 /** Grão do produto da NF (null quando não é grão: toner, impressora, ICMS…). */
 export function graoDeProduto(produto: string): Grao | null {
   const s = normalizarRotulo(produto)
+  if (COPA_OU_VAREJO.test(s)) return null
   for (const p of PRODUTOS_GRAO) if (p.re.test(s)) return p.grao
   return null
 }

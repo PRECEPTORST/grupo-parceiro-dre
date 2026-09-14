@@ -97,3 +97,28 @@ describe('resumirCompras', () => {
     expect(Object.keys(r.sacas).sort()).toEqual(['2026-08', '2026-09'])
   })
 })
+
+describe('copa e varejo não são grão', () => {
+  const naoSaoGrao = [
+    'FILTRO P/CAFE ALIS 103 PERMANENTE 1UN',
+    'XICARA SOFIA ALTA CAFE BRANCA - 70ML',
+    'CAFE BOM DIA TRADICIONAL ALMOFADA 500G',
+    'CAFE ITAU TRADICIONAL 500G',
+    'CAFE COCATREL SUPERIOR TM 500G',
+  ]
+  for (const nome of naoSaoGrao) {
+    it(`"${nome}" não entra no estoque`, () => {
+      // O preço não salva: 500 g a R$ 33 dá R$ 3.960/saca, dentro da faixa do café.
+      expect(graoDoProduto(nome)).toBeNull()
+    })
+  }
+
+  it('café em grãos continua sendo café', () => {
+    expect(graoDoProduto('CAFÉ EM GRÃOS')).toBe('cafe')
+  })
+
+  it('a regra não derruba grão a granel com peso no nome', () => {
+    expect(graoDoProduto('SOJA EM GRAOS SACA 60KG')).toBe('soja')
+    expect(graoDoProduto('MILHO A GRANEL')).toBe('milho')
+  })
+})

@@ -302,18 +302,48 @@ const DECISOES_ABERTAS: Divergencia[] = [
     quemDecide: 'Armazém / Daiane — é pedir uma posição de estoque, não uma decisão.',
   },
   {
+    id: 'conta-4119-inventada',
+    titulo: 'A conta "Variação de estoque" não existe no plano de contas do cliente',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'aberta',
+    linha: 'custo',
+    oQueE:
+      'O plano de contas do Grupo Parceiro vai de 4.1.01 a 4.1.17 e não tem conta de variação de estoque. Criamos duas: 4.1.19 ("Variação de estoque — apropriação") e 4.1.18 ("Aquisição de grãos — produto não detalhado").',
+    valendoHoje:
+      'Em uso. A alternativa era encolher o CPV em silêncio, e um custo que diminui sem linha que explique é indefensável numa reunião — como conta própria, o valor aparece no analítico e pode ser conferido contra o armazém. A mais próxima que existe, 4.1.14 "Quebra técnica e perda de estoque", significa outra coisa: perda física, não diferimento.',
+    seMudar:
+      'Se o contador criar as contas, nada muda no cálculo — só o número passa a ser oficial. Se recusar, a apropriação tem de ser embutida nas contas de aquisição (4.1.01 a 4.1.05) e deixa de ser auditável na tela.',
+    quemDecide: 'Contador. Criar conta no plano não é decisão nossa.',
+  },
+  {
     id: 'escopo-empresas',
-    titulo: 'A planilha é a empresa 1; esta tela mostra o grupo',
+    titulo: 'A operação de café (matriz) ficou fora do DRE',
+    valor: 0,
+    quantidade: 0,
+    situacao: 'decidida',
+    linha: 'estrutura',
+    oQueE:
+      'Os três estabelecimentos dividem a razão social PARCEIRO DO GRAO COMERCIO IMP. E EXP. DE CAFE E CEREAIS LTDA, raiz 30798330, mas com CNPJ próprio: filial MG 0002-16, MATRIZ 0001-35, filial SP 0004-88. A matriz é a operação de café — em 20 meses movimentou R$ 394,7 milhões em itens, dos quais R$ 383,4 milhões são café: 97,1%. As filiais têm ZERO café em grãos.',
+    valendoHoje:
+      'FORA. São dois negócios com CNPJ distinto, e somá-los produzia uma entidade que não existe. O estrago era concreto: o café da matriz entrava na cadeia de estoque das filiais, ficava negativo já em janeiro/2025 e derrubava o custo médio (chegou a -R$ 13.759/saca). Sem ele, o estoque de abertura que precisamos supor cai de 38.706 sacas de soja mais 2.866 de café para 1.506 sacas de soja.',
+    seMudar:
+      'Se a diretoria quiser o consolidado das três, o café volta — mas precisa da própria cadeia de estoque, separada, porque a unidade dele não é a dos cereais.',
+    quemDecide: 'Fechado — apontado pela diretoria, confirmado pelo CNPJ.',
+  },
+  {
+    id: 'escopo-filial-sp',
+    titulo: 'A planilha é só a filial MG; a tela mostra MG + SP',
     valor: 0,
     quantidade: 0,
     situacao: 'aberta',
     linha: 'estrutura',
     oQueE:
-      'A planilha se chama "DRE ACUMULADO _CEREAIS" e cobre só a empresa 1. Em agosto/2026 a empresa 2 vendeu R$ 3,5 milhões (CFOP 5102) e a 3, R$ 1,2 milhão — outra linha de negócio.',
+      'A planilha se chama "DRE ACUMULADO _CEREAIS" e cobre a filial MG sozinha. A filial SP movimentou R$ 76,2 milhões em 20 meses, tudo cereal, e está somada nesta tela.',
     valendoHoje:
-      'O DRE desta tela soma as empresas carregadas. Comparar esse total com a planilha inflava a receita em 24% — foi o que fez a conferência culpar o CPV por um erro de escopo.',
+      'MG + SP. É o DRE do negócio de cereais inteiro, que é o que a tela se propõe a mostrar.',
     seMudar:
-      'Se a comparação oficial for com a planilha, a tela precisa de um filtro por empresa. Se for o grupo, a planilha é que está incompleta.',
+      'Se a comparação oficial for contra a planilha, a filial SP sai também e os dois números passam a ser diretamente confrontáveis. Se o oficial for o negócio de cereais, é a planilha que está incompleta.',
     quemDecide: 'Diretoria — define qual é o DRE oficial.',
   },
   {

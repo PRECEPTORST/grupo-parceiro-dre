@@ -46,14 +46,26 @@ async function gravarDoc(prefixo, valor) {
   } catch { /* limpeza best-effort */ }
 }
 
+// A MATRIZ NÃO ENTRA: é a operação de CAFÉ, com CNPJ próprio (30798330/0001-35
+// contra 0002-16 da filial MG). Em 20 meses ela movimentou R$ 394,7 milhões em
+// itens, 97,1% dos quais café, e as filiais de cereais não têm nenhum. Somados,
+// o café entrava na cadeia de estoque dos cereais, ficava negativo já em
+// janeiro/2025 e derrubava o custo médio. Ver src/lib/empresas.ts.
+const EMPRESAS_DO_DRE = new Set([1, 3]);
+const noDre = (x) => EMPRESAS_DO_DRE.has(Number(x?.idEmpresa));
+
 // Junta as janelas lidas pelo robô no formato que a normalização espera.
 const janelas = arquivos.map((f) => JSON.parse(readFileSync(f, "utf8")));
 const entrada = { nfs: [], pagar: [], receber: [] };
+let fora = 0;
 for (const j of janelas) {
-  entrada.nfs.push(...(j.nfs ?? []));
-  entrada.pagar.push(...(j.pagar ?? []));
-  entrada.receber.push(...(j.receber ?? []));
+  for (const chave of ["nfs", "pagar", "receber"]) {
+    for (const r of j[chave] ?? []) {
+      if (noDre(r)) entrada[chave].push(r); else fora++;
+    }
+  }
 }
+if (fora) console.log(`fora do DRE (matriz/café): ${fora} registro(s)`);
 console.log(`entrada: nfs=${entrada.nfs.length} pagar=${entrada.pagar.length} receber=${entrada.receber.length}`);
 
 // A normalização vive em TypeScript. Compilar AQUI, toda vez, não é zelo: um

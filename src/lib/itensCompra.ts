@@ -50,12 +50,31 @@ export interface ProdutoCadastro {
   fatorSaca: number
 }
 
+/**
+ * MERCADORIA DE COPA NÃO É GRÃO.
+ *
+ * "FILTRO P/CAFE ALIS 103 PERMANENTE 1UN", "XICARA SOFIA ALTA CAFE BRANCA -
+ * 70ML", "CAFE BOM DIA TRADICIONAL ALMOFADA 500G" — todos casam com /CAFE/ e
+ * nenhum é café em grãos. São R$ 2.064 na filial MG, valor irrisório, mas
+ * entravam na cadeia de estoque como SACAS e puxavam o custo médio para baixo.
+ *
+ * A inferência por preço não pega isto, e é importante saber por quê: um pacote
+ * de 500 g a R$ 33 dá R$ 66/kg, que vezes 60 são R$ 3.960/saca — dentro da faixa
+ * plausível do café. Torrado em varejo e verde a granel custam a mesma ordem de
+ * grandeza por quilo. Só a descrição separa os dois.
+ *
+ * Por isso a regra olha o que o item É: um objeto de copa, ou uma embalagem de
+ * varejo (gramas, mililitros, unidades). Grão a granel não vem em 500 G.
+ */
+const COPA_OU_VAREJO = /\b(FILTRO|XICARA|CANECA|COADOR|GARRAFA|COPO|CAFETEIRA)\b|\b\d+\s?(G|ML|UN)\b/
+
 /** Grão a partir da descrição do produto. Sem grão, o item não é mercadoria. */
 export function graoDoProduto(descricao: string): Grao | null {
   const d = String(descricao ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toUpperCase()
+  if (COPA_OU_VAREJO.test(d)) return null
   if (d.includes('SOJA')) return 'soja'
   if (d.includes('MILHO')) return 'milho'
   if (d.includes('SORGO') || d.includes('SOGO')) return 'sorgo'
