@@ -938,3 +938,82 @@ Contrato · Qtd. Entr. · Unit. · Desc. · Total`.
 Cruza com a API no registro: a primeira linha de agosto é NFe 5217, contrato
 159/26M, R$ 38.960,25 — e o título da API traz `documento: "5217"`,
 `valor: "38960.2500"`, `descricao: "Fat. NFe entrada | Cont: 159/26M"`.
+
+## §32 — Por que a planilha do cliente ficava em 87-91% (2026-09-14)
+
+A pergunta que consumiu semanas: a razão custo/receita da planilha do cliente
+fica presa entre 87% e 91% TODO mês, e a nossa ia de 84% a 153%. A hipótese
+perseguida era a de que eles casavam custo com venda lote a lote e nós não.
+Foram testadas e descartadas cinco variações dela: combinações de CFOP,
+`valorTotalProdutos` vs `valorTotalNf`, `dataEntrada` vs `dataEmissao`,
+subconjuntos de empresa/grão, eliminação intragrupo.
+
+A hipótese estava errada. Eram três coisas, nenhuma delas o método.
+
+### 1. CFOP 1907 é ENTRADA DE ESTOQUE
+
+Eu o excluía com um raciocínio que soava certo: "o grão já era nosso, contá-lo
+dobraria o volume". O volume desmentiu. Em 20 meses (empresa 1):
+
+| grão  | compras 1102+1117 | +retorno 1907 | vendas    | saldo s/ret | saldo c/ret |
+|-------|-------------------|---------------|-----------|-------------|-------------|
+| soja  | 2.203.640         | 2.343.689     | 2.348.549 | **-144.909**| **-4.860**  |
+| milho | 1.998.709         | 2.077.584     | 1.636.880 | 361.829     | 440.704     |
+| sorgo | 308.187           | 308.187       | 280.531   | 27.656      | 27.656      |
+
+Um furo de 6,2% vira 0,2%. A simetria é a explicação: a REMESSA para o armazém
+(5905/5934) não é contada como saída de estoque, então o retorno não pode ser
+ignorado como entrada. Ignorar os dois lados fecharia; ignorar só um deixa o
+furo. Em valor o 1907 é 0,9% a 3,8% das entradas — não há risco de dobrar custo.
+
+**A lição**: quando um argumento contábil ("o grão já era nosso") colide com uma
+conferência de volume, a conferência ganha. O argumento descrevia a titularidade;
+a pergunta era de fluxo físico.
+
+### 2. Estoque de abertura — `aberturaMinima` em `custoMedio.ts`
+
+A API começa em janeiro/2025; a empresa não. A soja vendida naquele mês veio da
+safra de 2024. Sem esse saldo a média móvel divide por um estoque inexistente —
+o café chegou a -R$ 13.759/saca e agosto/2026 a -155% de margem.
+
+Não dá para inventar o inventário, mas dá para limitá-lo por baixo: se o saldo
+acumulado afunda a -38.706 sacas, havia ao menos 38.706 na abertura. É o piso
+que as próprias notas denunciam. Precificado pela PRIMEIRA COMPRA observada —
+usar o custo médio do primeiro mês seria circular, porque ele já está
+contaminado pelo buraco que se quer tapar.
+
+### 3. A planilha é de UMA empresa e NÃO APROPRIA ESTOQUE
+
+"DRE ACUMULADO _CEREAIS" é a empresa 1. Somávamos as cinco; em agosto/2026 as
+empresas 2 e 3 punham R$ 4,7M a mais de receita — outra linha de negócio, com
+DRE separado. Isso sozinho inflava a receita em 24%.
+
+E a "COMPRA" da planilha é a nota de entrada CFOP 1102 do mês, mais nada:
+
+|            | nosso (empresa 1) | planilha      | Δ     |
+|------------|-------------------|---------------|-------|
+| receita 8m | R$ 220,72M        | R$ 218,51M    | +1,0% |
+| compra 8m  | R$ 192,46M        | R$ 196,53M    | -2,1% |
+
+**Os dados já batiam.** A estabilidade 87-91% não vem de casar lote com lote:
+vem de a planilha lançar a compra no mês da venda do mesmo lote (controle de
+carregamento) e não apropriar estoque. O que oscila mês a mês — de -27% em
+janeiro a +10% em junho — é a DATA em que cada nota cai, e o acumulado fecha.
+
+Outro sinal de que a leitura está certa: `custoTotal - compra` da planilha em
+agosto é R$ 1.900.883 e nosso frete sobre compras é R$ 1.903.507 — 0,14%.
+
+### O que mudou em `conferir-planilha.mjs`
+
+Ele media a compra do mês — o número que a publicação já tinha parado de usar —
+e por isso reprovava 8 de 8 meses. Uma conferência que não mede o que a
+publicação produz não confere nada. Agora as duas entram pela mesma porta
+(`scripts/_apuracao.mjs`) e o teste separa duas perguntas:
+
+- **ACUMULADO**: a leitura da API está certa? Tolerância 5%. Passa em 1,0% e 2,1%.
+- **MÊS A MÊS**: não é para fechar. É a divergência de corte de competência, e o
+  número de cada mês é o tamanho dela.
+
+Com tudo isso a cadeia de 20 meses roda sem recusa e **agosto/2026 fecha em
+3,24% de margem bruta** — dentro dos 3% a 4% que a diretoria informou, obtido
+por um caminho independente dessa informação.
