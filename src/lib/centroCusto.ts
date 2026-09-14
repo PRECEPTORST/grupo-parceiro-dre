@@ -220,17 +220,28 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
  * sufixo ("- MERCADO INTERNO", "(CMV)", "SOBRE COMPRA") é qualificador, e um
  * qualificador desconhecido não deve custar a classificação inteira.
  *
+ * ⚠ O PREFIXO TAMBÉM VARIA, e isso me pegou duas vezes no mesmo mês. Em
+ * agosto/2026 o ERP usa "COMPRA DE MILHO" (a regra dizia "COMPRA MILHO") e
+ * "FRETES - CMV" (a regra dizia /^FRETE\b/, e o plural quebra a fronteira de
+ * palavra). Resultado: R$ 17,0 milhões de compra de grão e R$ 1,02 milhão de
+ * frete na fila de resíduo. Não moveu o DRE — resíduo não entra —, mas apagou o
+ * sinal: quem olhasse a fila veria R$ 19,5 milhões "não classificados" e poderia
+ * "consertar" classificando, o que dobraria o custo, já que ele vem da nota.
+ *
+ * Por isso os prefixos aceitam as variações que o ERP de fato escreve: o "DE"
+ * opcional e o plural. Preferir a regra tolerante à regra bonita.
+ *
  * A tabela exata continua VENCENDO: só o que não está nela chega aqui.
  */
 const FAMILIAS: { prefixo: RegExp; regra: RegraCentroCusto }[] = [
   // Receita de grão: o fato gerador é a nota de saída, em qualquer variação.
-  { prefixo: /^RECEITA (SOJA|MILHO|SORGO|CAFE)\b/, regra: { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' } },
-  { prefixo: /^DEVOLUCAO (SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: '3.2.06', natural: 'saida' } },
+  { prefixo: /^RECEITAS? (DE |DA )?(SOJA|MILHO|SORGO|CAFE)\b/, regra: { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' } },
+  { prefixo: /^DEVOLUCOES? (DE |DA )?(SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: '3.2.06', natural: 'saida' } },
   // Compra e frete de compra: o custo vem da nota de entrada / do CT-e.
-  { prefixo: /^COMPRA (SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.01', natural: 'saida' } },
-  { prefixo: /^FRETE\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.10', natural: 'saida' } },
-  { prefixo: /^ARMAZENAGEM\b/, regra: { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' } },
-  { prefixo: /^CLASSIFICACAO\b/, regra: { saida: '4.1.13', natural: 'saida' } },
+  { prefixo: /^COMPRAS? (DE |DA )?(SOJA|MILHO|SORGO|CAFE)\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.01', natural: 'saida' } },
+  { prefixo: /^FRETES?\b/, regra: { saida: VEM_DA_NF, estorno: '4.1.10', natural: 'saida' } },
+  { prefixo: /^ARMAZENAGENS?\b/, regra: { saida: '4.1.11', entrada: '3.1.09', natural: 'saida' } },
+  { prefixo: /^CLASSIFICAC(AO|OES)?\b/, regra: { saida: '4.1.13', natural: 'saida' } },
   { prefixo: /^SECAGEM\b/, regra: { saida: '4.1.12', natural: 'saida' } },
   { prefixo: /^(REFEICOES|VALE ALIMENTACAO|COPA E COZINHA|UNIFORMES|BRINDES PARA)\b/, regra: { saida: '4.3.04', natural: 'saida' } },
   { prefixo: /^BENS DE PEQUENO VALOR\b/, regra: { saida: '4.3.20', natural: 'saida' } },

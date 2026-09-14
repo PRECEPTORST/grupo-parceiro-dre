@@ -26,7 +26,7 @@ import { resumirCompras } from '../src/lib/itensCompra.ts'
 import { custoMedioMovel, montarMovimentosEstoque, lancamentosDeEstoque, ajusteEstoque, aberturaMinima } from '../src/lib/custoMedio.ts'
 import { montarDre } from '../src/lib/dre.ts'
 import { CONTA_SEM_DETALHE_COMPRA } from '../src/lib/enokiDre.ts'
-import { recortarEmpresa } from './_apuracao.mjs'
+import { recortarEmpresa, ajustesDeEstoque } from './_apuracao.mjs'
 
 const meses = process.argv.slice(2).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort()
 if (!meses.length) { console.error('uso: npx tsx scripts/publicar-com-estoque.mjs 2026-08'); process.exit(1) }
@@ -130,24 +130,14 @@ const rel = custoMedioMovel(meses, movimentos, abertura)
 // Emitir o ajuste assim mesmo poria um número absurdo no DRE com cara de
 // apurado. Melhor um CPV admitidamente incompleto (a compra do mês, com o aviso
 // na tela) do que um inventado.
-const CONTA_DO_GRAO = { soja: '4.1.01', milho: '4.1.02', sorgo: '4.1.03', cafe: '4.1.05' }
-
-// O AJUSTE É POR GRÃO, e a base de cada um é o que está NO DRE daquele grão —
-// não o que o relatório de itens leu. As duas coisas podem divergir (o resumo de
-// compras só conta CFOP de aquisição; o DRE conta a nota inteira), e usar a base
-// errada já custou caro uma vez: deu -R$ 1,31M de ajuste quando o certo era
-// -R$ 3,03M, e margem -5,95% em vez de +3,69%.
-const ajustes = []
+// A apropriação é montada por `ajustesDeEstoque`, o MESMO código que a
+// conferência usa. Uma conferência que não mede o que a publicação produz não
+// confere nada — já aconteceu duas vezes neste projeto.
+const ajustes = ajustesDeEstoque(lancamentos, rel, meses)
 for (const mes of meses) {
-  const noDreDoGrao = {}
-  for (const l of lancamentos) {
-    if (l.data.slice(0, 7) !== mes) continue
-    const grao = Object.keys(CONTA_DO_GRAO).find((g) => CONTA_DO_GRAO[g] === l.contaSafragold)
-    if (grao) noDreDoGrao[grao] = (noDreDoGrao[grao] ?? 0) + l.valor
-  }
-  // 4.1.18 é a compra sem detalhe de produto. Está zerada desde que a rota
-  // NfEntrada passou a entregar os itens, mas se voltar a ter valor ele não tem
-  // grão a que pertencer — e aí o ajuste por grão deixaria esse custo sem
+  // 4.1.18 é compra sem detalhe de produto. Está zerada desde que a rota
+  // NfEntrada passou a entregar os itens, mas se voltar a ter valor ela não tem
+  // grão a que pertencer, e o ajuste por grão deixaria esse custo sem
   // apropriação. Melhor gritar do que publicar torto.
   const semDetalhe = lancamentos
     .filter((l) => l.data.slice(0, 7) === mes && l.contaSafragold === CONTA_SEM_DETALHE_COMPRA)
@@ -155,28 +145,8 @@ for (const mes of meses) {
   if (Math.abs(semDetalhe) >= 0.005) {
     console.log(`   ⚠ ${mes}: ${brl(semDetalhe)} em ${CONTA_SEM_DETALHE_COMPRA} (compra sem grão) fica SEM apropriação`)
   }
-
-  const [a, m] = mes.split('-').map(Number)
-  const data = `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
-  let totalMes = 0
-  for (const p of rel.posicoes.filter((x) => x.competencia === mes)) {
-    const base = noDreDoGrao[p.grao] ?? 0
-    const valor = Math.round((p.cpv - base) * 100) / 100
-    if (Math.abs(valor) < 0.005) continue
-    totalMes += valor
-    ajustes.push({
-      id: `estoque-${mes}-${p.grao}`,
-      data,
-      contaSafragold: CONTA_DO_GRAO[p.grao],
-      historico: valor < 0
-        ? `Apropriação de estoque: ${p.rotulo} comprado e não vendido no mês (sai do custo, fica no estoque)`
-        : `Apropriação de estoque: ${p.rotulo} vendido de estoque anterior (entra no custo)`,
-      valor,
-      origem: 'enoki',
-    })
-  }
-  const aquisicaoNoDre = Object.values(noDreDoGrao).reduce((s, v) => s + v, 0) + semDetalhe
-  console.log(`   ${mes}: aquisição no DRE ${brl(aquisicaoNoDre)} · custo do vendido ${brl(rel.cpvPorCompetencia[mes] ?? 0)} · ajuste ${brl(totalMes)}`)
+  const doMes = ajustes.filter((x) => x.data.startsWith(mes)).reduce((s, x) => s + x.valor, 0)
+  console.log(`   ${mes}: custo do vendido ${brl(rel.cpvPorCompetencia[mes] ?? 0)} · apropriação ${brl(doMes)}`)
 }
 
 // A tabela vem ANTES da recusa: saber ONDE o saldo virou negativo é o que

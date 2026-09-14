@@ -113,6 +113,51 @@ export async function apurar(meses, cadastro, idEmpresa) {
   return { lancamentos, movimentos, abertura, rel, semItens }
 }
 
+export const CONTA_DO_GRAO = { soja: '4.1.01', milho: '4.1.02', sorgo: '4.1.03', cafe: '4.1.05' }
+
+/**
+ * Lançamentos de apropriação de estoque, prontos para somar aos lançamentos.
+ *
+ * Mora aqui, e não no script de publicação, porque a conferência TEM de medir o
+ * que a publicação produz. Já custou caro duas vezes: `conferir-planilha.mjs`
+ * media a compra do mês e reprovava 8 de 8, e `conferir-linhas.mjs` nasceu sem
+ * apropriação nenhuma, mostrando a COMPRA 9,8% acima da planilha quando com o
+ * ajuste ela fica 3,3% ABAIXO.
+ *
+ * A base de cada grão é o que está NO DRE daquele grão — não o que o resumo de
+ * compras leu. As duas coisas divergem (o resumo só conta CFOP de aquisição; o
+ * DRE conta a nota inteira), e usar a base errada deu -R$ 1,31M de ajuste quando
+ * o certo era -R$ 3,03M.
+ */
+export function ajustesDeEstoque(lancamentos, rel, meses) {
+  const out = []
+  for (const mes of meses) {
+    const noDreDoGrao = {}
+    for (const l of lancamentos) {
+      if (l.data.slice(0, 7) !== mes) continue
+      const grao = Object.keys(CONTA_DO_GRAO).find((g) => CONTA_DO_GRAO[g] === l.contaSafragold)
+      if (grao) noDreDoGrao[grao] = (noDreDoGrao[grao] ?? 0) + l.valor
+    }
+    const [a, m] = mes.split('-').map(Number)
+    const data = `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
+    for (const p of rel.posicoes.filter((x) => x.competencia === mes)) {
+      const valor = Math.round((p.cpv - (noDreDoGrao[p.grao] ?? 0)) * 100) / 100
+      if (Math.abs(valor) < 0.005) continue
+      out.push({
+        id: `estoque-${mes}-${p.grao}`,
+        data,
+        contaSafragold: CONTA_DO_GRAO[p.grao],
+        historico: valor < 0
+          ? `Apropriação de estoque: ${p.rotulo} comprado e não vendido no mês (sai do custo, fica no estoque)`
+          : `Apropriação de estoque: ${p.rotulo} vendido de estoque anterior (entra no custo)`,
+        valor,
+        origem: 'enoki',
+      })
+    }
+  }
+  return out
+}
+
 /** Contas em que a aquisição de grão está lançada hoje no DRE. */
 export const CONTAS_AQUISICAO = new Set(['4.1.18', '4.1.01', '4.1.02', '4.1.03', '4.1.05'])
 

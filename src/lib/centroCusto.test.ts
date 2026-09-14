@@ -240,3 +240,44 @@ describe('regra por FAMÍLIA — o ERP renomeia centro de custo sem avisar', () 
     expect(destinoDeCentroCusto('ALGO QUE NINGUEM VIU', 'saida')).toBeNull()
   })
 })
+
+describe('o prefixo da família tolera como o ERP de fato escreve', () => {
+  // Agosto/2026: R$ 17,0M em "COMPRA DE MILHO" e R$ 1,02M em "FRETES - CMV"
+  // caíram no resíduo porque a regra dizia "COMPRA MILHO" e /^FRETE\b/.
+  const vemDaNf = [
+    'COMPRA DE MILHO',
+    'COMPRA DE SOJA',
+    'COMPRA DE SORGO',
+    'COMPRA MILHO',
+    'FRETES - CMV',
+    'FRETE (USO & CONSUMO)',
+    'FRETE (CMV)',
+    'FRETE SOBRE COMPRA',
+  ]
+  for (const rotulo of vemDaNf) {
+    it(`"${rotulo}" é custo que vem da NF, não resíduo`, () => {
+      // Se virasse despesa, dobraria o custo: ele já veio da nota.
+      const d = destinoDeCentroCusto(rotulo, 'saida')
+      expect(d).not.toBeNull()
+      expect(d!.ignorar).toBe(true)
+      expect(d!.motivo).toBe('custo_vem_da_nf')
+    })
+  }
+
+  it('a receita de grão continua vindo da nota, com "DE" ou sem', () => {
+    for (const r of ['RECEITA DE MILHO - MERCADO INTERNO', 'RECEITAS MILHO']) {
+      expect(destinoDeCentroCusto(r, 'entrada')?.motivo).toBe('receita_vem_da_nf')
+    }
+  })
+
+  it('classificação e armazenagem no plural também entram', () => {
+    expect(destinoDeCentroCusto('CLASSIFICACAO - MILHO', 'saida')?.conta).toBe('4.1.13')
+    expect(destinoDeCentroCusto('ARMAZENAGENS DE TERCEIROS', 'saida')?.conta).toBe('4.1.11')
+  })
+
+  it('não engole o que NÃO é da família', () => {
+    // "COMPRA DE MÓVEIS" não é grão e não pode virar custo-da-NF em silêncio.
+    const d = destinoDeCentroCusto('COMPRA DE MOVEIS', 'saida')
+    expect(d?.motivo).not.toBe('custo_vem_da_nf')
+  })
+})

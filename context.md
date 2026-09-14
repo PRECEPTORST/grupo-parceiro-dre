@@ -1083,3 +1083,61 @@ entregar os itens de todas as notas de compra: existe só como rede de seguranç
 para nota sem item, e o script avisa em voz alta se ela voltar a ter valor —
 porque aí seria custo sem grão a que pertencer, e o ajuste por grão o deixaria
 sem apropriação.
+
+## §34 — Onde o DRE da API diverge da planilha, linha a linha (2026-09-14)
+
+`conferir-planilha.mjs` comparava dois totais — receita e compra — e dizia "ok,
+1,0% e 2,1%". Estava certo e era insuficiente: **dois totais podem fechar com
+todas as linhas erradas**, e era o caso. Abrindo o detalhe no desenho da própria
+planilha (`conferir-linhas.mjs`), agosto/2026 na filial MG:
+
+| linha | API | planilha | Δ |
+|---|---|---|---|
+| RECEITA BRUTA | 18.387.746 | 19.103.526 | -3,7% |
+| IMPOSTOS | 134.101 | 0 | a planilha não deduz |
+| DEVOLUÇÃO | 393.818 | 0 | a planilha não deduz |
+| COMPRA DE CEREAIS | 15.147.414 | 16.695.193 | -9,3% |
+| FRETE | 1.871.418 | 1.822.630 | +2,7% |
+| COMISSÃO | **0** | 68.275 | -100% |
+| CLASSIFICAÇÃO | 32.089 | 4.496 | +614% |
+| QUEBRAS | **0** | 5.482 | -100% |
+| **DESPESA TOTAL** | **21.593** | **505.543** | **-95,7%** |
+| LUCRO BRUTO | 808.906 (4,53%) | 507.450 (2,66%) | |
+| RESULTADO | 787.314 | 1.907 | |
+
+**A despesa é a divergência dominante, e não é erro de cálculo: o dado não
+existe.** Procurei em agosto por centro de custo E por descrição, nas três
+empresas: não há UM título de salário, pró-labore, aluguel, contabilidade, juros
+ou IOF. O que o ERP traz de despesa é material de escritório, refeições,
+uniformes, brindes e combustível. Nos 8 meses de 2026 são R$ 162,6 mil contra
+R$ 3,48 milhões da planilha — 4,7% dela, com a diferença entre -89% e -97% TODO
+mês. Comissão idem: zero contra R$ 792 mil.
+
+Consequência prática, que precisa estar dita em qualquer reunião: **o lucro
+bruto do DRE da API é defensável; o resultado final não é.** Ele aparece
+otimista por construção, e nenhum cálculo nosso conserta dado que não foi
+registrado.
+
+### Dois erros meus que isto expôs
+
+**1. A receita estava sendo medida errada na conferência.** Eu somava todas as
+contas 3.*, então ICMS (R$ 134 mil) e devolução (R$ 394 mil) ENTRAVAM na receita
+em vez de sair. Agosto aparecia como R$ 18,92M, "-1,0% da planilha"; a bruta é
+R$ 18,39M (-3,7%) e a líquida R$ 17,86M (-6,5%). Um erro de sinal que fazia o
+número parecer melhor do que é.
+
+**2. A conferência de linhas nasceu sem a apropriação de estoque** e mostrava a
+COMPRA 9,8% ACIMA da planilha, quando com o ajuste ela fica 9,3% abaixo. É a
+terceira vez neste projeto que uma ferramenta de conferência mede algo diferente
+do que a publicação produz. Agora `ajustesDeEstoque` mora em `_apuracao.mjs` e
+as duas chamam a mesma função.
+
+### E um bug de classificação
+
+O ERP escreve "COMPRA DE MILHO" (a regra dizia "COMPRA MILHO") e "FRETES - CMV"
+(a regra dizia `/^FRETE\b/`, e o plural quebra a fronteira de palavra). R$ 17,0
+milhões de compra e R$ 1,02 milhão de frete estavam na fila de resíduo. Não
+movia o DRE — resíduo não entra — mas apagava o sinal: quem olhasse a fila veria
+R$ 19,5 milhões "não classificados" e poderia "consertar" classificando, o que
+dobraria o custo, já que ele vem da nota. Os prefixos de família agora aceitam o
+"DE" opcional e o plural. **Preferir a regra tolerante à regra bonita.**

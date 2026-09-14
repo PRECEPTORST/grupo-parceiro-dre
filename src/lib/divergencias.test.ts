@@ -129,7 +129,17 @@ describe('totalEmAberto', () => {
         ],
       }),
     )
-    // Só o aberto conta; as decisões fixas da lista não têm valor medido.
-    expect(totalEmAberto(d)).toBe(1_000_000 + 240_168.91)
+    // O descarte ABERTO entra; o já decidido (nf_cancelada) não. Em vez de
+    // fixar a soma — que muda toda vez que uma divergência ganha valor medido —
+    // o teste afirma a regra: aberto dentro, decidido fora.
+    const abertas = d.filter((x) => x.situacao === 'aberta')
+    const fechadas = d.filter((x) => x.situacao === 'decidida')
+    expect(totalEmAberto(d)).toBeCloseTo(
+      abertas.reduce((s, x) => s + Math.abs(x.valor), 0),
+      2,
+    )
+    expect(abertas.some((x) => x.valor === 1_000_000)).toBe(true)
+    expect(fechadas.some((x) => x.valor === 9_000_000)).toBe(true)
+    expect(totalEmAberto(d)).toBeLessThan(9_000_000)
   })
 })

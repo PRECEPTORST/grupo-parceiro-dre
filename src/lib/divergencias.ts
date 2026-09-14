@@ -199,18 +199,33 @@ const EXPLICACAO: Record<
 const DECISOES_ABERTAS: Divergencia[] = [
   {
     id: 'folha-ausente',
-    titulo: 'Folha de pagamento não aparece no ERP',
-    valor: 0,
-    quantidade: 0,
+    titulo: 'O bloco de despesa administrativa e financeira não existe no ERP',
+    valor: 3_313_370.36,
+    quantidade: 8,
     situacao: 'aberta',
     linha: 'despesas',
     oQueE:
-      'Nenhum título de salário, encargo ou pró-labore foi encontrado na carga. Uma operação deste porte não roda sem folha.',
+      'Não é a folha só: é o bloco inteiro. Em agosto/2026 não há UM título de salário, pró-labore, aluguel, contabilidade, juros ou IOF em nenhuma das empresas da carga — procurado por centro de custo e por descrição. O que o ERP traz de despesa são miudezas: material de escritório, refeições, uniformes, brindes, combustível.',
     valendoHoje:
-      'O DRE do ERP sai sem folha. Em julho a planilha do cliente traz R$ 0,19M de despesa administrativa (salários R$ 78k, pró-labore R$ 27k, mais estrutura) que o ERP não entrega. Precisa vir da planilha ou de lançamento manual.',
+      'O DRE sai com a despesa que existe. Nos 8 meses de 2026 isso dá R$ 162,6 mil contra R$ 3,48 milhões na planilha — 4,7% dela. Mês a mês a diferença fica entre -89% e -97%, sem exceção. O lucro bruto é confiável; o resultado final NÃO é, e é por isso que ele aparece otimista.',
     seMudar:
-      'Se a folha passar pelo financeiro do Enoki sob outro nome, ela entra automática e o resultado cai pelo valor dela.',
-    quemDecide: 'Juliano / Daiane.',
+      'Se esses lançamentos passarem a entrar no financeiro do Enoki, entram no DRE automaticamente e o resultado cai pelo valor deles. Enquanto não passarem, só a planilha tem o resultado final — nenhum cálculo nosso resolve dado que não foi registrado.',
+    quemDecide: 'Juliano / Daiane. É a maior divergência da lista e a mais objetiva.',
+  },
+  {
+    id: 'comissao-ausente',
+    titulo: 'Comissão de vendas: zero no ERP, R$ 792 mil na planilha',
+    valor: 791_991.68,
+    quantidade: 8,
+    situacao: 'aberta',
+    linha: 'despesas',
+    oQueE:
+      'A planilha lança comissão todo mês, de R$ 41 mil a R$ 184 mil. Não há nenhum título com centro de custo de comissão ou corretagem na carga da API, em nenhum mês de 2026.',
+    valendoHoje:
+      'Zero. A conta 4.2.01 ("Comissões de vendas") existe no plano e nunca recebe lançamento.',
+    seMudar:
+      'É custo de venda real e reduz o resultado em R$ 792 mil no acumulado de 2026. Pode estar sendo paga fora do ERP ou embutida em outro título — vale perguntar antes de supor.',
+    quemDecide: 'Juliano / Daiane — mesma conversa da despesa administrativa.',
   },
   {
     id: 'cfop-exportacao',
