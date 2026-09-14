@@ -300,8 +300,27 @@ describe('ICMS crédito presumido não deduz receita', () => {
     expect(d?.conta).not.toBe('3.2.01')
   })
 
-  it('ICMS que É imposto continua deduzindo', () => {
-    expect(destinoDeCentroCusto('ICMS - DIFAL', 'saida')?.conta).toBe('3.2.01')
-    expect(destinoDeCentroCusto('PARCELAMENTO ICMS', 'saida')?.conta).toBe('3.2.01')
+  // Havia aqui um "ICMS que É imposto continua deduzindo", escrito por mim na
+  // mesma hora em que corrigi o crédito presumido. Repeti o erro no teste
+  // seguinte: assumi, de novo pelo NOME, que DIFAL e parcelamento eram ICMS
+  // sobre vendas. Não são — ver o bloco 'imposto nenhum deduz a receita'.
+})
+
+describe('imposto nenhum deduz a receita de grão', () => {
+  // A venda de grão em MG é ICMS diferido: a linha IMPOSTOS da planilha do
+  // cliente é ZERO em todos os meses de 2026. Tudo que eu mandava para 3.2.01
+  // era outra coisa com "ICMS" no nome.
+  it('DIFAL é custo da compra — veio de pneu e veículo, não de grão', () => {
+    expect(destinoDeCentroCusto('ICMS - DIFAL', 'saida')?.conta).toBe('4.3.14')
+  })
+
+  it('parcelamento de ICMS é despesa, como na planilha do cliente', () => {
+    expect(destinoDeCentroCusto('PARCELAMENTO ICMS', 'saida')?.conta).toBe('4.3.17')
+  })
+
+  it('nenhum centro de custo com ICMS no nome cai em dedução de receita', () => {
+    for (const cc of ['ICMS - DIFAL', 'PARCELAMENTO ICMS', 'ICMS CREDITO PRESUMIDO', 'ICMS - SOBRE COMPRAS']) {
+      expect(destinoDeCentroCusto(cc, 'saida')?.conta, cc).not.toBe('3.2.01')
+    }
   })
 })

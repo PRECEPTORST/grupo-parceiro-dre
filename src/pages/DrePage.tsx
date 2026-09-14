@@ -17,6 +17,7 @@ import {
 import { mapaEfetivo, nomeConta, GRAO_DE_CONTA } from '../lib/planoContas'
 import { SeletorFonteDre } from '../components/SeletorFonteDre'
 import { PainelCustoMedio } from '../components/PainelCustoMedio'
+import { PainelConferencia } from '../components/PainelConferencia'
 import { PrimeirosPassos } from '../components/PrimeirosPassos'
 import { AvisoCobertura } from '../components/AvisoCobertura'
 import { AvisoEstoque } from '../components/AvisoEstoque'
@@ -300,6 +301,14 @@ export function DrePage() {
               </table>
             </div>
           </Card>
+
+          {/* A conferência vem LOGO DEPOIS do DRE, e não no fim da página: a
+              primeira pergunta de quem olha este número é se ele bate com a
+              planilha que a diretoria já usa. Deixá-la no rodapé é responder
+              depois que a pessoa já formou opinião. */}
+          <div className="mt-5">
+            <PainelConferencia competencia={competencia} />
+          </div>
 
           <div className="mt-5">
             <PainelCustoMedio competencia={competencia} podeEditar={podeEditar} />

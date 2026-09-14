@@ -180,8 +180,22 @@ export const REGRAS_CENTRO_CUSTO: Record<string, RegraCentroCusto> = {
   'CLASSIFICACAO SOJA': { saida: '4.1.13', natural: 'saida' },
   'CLASSIFICACAO SORGO': { saida: '4.1.13', natural: 'saida' },
   'CLASSIFICACAO CAFE': { saida: '4.1.13', natural: 'saida' },
-  'ICMS - DIFAL': { saida: '3.2.01', natural: 'saida' },
-  'PARCELAMENTO ICMS': { saida: '3.2.01', natural: 'saida' },
+  // ⚠ NENHUM DESTES DEDUZ RECEITA. Eu os mandava para 3.2.01 ("ICMS sobre
+  // vendas") pelo nome, e o nome é o que menos importa aqui.
+  //
+  // O DIFAL é diferencial de alíquota na COMPRA interestadual. Os R$ 11.780,75
+  // que estavam nessa conta em 20 meses vieram de OTTIMA VEÍCULOS, PNEUMASTER
+  // PNEUS, HL PNEUS e MAIOLINI SOLUÇÕES AUTOMOTIVAS — pneu e veículo, não grão.
+  // É custo da compra, e vai junto com ela.
+  //
+  // O parcelamento é dívida tributária antiga sendo paga; a planilha do cliente
+  // lança "ICMS - PARCELAMENTO" dentro de DESPESAS (R$ 17 mil/mês), não como
+  // dedução de venda — e está certa.
+  //
+  // A venda de grão em MG é ICMS DIFERIDO: a linha IMPOSTOS da planilha é ZERO
+  // em todos os meses de 2026. Não é omissão dela, é o regime.
+  'ICMS - DIFAL': { saida: '4.3.14', natural: 'saida' },
+  'PARCELAMENTO ICMS': { saida: '4.3.17', natural: 'saida' },
   'RECEITA SOJA - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
   'RECEITA MILHO - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
   'RECEITA SORGO - EXPORTACAO': { entrada: VEM_DA_NF, saida: '3.2.06', natural: 'entrada' },
