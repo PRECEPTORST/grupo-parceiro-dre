@@ -68,31 +68,21 @@ const DEVOLUCAO_VENDA = new Set([
 const REMESSA = new Set([
   '901', '902', '903', '904', '905', '906', '907', '908', '909', '910',
   '911', '912', '913', '914', '915', '916', '917', '918', '919', '920',
-  '921', '923', '924', '925', '926', '927', '949',
+  '921', '923', '924', '925', '926', '927', '934', '949',
 ])
 
 /**
- * ⚠ 5934 — REMESSA SIMBÓLICA — É VENDA NESTE NEGÓCIO, e ficava em 'remessa'.
+ * 5934 (remessa simbólica) É REMESSA — e eu o tinha promovido a venda em
+ * 2026-09-14, errado. O ajuste parecia perfeito: com ele a receita de 8 meses
+ * de 2026 fechava em -0,1% com a planilha do cliente. Era coincidência de
+ * magnitude: os R$ 9,1M de 5934 ficavam no lugar dos R$ 17,9M de transferência
+ * (6152) menos R$ 5,9M de devolução, que é o que a planilha de fato soma.
  *
- * O nome engana: "remessa simbólica de mercadoria depositada em armazém geral"
- * soa a movimentação. Mas simbólica quer dizer justamente que o grão NÃO se
- * move — quem muda é o dono. É como se vende grão que já está armazenado.
- *
- * Foram R$ 9,11 milhões em 2026 na filial MG que não entravam na receita, e é
- * exatamente o buraco que faltava: sem eles a receita de 8 meses fica 4,3%
- * abaixo da planilha do cliente (R$ 209,1M contra R$ 218,5M); com eles,
- * R$ 218,2M — 0,1%.
- *
- * E não dobra: cruzando o `idContrato` de TODAS as 110 notas 5934 da filial em
- * 20 meses contra TODAS as notas de venda, ZERO compartilham contrato. É canal
- * de venda próprio, não a segunda perna de uma venda já contada. Os
- * destinatários confirmam — cerealistas e tradings (ELGRANO, PORTO MINEIRO DE
- * GRÃOS, UNISAFRA, R L GRÃOS), não depósitos nossos.
- *
- * O 5905 (remessa física) continua em REMESSA: ali o grão sai e volta, e o dono
- * é o mesmo. A diferença entre os dois é a palavra "simbólica".
+ * O que desmentiu foi estender o teste para 11 meses (out/2025 a ago/2026):
+ * base+5934 dá 23,7 pontos de erro médio mensal; base+6152-devolução dá 4,0.
+ * Incluir o 5934 em QUALQUER combinação piora. Ajustar o acumulado de 8 meses
+ * com um termo livre não é evidência — é grau de liberdade.
  */
-const REMESSA_SIMBOLICA_VENDA = new Set(['934'])
 
 /**
  * Aquisição de SERVIÇO DE TRANSPORTE (CT-e). Entrando, é frete sobre compra —
@@ -135,8 +125,6 @@ export function naturezaDeCfop(cfop: unknown, entrada: boolean): NaturezaCfop {
   // Só na ENTRADA: o CT-e de saída é frete sobre VENDA, que continua vindo do
   // título (a nota de saída não distingue as duas pontas com segurança).
   if (SERVICO_TRANSPORTE.has(sufixo)) return entrada ? 'frete_compra' : 'outro'
-  // Antes do teste de REMESSA: a simbólica é venda, e o sufixo é o mesmo grupo.
-  if (REMESSA_SIMBOLICA_VENDA.has(sufixo)) return entrada ? 'compra' : 'venda'
   if (REMESSA.has(sufixo)) return 'remessa'
   // Mesmo sufixo de aquisição de mercadoria: saindo é venda, entrando é COMPRA.
   // 1102/2102 na nota de entrada é o CPV — a contrapartida exata do 5102 na de

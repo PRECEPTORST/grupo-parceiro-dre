@@ -1256,3 +1256,59 @@ teste derivado da suposição não a testa; ele a congela.
 O antídoto que funcionou nas três vezes foi o mesmo: **abrir o documento**. O
 título tinha uma nota vinculada, a nota tinha um destinatário, o destinatário
 dizia se era grão ou pneu.
+
+
+## §37 — Por que a API divergia da planilha: era CFOP, não data (2026-09-14)
+
+Matheus pediu para investigar, e o §36 estava errado num ponto central: o 5934
+NÃO é receita da planilha. Fechava o acumulado de 8 meses em -0,1% por
+coincidência de magnitude (R$ 9,1M de 5934 ≈ R$ 17,9M de transferência menos
+R$ 5,9M de devolução). Estender o teste para 11 meses (out/2025 a ago/2026)
+desmontou: base+5934 dá 23,7 pontos de erro médio mensal e explode em nov/dez
+(-71%, -78%).
+
+### O método que decidiu
+
+Para cada hipótese, erro médio absoluto mensal em 11 meses E acumulado de 2026.
+O acumulado sozinho aceita qualquer termo livre; o mensal em 11 meses não.
+
+**Receita, filial MG (5106/6106/6502/5102/5502 = base):**
+
+| hipótese | erro mensal | acum. 2026 |
+|---|---|---|
+| base | 21,3 pts | -4,3% |
+| base + 5934 | 23,7 | -0,1% |
+| base + 6152 | 5,4 | +3,9% |
+| **base + 6152 − devolução** | **4,0** | **+1,2%** |
+| MG+SP consolidado (sem transferência) | 9,8 | +6,0% |
+
+**Compra:** 1102 + 1117 + 1907 = 6,4 pts, -0,2% — o retorno de armazém está
+dentro de COMPRA DE CEREAIS, como a tela de divergências já dizia.
+
+**Datas testadas e descartadas:** título por lançamento (21,8), vencimento
+(31,9), quitação (261); corte do mês em outro dia (piora monotonicamente); um
+deslocamento uniforme de -5 dias que "ajudava" em 8 meses e some em 11.
+
+### A explicação
+
+A planilha "CEREAIS" é a **filial MG** e registra a **transferência para a
+filial SP (CFOP 6152) como venda**. 100% dessas notas vão para o CNPJ
+30798330/0004; SP recebe por 2152 (R$ 17,9M em 2026) e revende por 5106/6106
+(R$ 22,6M). É o espelho exato da regra que já existia para o 1907 — na visão
+da filial, o grão que sai para a irmã saiu dela. E a devolução é abatida dentro
+da receita bruta (carga negativa no carregamento), não ignorada.
+
+O que sobra — janeiro -9%, julho +13% na receita; janeiro +17%, abril -9% na
+compra — é data: emissão da nota aqui, carregamento lá. `/Contratos` existe
+(exige `idEmpresa` e `tipoNegociacao`) e traz o vínculo compra↔venda em
+`infoAdicional` como texto livre. É o caminho para casar lote a lote, se
+alguém quiser esse corte.
+
+### As duas lições
+
+1. **Testar contra 8 meses aceitava um termo livre que 11 rejeitaram.** O 5934
+   não era evidência, era grau de liberdade. Sempre que um ajuste fecha um
+   TOTAL, perguntar se ele fecha os MESES.
+2. **"Deslocamento de 5 dias" era um sintoma modelado como causa.** A planilha
+   parecia adiantada porque tinha R$ 5M/mês de 6152 que eu não tinha. Antes de
+   modelar um efeito, procurar o que falta.

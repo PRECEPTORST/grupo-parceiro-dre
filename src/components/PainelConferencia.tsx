@@ -5,8 +5,10 @@
 // "O DRE está diferente da planilha" é verdade e é inútil sozinho, porque
 // mistura duas coisas de naturezas opostas:
 //
-//   • ESCOLHA DE MÉTODO — apropriamos estoque e deduzimos devolução de venda; a
-//     planilha não faz nem uma coisa nem outra. Isso é decisão, e é reversível.
+//   • ESCOLHA DE MÉTODO — apropriamos estoque; a planilha não. E mostramos a
+//     devolução de venda em linha própria; a planilha a abate dentro da receita
+//     bruta (a linha DEVOLUÇÃO dela é zero por isso, não por não deduzir — li
+//     errado na primeira vez). Isso é apresentação, e é reversível.
 //   • DADO QUE NÃO EXISTE — comissão, quebras e o bloco administrativo e
 //     financeiro não estão no ERP. Isso não é decisão, e nenhum cálculo cria.
 //
@@ -122,15 +124,16 @@ export function PainelConferencia({ competencia }: { competencia: string }) {
     const doMes = (mes: string) => lancamentos.filter((l) => l.data.slice(0, 7) === mes)
 
     // MODO PLANILHA: sem apropriação de estoque (a compra volta a ser a do mês) e
-    // sem deduzir devolução de venda. São exatamente as duas convenções do
-    // cliente — o resto da diferença já não é método.
+    // com a devolução de venda ABATIDA DENTRO da receita bruta, em vez de linha
+    // própria. São exatamente as convenções do cliente — o resto já não é método.
     const semConvencoesNossas = (ls: LancamentoCanonico[]) =>
-      ls.filter(
-        (l) =>
-          !MARCA_APROPRIACAO.test(l.historico ?? '') &&
-          l.contaSafragold !== '3.2.06' &&
-          l.contaSafragold !== '3.2.07',
-      )
+      ls
+        .filter((l) => !MARCA_APROPRIACAO.test(l.historico ?? ''))
+        .map((l) =>
+          l.contaSafragold === '3.2.06' || l.contaSafragold === '3.2.07'
+            ? { ...l, contaSafragold: '3.1.98', valor: -l.valor }
+            : l,
+        )
 
     const acumular = (f: (m: string) => LinhaPlanilha) =>
       meses.reduce((acc, m) => {
@@ -165,9 +168,11 @@ export function PainelConferencia({ competencia }: { competencia: string }) {
     <Card className="mb-5 animate-rise">
       <Kicker>Conferência com a planilha</Kicker>
       <p className="mb-4 mt-1 text-sm text-muted">
-        A coluna <strong>apurado</strong> é o que este DRE calcula. A do meio copia as duas
-        convenções do cliente — sem apropriação de estoque e sem deduzir devolução de venda — para
-        que a diferença que sobra não seja de método. Escopo: filial MG.
+        A coluna <strong>apurado</strong> é o que este DRE calcula. A do meio copia as
+        convenções do cliente — sem apropriação de estoque, e com a devolução de venda abatida
+        dentro da receita bruta em vez de em linha própria — para que a diferença que sobra não
+        seja de método. Escopo: filial MG, com a transferência para a filial SP contada como venda,
+        que é como o fechamento do cliente a registra.
       </p>
 
       <Tabela
@@ -197,9 +202,9 @@ export function PainelConferencia({ competencia }: { competencia: string }) {
       </div>
 
       <p className="mt-3 text-xs text-muted">
-        No acumulado a receita e a compra fecham em menos de 1%; mês a mês a diferença chega a 30%.
-        Não é erro de leitura: a planilha nasce do controle de carregamento e lança a compra no mês
-        da venda do mesmo lote, enquanto aqui vale a data de emissão de cada nota. Uma nota no mês
+        Em onze meses (out/2025 a ago/2026) a receita reconstruída fica a 4 pontos da planilha em
+        média, e a compra a 6; o acumulado de 2026 fecha em +1% e −1%. O que resta mês a mês é
+        data: aqui vale a emissão de cada nota, lá o controle de carregamento. Uma nota no mês
         errado some no acumulado; uma que falta, não.
       </p>
     </Card>

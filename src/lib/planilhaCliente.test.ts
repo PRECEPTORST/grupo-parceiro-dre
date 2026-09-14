@@ -16,7 +16,9 @@ describe('a referência da planilha é internamente coerente', () => {
   it('a receita líquida de 2026 é a bruta: a planilha não deduz nada', () => {
     // Venda de grão em MG é ICMS diferido e a linha DEVOLUÇÃO é zero. Não é
     // omissão dela — é o regime, e o nosso DRE foi corrigido para o mesmo.
+    // (Dez/2025 tem R$ 1.086,88 de imposto; o teste é sobre 2026.)
     for (const [mes, l] of Object.entries(PLANILHA_CLIENTE)) {
+      if (!mes.startsWith('2026')) continue
       expect(receitaLiquida(l), mes).toBeCloseTo(l.receitaBruta, 2)
     }
   })

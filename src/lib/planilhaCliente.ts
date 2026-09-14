@@ -26,6 +26,11 @@ export interface LinhaPlanilha {
 }
 
 export const PLANILHA_CLIENTE: Record<string, LinhaPlanilha> = {
+  // Out–dez/2025 entram porque 8 meses aceitavam ajustes que 11 desmentem: o
+  // 5934 "fechava" o acumulado de 2026 e explodia em nov/dez (-71%, -78%).
+  '2025-10': { receitaBruta: 4_996_400.22, impostos: 0, devolucao: 0, compra: 4_311_967.58, armazenagem: 0, frete: 513_147.37, comissao: 51_678.72, classificacao: 320.00, quebras: 2_651.60, despesaTotal: 163_316.65 },
+  '2025-11': { receitaBruta: 7_465_870.90, impostos: 0, devolucao: 0, compra: 6_383_244.37, armazenagem: 1_500.00, frete: 747_275.32, comissao: 49_069.80, classificacao: 320.00, quebras: 4_983.85, despesaTotal: 296_542.52 },
+  '2025-12': { receitaBruta: 10_131_395.70, impostos: 1_086.88, devolucao: 0, compra: 8_909_081.88, armazenagem: 0, frete: 874_880.50, comissao: 47_307.70, classificacao: 320.00, quebras: 7_588.33, despesaTotal: 207_213.44 },
   '2026-01': { receitaBruta: 9_030_088.30, impostos: 0, devolucao: 0, compra: 7_909_884.41, armazenagem: 0, frete: 634_974.03, comissao: 41_110.47, classificacao: 6_119.63, quebras: 5_289.00, despesaTotal: 250_408.62 },
   '2026-02': { receitaBruta: 12_601_230.59, impostos: 0, devolucao: 0, compra: 11_317_769.48, armazenagem: 0, frete: 879_357.24, comissao: 56_739.02, classificacao: 5_760.00, quebras: 19_068.11, despesaTotal: 273_700.25 },
   '2026-03': { receitaBruta: 40_429_003.18, impostos: 0, devolucao: 0, compra: 36_666_215.64, armazenagem: 0, frete: 3_168_207.66, comissao: 118_872.97, classificacao: 0, quebras: 13_996.71, despesaTotal: 111_237.53 },

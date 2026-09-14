@@ -174,15 +174,16 @@ describe('notas que não são venda (armadilha #4)', () => {
     expect(ehVenda(nfVenda({ finalidade: 'Complementar' }))).toBe(true)
   })
 
-  it('remessa FÍSICA e transferência NÃO são venda (item 2.3)', () => {
+  it('remessa e transferência NÃO são venda no CONSOLIDADO (item 2.3)', () => {
     expect(ehVenda(nfVenda({ cfop: '5905' }))).toBe(false) // remessa p/ armazém geral
-    // 5934 saiu daqui: remessa SIMBÓLICA é venda. Ver 'remessa simbólica' em
-    // cfop.test.ts — R$ 9,11M em 2026 que faltavam na receita.
-    expect(ehVenda(nfVenda({ cfop: '5934' }))).toBe(true)
-    expect(ehVenda(nfVenda({ cfop: '6152' }))).toBe(false) // transferência
-    const r = normalizarEnokiDre({
-      nfs: [nfVenda({ cfop: '5905' }), nfVenda({ idNf: 2, cfop: '6152' })],
-    })
+    expect(ehVenda(nfVenda({ cfop: '5934' }))).toBe(false) // remessa simbólica
+    expect(ehVenda(nfVenda({ cfop: '6152' }))).toBe(false) // transferência (natureza fiscal)
+    // Na convenção 'cliente' (filial) a transferência de saída VIRA venda — ver
+    // o bloco 'transferência para a filial irmã'. Aqui o teste é do consolidado.
+    const r = normalizarEnokiDre(
+      { nfs: [nfVenda({ cfop: '5905' }), nfVenda({ idNf: 2, cfop: '6152' })] },
+      { convencao: 'consolidado' },
+    )
     expect(r.lancamentos).toHaveLength(0)
     expect(r.descartes.some((d) => d.motivo === 'nf_remessa')).toBe(true)
     expect(r.descartes.some((d) => d.motivo === 'nf_transferencia')).toBe(true)
@@ -649,10 +650,10 @@ describe('nota sem itens abertos: nenhuma natureza viva pode sumir', () => {
     const { lancamentos } = normalizarEnokiDre({
       nfs: [
         nfSemItens({ cfop: '5905' }), // remessa
-        nfSemItens({ idNf: 701, cfop: '6152' }), // transferência
+        nfSemItens({ idNf: 701, cfop: '6152' }), // transferência (descartada só no consolidado)
         nfSemItens({ idNf: 702, cfop: '5106', status: 'Cancelada' }),
       ],
-    })
+    }, { convencao: 'consolidado' })
     expect(lancamentos).toHaveLength(0)
   })
 })
@@ -742,5 +743,31 @@ describe('deduplicação só é segura se o id for único', () => {
     expect(r.lancamentos).toHaveLength(2)
     expect(r.colisoes).toEqual([])
     expect(r.lancamentos.reduce((s, l) => s + l.valor, 0)).toBe(8777)
+  })
+})
+
+
+describe('transferência para a filial irmã (6152) — depende da convenção', () => {
+  // 100% das 6152 da filial MG vão para o CNPJ 30798330/0004 (filial SP). Para
+  // o consolidado é movimento interno; para a filial é a saída do grão dela, e
+  // o fechamento do cliente soma R$ 32,9M disso em RECEITA. Onze meses contra
+  // a planilha: sem 6152, 21,3 pts de erro mensal; com, 4,0.
+  it("na convenção 'cliente' (filial) vira VENDA", () => {
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ cfop: '6152' })] }, { convencao: 'cliente' })
+    expect(r.lancamentos.some((l) => l.contaSafragold.startsWith('3.1.'))).toBe(true)
+    expect(r.descartes.some((d) => d.motivo === 'nf_transferencia')).toBe(false)
+  })
+
+  it("na convenção 'consolidado' continua descartada como transferência", () => {
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ cfop: '6152' })] }, { convencao: 'consolidado' })
+    expect(r.lancamentos).toHaveLength(0)
+    expect(r.descartes.some((d) => d.motivo === 'nf_transferencia')).toBe(true)
+  })
+
+  it('transferência de ENTRADA (2152) não vira venda nem compra na filial que recebe', () => {
+    // A regra (2) é só de saída. Quem recebe (SP) já tem a compra pela nota da
+    // irmã, e contar de novo dobraria o custo.
+    const r = normalizarEnokiDre({ nfs: [nfVenda({ cfop: '2152', entrada: true })] }, { convencao: 'cliente' })
+    expect(r.lancamentos.filter((l) => l.contaSafragold.startsWith('3.1.'))).toHaveLength(0)
   })
 })

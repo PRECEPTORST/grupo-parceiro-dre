@@ -480,6 +480,21 @@ function processarNfs(
     if (convencao === 'cliente' && natureza === 'remessa' && ehEntradaDaNf(nf)) {
       natureza = 'compra'
     }
+    // (2) TRANSFERÊNCIA PARA A FILIAL IRMÃ COMO VENDA — o espelho de (1).
+    //
+    // O CFOP 6152 é grão saindo da filial MG para a filial SP (100% das notas,
+    // pelo CNPJ do destinatário: raiz 30798330, sufixo 0004). Num consolidado
+    // isso se elimina; para a filial MG é a saída do grão dela, e é assim que o
+    // fechamento do cliente registra: R$ 32,9M em 20 meses dentro de RECEITA.
+    //
+    // Foi o que explicava o buraco de nov/dez de 2025 (-71%, -78%) e o padrão
+    // de "a planilha adiantada em ~5 dias" que eu tinha tentado modelar com um
+    // deslocamento de data. Não era data: era CFOP. Onze meses contra a
+    // planilha, filial MG: base 21,3 pts de erro médio mensal; base+6152, 5,4;
+    // base+6152 com devolução líquida, 4,0 — e acumulado de 2026 em +1,2%.
+    if (convencao === 'cliente' && natureza === 'transferencia' && !ehEntradaDaNf(nf)) {
+      natureza = 'venda'
+    }
     // Só o que é venda precisa estar autorizado; remessa/ajuste já sai fora abaixo.
     if (natureza === 'venda' && !ehAutorizada(nf)) {
       descartar(acc, 'nf_nao_autorizada', valorNf)

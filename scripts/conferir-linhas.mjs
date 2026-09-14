@@ -24,7 +24,11 @@
  * ESCOLHA de método do que é DADO que falta:
  *
  *   • sem apropriação de estoque — a COMPRA vira a nota do mês, como lá;
- *   • sem deduzir devolução de venda — a linha DEVOLUÇÃO deles é zero.
+ *   • devolução de venda ABATIDA DENTRO da receita bruta — a linha DEVOLUÇÃO
+ *     deles é zero não porque não deduzem, mas porque a receita já vem líquida
+ *     (o controle de carregamento registra a devolução como carga negativa).
+ *     Eu tinha lido o zero como "não deduz"; onze meses de teste mostraram que
+ *     abater a devolução MELHORA o ajuste (5,4 → 4,0 pts).
  *
  * O que sobrar de diferença depois disso não é convenção: é dado.
  *
@@ -75,10 +79,13 @@ for (let a = 2025; a <= 2026; a++) {
 const { lancamentos: base, rel } = await apurar(TODOS, undefined, EMPRESA_DA_PLANILHA)
 // COM a apropriação de estoque: é o que o site publica. Sem ela a linha COMPRA
 // aparece 9,8% acima da planilha quando na verdade fica 9,3% abaixo.
+// No modo planilha a devolução (3.2.06/07) vira receita NEGATIVA: some da linha
+// DEVOLUÇÃO e abate a RECEITA BRUTA, que é como a planilha a mostra.
 const lancamentos = modoPlanilha
-  ? base.filter((l) => l.contaSafragold !== '3.2.06' && l.contaSafragold !== '3.2.07')
+  ? base.map((l) => (l.contaSafragold === '3.2.06' || l.contaSafragold === '3.2.07'
+      ? { ...l, contaSafragold: '3.1.98', valor: -l.valor } : l))
   : [...base, ...ajustesDeEstoque(base, rel, TODOS)]
-if (modoPlanilha) console.log('MODO PLANILHA: sem apropriação de estoque, sem deduzir devolução.\n')
+if (modoPlanilha) console.log('MODO PLANILHA: sem apropriação de estoque; devolução abatida dentro da receita bruta.\n')
 
 const num = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const delta = (a, b) => (b === 0 ? (a === 0 ? '     —' : '  falta na planilha') : `${((a / b - 1) * 100).toFixed(1)}%`.padStart(8))

@@ -243,18 +243,17 @@ const DECISOES_ABERTAS: Divergencia[] = [
   },
   {
     id: 'devolucao-nao-deduzida',
-    titulo: 'A planilha não deduz devolução de venda; nós deduzimos',
+    titulo: 'A planilha abate a devolução dentro da receita; nós mostramos em linha própria',
     valor: 393_817.56,
     quantidade: 34,
-    situacao: 'aberta',
+    situacao: 'decidida',
     linha: 'deducoes',
     oQueE:
-      'Em agosto/2026 são 34 notas de devolução de venda, R$ 393.817,56 — grão que o cliente devolveu. As maiores: NF 14298 de soja da AGROFEL (R$ 105.213,00), NF 15068 de milho da SEARA (R$ 60.891,71), NF 14746 de milho da SEARA (R$ 58.783,96), NF 14538 da MANTIQUEIRA (R$ 42.750,00). A linha DEVOLUÇÃO da planilha é ZERO em todos os meses de 2026.',
+      'Em agosto/2026 são 34 notas de devolução de venda, R$ 393.817,56. A linha DEVOLUÇÃO da planilha é zero em todos os meses — e eu li isso como "não deduz". Estava errado: o controle de carregamento registra a devolução como carga negativa, e a RECEITA BRUTA da planilha já vem líquida dela.',
     valendoHoje:
-      'DEDUZIMOS da receita bruta. São notas de devolução reais, com número, grão e destinatário — a venda não se concretizou.',
-    seMudar:
-      'Copiar o critério da planilha faria a receita líquida bater melhor e deixaria o DRE R$ 394 mil otimista em agosto. Parece omissão do filtro manual dela, não regra — e copiar um erro para bater não é conferir.',
-    quemDecide: 'Contador. É a pergunta mais objetiva da lista.',
+      'Deduzimos, em linha própria (3.2.06). A receita líquida é a mesma nos dois desenhos; muda só onde a devolução aparece. A prova: em onze meses contra a planilha, abater a devolução MELHORA o ajuste da receita (5,4 → 4,0 pontos de erro médio).',
+    seMudar: 'Nada a decidir. A coluna "modo planilha" da conferência já abate dentro da receita para ficar comparável.',
+    quemDecide: 'Fechado — era leitura errada minha da planilha.',
   },
   {
     id: 'icms-credito-presumido',
@@ -288,18 +287,18 @@ const DECISOES_ABERTAS: Divergencia[] = [
   },
   {
     id: 'corte-competencia',
-    titulo: 'A mesma nota cai em meses diferentes aqui e na planilha',
+    titulo: 'Mês a mês sobra ~4 pontos de diferença: data de emissão × controle de carregamento',
     valor: 0,
     quantidade: 0,
     situacao: 'aberta',
     linha: 'receita',
     oQueE:
-      'Em 8 meses de 2026 (empresa 1), nossa receita soma R$ 220,72 milhões contra R$ 218,51 da planilha — 1,0%. A compra de grão, R$ 192,46 contra R$ 196,53 milhões — 2,1%. Os totais batem. Mas mês a mês a diferença vai de -27% (janeiro) a +10% (junho).',
+      'Com as convenções do cliente reconstruídas (filial MG; transferência para SP contada como venda; retorno de armazém dentro da compra; devolução abatida na receita), onze meses de out/2025 a ago/2026 fecham com 4 pontos de erro médio na receita e 6 na compra, e o acumulado de 2026 em +1% e -1%. O que resta é data: janeiro -9%, julho +13%; compra em janeiro +17%, abril -9%.',
     valendoHoje:
-      'Usamos a DATA DE EMISSÃO da nota, que é o fato gerador. A planilha nasce do controle de carregamento, que lança a compra no mês da venda do mesmo lote — por isso a razão custo/receita dela fica presa em 87%-91% todo mês.',
+      'Usamos a DATA DE EMISSÃO da nota, que é o fato gerador contábil. A planilha nasce do controle de carregamento. Testei as três datas do título (lançamento, vencimento, quitação) e um corte de mês em outro dia: todas pioram. Não é caixa, não é vencimento, não é dia de fechamento.',
     seMudar:
-      'Adotar o corte do carregamento faria cada mês bater com a planilha, mas exige o vínculo lote-a-lote, que não está na API. Manter a emissão é o critério contábil e já fecha no acumulado.',
-    quemDecide: 'Contador — e é a maior divergência que sobrou.',
+      'Igualar mês a mês exige a data de carregamento por nota, que a API não expõe. Os contratos (rota /Contratos) trazem o vínculo compra↔venda em texto livre ("VINCULADO COM CTR. 054/24SG") — é por ali que se casaria lote a lote, se a diretoria quiser esse corte.',
+    quemDecide: 'Contador decide o critério; Francis, se for carregamento, precisa expor a data.',
   },
   {
     id: 'apropriacao-estoque',
@@ -363,18 +362,18 @@ const DECISOES_ABERTAS: Divergencia[] = [
   },
   {
     id: 'escopo-filial-sp',
-    titulo: 'A planilha é só a filial MG; a tela mostra MG + SP',
-    valor: 0,
-    quantidade: 0,
-    situacao: 'aberta',
+    titulo: 'A planilha é a filial MG, e conta a transferência para a filial SP como venda',
+    valor: 32_912_000,
+    quantidade: 399,
+    situacao: 'decidida',
     linha: 'estrutura',
     oQueE:
-      'A planilha se chama "DRE ACUMULADO _CEREAIS" e cobre a filial MG sozinha. A filial SP movimentou R$ 76,2 milhões em 20 meses, tudo cereal, e está somada nesta tela.',
+      'A filial MG manda grão para a filial SP por CFOP 6152 — 100% das notas vão para o CNPJ 30798330/0004, R$ 32,9 milhões em 20 meses. SP recebe por 2152 e revende por 5106/6106 (R$ 22,6M em 2026). Num consolidado a transferência se elimina; a planilha "CEREAIS" é a filial MG sozinha e registra a transferência como a venda dela. Era isso que explicava nov e dez/2025 (-71%, -78% sem o 6152; -1% e -11% com).',
     valendoHoje:
-      'MG + SP. É o DRE do negócio de cereais inteiro, que é o que a tela se propõe a mostrar.',
+      'Na convenção "cliente" (filial) a transferência de saída vira venda, espelho da regra que já fazia o retorno de armazém virar compra. Na convenção "consolidado" ela continua eliminada. A tela mostra a filial MG.',
     seMudar:
-      'Se a comparação oficial for contra a planilha, a filial SP sai também e os dois números passam a ser diretamente confrontáveis. Se o oficial for o negócio de cereais, é a planilha que está incompleta.',
-    quemDecide: 'Diretoria — define qual é o DRE oficial.',
+      'Se o DRE oficial for MG+SP consolidado, a transferência sai da receita e entram as vendas externas de SP; o acumulado de 2026 fica +6% acima da planilha em vez de +1%, porque SP vende o grão por mais do que recebeu.',
+    quemDecide: 'Diretoria — define qual é o DRE oficial. A planilha, hoje, é MG.',
   },
   {
     id: 'gap-contratos',
