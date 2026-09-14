@@ -71,11 +71,14 @@ describe('resumirCompras', () => {
     expect(r.valor['2026-08'].milho).toBeCloseTo(54_000, 2)
   })
 
-  it('retorno de armazém (1907) NÃO é compra nova', () => {
-    // O grão já era nosso; contá-lo dobraria o volume e derrubaria o custo médio.
-    const r = resumirCompras([item({ cfop: '1907' })], cadastro)
-    expect(r.sacas['2026-08']?.milho).toBeUndefined()
-    expect(r.ignorados[0].motivo).toContain('1907')
+  it('retorno de armazém (1907) É entrada de estoque', () => {
+    // Parecia que não: "o grão já era nosso". Mas em 20 meses a soja comprava
+    // 2.203.640 sacas e vendia 2.348.549 — furo de 144.909 que nunca fechava.
+    // Somando o retorno, o saldo fecha em -4.860 sacas (0,2%). A remessa PARA o
+    // armazém não é contada como saída, então o retorno não pode ser ignorado
+    // como entrada.
+    const r = resumirCompras([item({ cfop: '1907', quantidade: 60_000 })], cadastro)
+    expect(r.sacas['2026-08'].milho).toBeCloseTo(1000, 0)
   })
 
   it('nada some em silêncio — o ignorado sai com motivo e valor', () => {

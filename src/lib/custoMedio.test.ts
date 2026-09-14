@@ -3,6 +3,7 @@ import {
   custoMedioMovel,
   ajusteEstoque,
   lancamentosDeEstoque,
+  aberturaMinima,
   CONTA_VARIACAO_ESTOQUE,
   type MovimentoEstoque,
 } from './custoMedio'
@@ -190,5 +191,51 @@ describe('lancamentosDeEstoque — a apropriação entra como LINHA do DRE', () 
       { competencia: '2026-08', grao: 'milho', sacasCompradas: 1000, valorComprado: 60_000, sacasVendidas: 1000 },
     ])
     expect(lancamentosDeEstoque(rel)).toEqual([])
+  })
+})
+
+describe('aberturaMinima — o encadeamento denuncia o estoque que faltava', () => {
+  it('devolve o déficit mais fundo, não o do último mês', () => {
+    // Vende 500 sem comprar (fica -500), depois compra 300 e não vende (-200).
+    // O piso é 500: em janeiro já faltavam 500 sacas.
+    const movs: MovimentoEstoque[] = [
+      { competencia: '2026-01', grao: 'soja', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 500 },
+      { competencia: '2026-02', grao: 'soja', sacasCompradas: 300, valorComprado: 39_000, sacasVendidas: 0 },
+    ]
+    expect(aberturaMinima(['2026-01', '2026-02'], movs).soja?.sacas).toBe(500)
+  })
+
+  it('precifica pela primeira COMPRA, não pelo custo médio do mês quebrado', () => {
+    const movs: MovimentoEstoque[] = [
+      { competencia: '2026-01', grao: 'soja', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 500 },
+      { competencia: '2026-02', grao: 'soja', sacasCompradas: 300, valorComprado: 39_000, sacasVendidas: 0 },
+    ]
+    // R$ 130/saca é o preço da nota de fevereiro. O custo médio de janeiro é 0
+    // (dividiu sem estoque) e o de fevereiro ainda carrega o buraco.
+    expect(aberturaMinima(['2026-01', '2026-02'], movs).soja?.valor).toBeCloseTo(65_000, 0)
+  })
+
+  it('grão que nunca fica negativo não ganha abertura', () => {
+    const movs: MovimentoEstoque[] = [
+      { competencia: '2026-01', grao: 'milho', sacasCompradas: 1_000, valorComprado: 60_000, sacasVendidas: 400 },
+    ]
+    expect(aberturaMinima(['2026-01'], movs)).toEqual({})
+  })
+
+  it('a abertura inferida zera o alerta — é essa a definição dela', () => {
+    const movs: MovimentoEstoque[] = [
+      { competencia: '2026-01', grao: 'soja', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 500 },
+      { competencia: '2026-02', grao: 'soja', sacasCompradas: 300, valorComprado: 39_000, sacasVendidas: 0 },
+    ]
+    const meses = ['2026-01', '2026-02']
+    const rel = custoMedioMovel(meses, movs, aberturaMinima(meses, movs))
+    expect(rel.posicoes.every((p) => p.sacasFinais >= -0.01)).toBe(true)
+  })
+
+  it('grão que só vende, sem nota de compra, fica de fora em vez de ganhar preço inventado', () => {
+    const movs: MovimentoEstoque[] = [
+      { competencia: '2026-01', grao: 'cafe', sacasCompradas: 0, valorComprado: 0, sacasVendidas: 100 },
+    ]
+    expect(aberturaMinima(['2026-01'], movs).cafe).toBeUndefined()
   })
 })

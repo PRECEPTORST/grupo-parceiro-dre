@@ -64,14 +64,26 @@ export function graoDoProduto(descricao: string): Grao | null {
 }
 
 /**
- * CFOPs que representam AQUISIÇÃO de mercadoria para o estoque.
+ * CFOPs que representam ENTRADA DE MERCADORIA NO ESTOQUE.
  *
- * O relatório traz também devolução (1202/2202) e retorno de armazém (1907). A
- * devolução REDUZ o que entrou; o retorno de armazém é grão que já era nosso
- * voltando, e por isso NÃO entra como compra nova — contá-lo dobraria o volume
- * e derrubaria o custo médio artificialmente.
+ * ⚠ O RETORNO DE ARMAZÉM (907) ENTRA — e eu tinha excluído, errado.
+ *
+ * O raciocínio parecia sólido: "o grão já era nosso, contá-lo dobraria o
+ * volume". Os números dizem o contrário. Em 20 meses (jan/2025 a ago/2026) a
+ * soja comprou 2.203.640 sacas e vendeu 2.348.549 — um furo de 144.909 sacas
+ * que nunca fechava, e que fazia o saldo ficar negativo já no segundo mês,
+ * quebrando o custo médio. Somando o retorno de armazém, a compra vai a
+ * 2.343.689 e o saldo fecha em -4.860 sacas: 0,2%.
+ *
+ * A explicação é a simetria: a REMESSA para o armazém (5905/5934) não é contada
+ * como saída de estoque, então o retorno não pode ser ignorado como entrada.
+ * Ignorar os dois lados fecharia; ignorar só um deixa o furo.
+ *
+ * Note que isto é uma pergunta DIFERENTE da do DRE: lá o 1907 conta como custo
+ * na convenção do cliente. Aqui a pergunta é de VOLUME FÍSICO, e a resposta é a
+ * mesma por coincidência — mas pelos motivos certos.
  */
-const SUFIXO_COMPRA = new Set(['101', '102', '111', '116', '117', '120', '122'])
+const SUFIXO_COMPRA = new Set(['101', '102', '111', '116', '117', '120', '122', '907'])
 const SUFIXO_DEVOLUCAO = new Set(['201', '202'])
 
 function sufixo(cfop: string): string {

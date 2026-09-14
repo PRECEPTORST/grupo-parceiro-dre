@@ -17,7 +17,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { normalizarEnokiDre } from '../src/lib/enokiDre.ts'
 import { mapaEfetivo } from '../src/lib/planoContas.ts'
 import { resumirCompras } from '../src/lib/itensCompra.ts'
-import { custoMedioMovel, montarMovimentosEstoque, lancamentosDeEstoque, ajusteEstoque } from '../src/lib/custoMedio.ts'
+import { custoMedioMovel, montarMovimentosEstoque, lancamentosDeEstoque, ajusteEstoque, aberturaMinima } from '../src/lib/custoMedio.ts'
 import { montarDre } from '../src/lib/dre.ts'
 
 const meses = process.argv.slice(2).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort()
@@ -81,7 +81,19 @@ for (const m of movimentos) {
   const v = valorComprado[m.competencia]?.[m.grao]
   if (v != null) m.valorComprado = v
 }
-const rel = custoMedioMovel(meses, movimentos)
+// A API começa em janeiro/2025, mas a empresa não. A soja vendida naquele mês
+// veio da safra de 2024 — grão que entrou antes da primeira nota legível. Sem
+// isso a média móvel divide por um saldo inexistente (o café chegou a
+// -R$ 13.759/saca). `aberturaMinima` devolve o PISO que as notas denunciam: se
+// o saldo afunda a -38.706 sacas, havia ao menos 38.706 na abertura.
+const abertura = aberturaMinima(meses, movimentos)
+if (Object.keys(abertura).length) {
+  console.log('\n═══ ESTOQUE DE ABERTURA INFERIDO (piso, não inventário)')
+  for (const [grao, a] of Object.entries(abertura)) {
+    console.log(`   ${grao.padEnd(7)}${a.sacas.toLocaleString('pt-BR').padStart(10)} sacas   ${brl(a.valor).padStart(20)}   ${brl(a.valor / a.sacas)}/saca`)
+  }
+}
+const rel = custoMedioMovel(meses, movimentos, abertura)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A BASE DO AJUSTE É O QUE ESTÁ NO DRE, NÃO O QUE O RELATÓRIO LEU.
@@ -110,18 +122,6 @@ const CONTAS_AQUISICAO = new Set(['4.1.18', '4.1.01', '4.1.02', '4.1.03', '4.1.0
 // Emitir o ajuste assim mesmo poria um número absurdo no DRE com cara de
 // apurado. Melhor um CPV admitidamente incompleto (a compra do mês, com o aviso
 // na tela) do que um inventado.
-const graosQuebrados = new Set(
-  rel.posicoes.filter((p) => p.estoqueNegativo).map((p) => p.rotulo),
-)
-if (graosQuebrados.length !== 0 && graosQuebrados.size) {
-  console.log(`\n✗ NÃO vou gerar ajuste de estoque: ${[...graosQuebrados].join(', ')} com saldo negativo.`)
-  console.log('  A média móvel precisa de estoque de abertura, que ainda não temos.')
-  console.log('  O DRE fica com o CPV = compra do mês, e o aviso na tela explica a distorção.')
-  writeFileSync('robot/out/lancamentos-estoque.json',
-    JSON.stringify({ geradoEm: new Date().toISOString(), meses, ajustes: [], motivo: 'estoque negativo' }, null, 1), 'utf8')
-  process.exit(0)
-}
-
 const ajustes = []
 for (const mes of meses) {
   const aquisicaoNoDre = lancamentos
@@ -144,6 +144,9 @@ for (const mes of meses) {
   console.log(`   ${mes}: aquisição no DRE ${brl(aquisicaoNoDre)} · custo do vendido ${brl(cpvCorreto)}`)
 }
 
+// A tabela vem ANTES da recusa: saber ONDE o saldo virou negativo é o que
+// aponta o mês em que falta compra ou estoque de abertura. Recusar sem mostrar
+// deixa quem lê sem o dado que resolveria.
 console.log('\n═══ MOVIMENTO DE ESTOQUE (sacas)')
 console.log('MÊS      GRÃO     inicial  compradas   vendidas      final   custo médio')
 const nSac = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })
@@ -160,6 +163,18 @@ for (const p of rel.posicoes) {
 if (rel.competenciasComAlerta.length) {
   console.log(`\n⚠ ALERTA em ${rel.competenciasComAlerta.join(', ')} — estoque negativo significa`)
   console.log('  que falta compra ou estoque de abertura; o CPV sai subavaliado.')
+}
+
+const graosQuebrados = new Set(
+  rel.posicoes.filter((p) => p.estoqueNegativo).map((p) => p.rotulo),
+)
+if (graosQuebrados.length !== 0 && graosQuebrados.size) {
+  console.log(`\n✗ NÃO vou gerar ajuste de estoque: ${[...graosQuebrados].join(', ')} com saldo negativo.`)
+  console.log('  A média móvel precisa de estoque de abertura, que ainda não temos.')
+  console.log('  O DRE fica com o CPV = compra do mês, e o aviso na tela explica a distorção.')
+  writeFileSync('robot/out/lancamentos-estoque.json',
+    JSON.stringify({ geradoEm: new Date().toISOString(), meses, ajustes: [], motivo: 'estoque negativo' }, null, 1), 'utf8')
+  process.exit(0)
 }
 
 for (const mes of meses) {

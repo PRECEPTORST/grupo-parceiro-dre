@@ -59,8 +59,12 @@ async function api(caminho, tent = 0) {
     await sleep(2000 * (tent + 1));
     return api(caminho, tent + 1);
   }
-  if ((r.status === 429 || r.status >= 500) && tent < 6) {
-    await sleep(2000 * (tent + 1));
+  // 429 é LIMITE DE TAXA, e limite não passa em 12 segundos. Puxando um ano
+  // inteiro a API começa a recusar por volta do terceiro mês, e uma espera curta
+  // só gasta as tentativas: a carga morria com 2 de 12 meses baixados.
+  // Recuo exponencial até ~2 min, que é o que o servidor pede na prática.
+  if ((r.status === 429 || r.status >= 500) && tent < 10) {
+    await sleep(Math.min(120_000, 3000 * 2 ** tent));
     return api(caminho, tent + 1);
   }
   if (!r.ok) throw new Error(`${caminho} → ${r.status} ${(await r.text()).slice(0, 160)}`);
@@ -78,7 +82,7 @@ async function todos(rota, filtros, campoId) {
     const ultimo = lote[lote.length - 1]?.[campoId];
     if (ultimo == null || ultimo === cursor) break;
     cursor = ultimo;
-    await sleep(180);
+    await sleep(350);
     if (lote.length < TOP) break;
   }
   return out;

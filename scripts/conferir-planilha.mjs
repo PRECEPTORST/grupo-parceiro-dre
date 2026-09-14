@@ -1,17 +1,37 @@
 /**
  * Confronta o DRE apurado da API com a planilha real do cliente, mês a mês.
  *
- * POR QUE O TESTE É O *RATIO*, E NÃO O VALOR
- * ------------------------------------------
- * Comparar receita com receita esconde o que interessa. A planilha do cliente
- * tem uma assinatura muito mais reveladora: a razão compra/receita fica entre
- * 87% e 91% TODOS os meses de 2026. A nossa, com CPV = compra do mês, vai de 84%
- * a 153%.
+ * O QUE ESTA CONFERÊNCIA DESCOBRIU
+ * --------------------------------
+ * A pergunta era por que a razão custo/receita do cliente fica presa entre 87%
+ * e 91% todo mês enquanto a nossa ia de 84% a 153%. A hipótese que perseguimos
+ * por muito tempo foi a de que eles casavam custo com venda lote a lote, e nós
+ * não. Estava errada, e são DOIS erros nossos somados:
  *
- * Essa estabilidade é o retrato de custo casado com a venda — o custo de cada
- * venda é o do lote que saiu. A oscilação é o retrato do contrário. Por isso o
- * alvo desta conferência é o RATIO: ele diz se a apuração está com o método
- * certo, e não apenas se um mês bateu por acaso.
+ *   1. ESCOPO. A planilha é a EMPRESA 1 ("DRE ACUMULADO _CEREAIS"). Somávamos
+ *      as cinco, e as empresas 2 e 3 acrescentavam R$ 4,7 milhões de receita
+ *      em agosto — outra linha de negócio, num DRE separado. Isso sozinho
+ *      inflava a receita em 24%.
+ *
+ *   2. A PLANILHA NÃO APROPRIA ESTOQUE. A "compra" dela é a nota de compra do
+ *      mês, CFOP 1102, e mais nada. Comprovado: 8 meses de 2026 somam
+ *      R$ 196,53 milhões na planilha e R$ 192,46 milhões nas notas — 2,1% de
+ *      diferença. A receita idem: R$ 218,51 milhões contra R$ 220,72 milhões,
+ *      1,0%.
+ *
+ * Ou seja: os NOSSOS DADOS JÁ BATEM. O que oscila mês a mês é a DATA em que
+ * cada nota cai (janeiro fica 27% abaixo, junho 10% acima, e o acumulado
+ * fecha), e a estabilidade do ratio deles vem do controle de carregamento, que
+ * lança a compra no mesmo mês da venda do mesmo lote.
+ *
+ * POR ISSO O TESTE MUDOU
+ * ----------------------
+ * Ele mede duas coisas diferentes:
+ *
+ *   • ACUMULADO — receita e compra contra a planilha. É o teste de que a
+ *     LEITURA da API está certa. Tem que fechar em poucos por cento.
+ *   • MÊS A MÊS — a diferença de corte de competência. NÃO é para fechar: é a
+ *     divergência que o cliente precisa decidir, e o número dela é este.
  *
  * Roda sem planilha nenhuma: os valores de referência estão aqui, extraídos uma
  * vez de `DRE ACUMULADO _CEREAIS`. O objetivo é justamente poder verificar a
@@ -19,10 +39,17 @@
  *
  *   npx tsx scripts/conferir-planilha.mjs
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { apurar, arquivoDaCarga } from './_apuracao.mjs'
 
-/** Faixa em que o cliente opera, observada em 8 meses de 2026. */
-export const FAIXA_COMPRA_RECEITA = { min: 0.87, max: 0.91 }
+/**
+ * Tolerância do ACUMULADO. Passar daqui significa que estamos lendo notas a
+ * menos (ou a mais) da API, não que o corte de competência é outro.
+ */
+export const TOLERANCIA_ACUMULADO = 0.05
+
+/** Empresa 1: o escopo da planilha. Ver `recortarEmpresa`. */
+export const EMPRESA_DA_PLANILHA = 1
 
 /** DRE real do cliente (aba "DRE ACUM (2)"), por competência. */
 const PLANILHA = {
@@ -36,35 +63,73 @@ const PLANILHA = {
   '2026-08': { receita: 19_103_526.18, compra: 16_695_193.02, custoTotal: 18_596_076.21 },
 }
 
-const VENDA = new Set(['5106', '6106', '6502', '5102', '5502'])
-const FRETE = new Set(['1353', '2353'])
-const brl = (v) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+// A cadeia PRECISA começar na primeira carga que temos, não em janeiro/2026: o
+// estoque de um mês é o inicial do seguinte, e começar no meio jogaria fora o
+// grão comprado antes. 2026-01 sem 2025 dá 153% de custo/receita.
+const TODOS = []
+for (let a = 2025; a <= 2026; a++) {
+  for (let m = 1; m <= 12; m++) {
+    const mes = `${a}-${String(m).padStart(2, '0')}`
+    if (existsSync(arquivoDaCarga(mes))) TODOS.push(mes)
+  }
+}
+
+const { lancamentos, rel, abertura } = await apurar(TODOS, undefined, EMPRESA_DA_PLANILHA)
+
+/** Compra de grão do mês: nota de entrada CFOP 1102, que é o que a planilha usa. */
+function compraDoMes(mes) {
+  return JSON.parse(readFileSync(arquivoDaCarga(mes), 'utf8')).nfs
+    .filter((n) => n.entrada && n.status === 'Finalizada' && n.idEmpresa === EMPRESA_DA_PLANILHA)
+    .filter((n) => String(n.cfop ?? '').slice(0, 4) === '1102')
+    .reduce((s, n) => s + (n.itens ?? []).reduce((t, i) => t + (Number(i.valorTotal) || 0), 0), 0)
+}
+
+const brl = (v) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// Sem o 'R$': em coluna, o prefixo repetido só rouba largura do número.
+const num = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const pct = (v) => `${(v * 100).toFixed(1)}%`
+const dif = (a, b) => `${((a / b - 1) * 100).toFixed(1)}%`.padStart(8)
 
-console.log('MÊS        receita API   receita plan.    compra/receita          margem')
-console.log('                                          API     plan.      API     plan.')
+if (Object.keys(abertura).length) {
+  console.log('estoque de abertura inferido (piso que as notas denunciam):')
+  for (const [g, a] of Object.entries(abertura)) {
+    console.log(`   ${g.padEnd(6)} ${a.sacas.toLocaleString('pt-BR')} sacas · ${brl(a.valor)}`)
+  }
+  console.log('')
+}
+
+console.log('                      RECEITA                     │              COMPRA DE GRÃO')
+console.log('MÊS             nossa       planilha        Δ    │       nossa       planilha        Δ')
+let sR = 0, sRp = 0, sC = 0, sCp = 0
 for (const [mes, alvo] of Object.entries(PLANILHA)) {
-  const arq = `robot/out/api-producao-${mes}.json`
-  if (!existsSync(arq)) { console.log(`  ${mes}   (sem carga)`); continue }
-  const fin = JSON.parse(readFileSync(arq, 'utf8')).nfs
-    .filter((n) => n.status === 'Finalizada' && n.idEmpresa === 1)
-  const cfop = (n) => String(n.cfop ?? '').slice(0, 4)
-  const soma = (f) => fin.filter(f).reduce((s, n) => s + (Number(n.valorTotalNf) || 0), 0)
-  const receita = soma((n) => !n.entrada && VENDA.has(cfop(n)))
-  const compra = soma((n) => n.entrada && cfop(n) === '1102')
-  const frete = soma((n) => n.entrada && FRETE.has(cfop(n)))
-
-  const rApi = receita ? compra / receita : 0
-  const rPlan = alvo.compra / alvo.receita
-  const mApi = receita ? (receita - compra - frete) / receita : 0
-  const mPlan = (alvo.receita - alvo.custoTotal) / alvo.receita
-  const fora = rApi < FAIXA_COMPRA_RECEITA.min || rApi > FAIXA_COMPRA_RECEITA.max
+  const receita = lancamentos
+    .filter((l) => l.data.slice(0, 7) === mes && l.contaSafragold.startsWith('3.'))
+    .reduce((s, l) => s + l.valor, 0)
+  const compra = compraDoMes(mes)
+  sR += receita; sRp += alvo.receita; sC += compra; sCp += alvo.compra
   console.log(
-    `  ${mes}  ${brl(receita).padStart(16)}${brl(alvo.receita).padStart(16)}` +
-    `${pct(rApi).padStart(8)}${pct(rPlan).padStart(9)}` +
-    `${pct(mApi).padStart(9)}${pct(mPlan).padStart(9)}${fora ? '  ⚠' : '  ok'}`,
+    `  ${mes}${num(receita).padStart(15)}${num(alvo.receita).padStart(15)}${dif(receita, alvo.receita)}` +
+    ` │${num(compra).padStart(15)}${num(alvo.compra).padStart(15)}${dif(compra, alvo.compra)}`,
   )
 }
-console.log(`\n  ⚠ = compra/receita fora de ${pct(FAIXA_COMPRA_RECEITA.min)}–${pct(FAIXA_COMPRA_RECEITA.max)},`)
-console.log('    a faixa em que o cliente opera. Fora dela, o CPV está descrevendo')
-console.log('    a COMPRA do mês e não o custo do que foi VENDIDO.')
+console.log(
+  `  TOTAL${num(sR).padStart(15)}${num(sRp).padStart(15)}${dif(sR, sRp)}` +
+  ` │${num(sC).padStart(15)}${num(sCp).padStart(15)}${dif(sC, sCp)}`,
+)
+
+const okR = Math.abs(sR / sRp - 1) <= TOLERANCIA_ACUMULADO
+const okC = Math.abs(sC / sCp - 1) <= TOLERANCIA_ACUMULADO
+console.log(`\n  ACUMULADO (é o teste da leitura da API, tolerância ${pct(TOLERANCIA_ACUMULADO)}):`)
+console.log(`     receita ${okR ? 'ok' : '⚠'} ${pct(Math.abs(sR / sRp - 1))}    compra ${okC ? 'ok' : '⚠'} ${pct(Math.abs(sC / sCp - 1))}`)
+console.log('\n  MÊS A MÊS não fecha, e não é para fechar: a planilha lança a compra no')
+console.log('  mês da venda do mesmo lote (controle de carregamento) e não apropria')
+console.log('  estoque. A diferença de cada mês é o tamanho dessa divergência de corte.')
+console.log(`\n  Nosso CPV com apropriação de estoque, para comparação:`)
+for (const mes of Object.keys(PLANILHA)) {
+  const receita = lancamentos
+    .filter((l) => l.data.slice(0, 7) === mes && l.contaSafragold.startsWith('3.'))
+    .reduce((s, l) => s + l.valor, 0)
+  const cpv = rel.cpvPorCompetencia[mes] ?? 0
+  console.log(`     ${mes}  CPV ${num(cpv).padStart(15)}   ${pct(cpv / receita).padStart(7)} da receita`)
+}
+if (!okR || !okC) process.exitCode = 1

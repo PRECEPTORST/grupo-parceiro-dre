@@ -274,3 +274,52 @@ export function lancamentosDeEstoque(rel: RelatorioCustoMedio): LancamentoCanoni
   }
   return out
 }
+
+/**
+ * ESTOQUE DE ABERTURA INFERIDO — o piso que o próprio encadeamento denuncia.
+ *
+ * A API só devolve nota a partir de janeiro/2025, mas a empresa não nasceu ali.
+ * A soja vendida em janeiro veio da safra de 2024, o café de janeiro veio da
+ * colheita do ano anterior — grão que entrou antes da primeira nota que
+ * conseguimos ler. Sem contar isso, a média móvel divide por um saldo que não
+ * existe e devolve custo negativo (café chegou a -R$ 13.759/saca em jun/2025).
+ *
+ * Não dá para INVENTAR esse estoque. Mas dá para LIMITÁ-LO por baixo: se num
+ * mês qualquer o saldo acumulado fica em -38.706 sacas, então havia pelo menos
+ * 38.706 sacas na abertura, senão a empresa vendeu grão que nunca comprou. Esse
+ * mínimo é o que esta função devolve — não é a posição real do armazém, é o
+ * menor valor compatível com as notas.
+ *
+ * O preço é o da PRIMEIRA COMPRA observada do grão — valor dividido por sacas da
+ * nota, não o custo médio. O custo médio do primeiro mês já está contaminado
+ * pelo buraco que estamos tentando tapar; usá-lo seria circular. O preço da nota
+ * não depende da cadeia: é o que o fornecedor cobrou.
+ *
+ * Quem quiser o número certo pede o inventário ao armazém e passa em `abertura`;
+ * esta função é o que dá para fazer só com a API, e assume o valor mais
+ * conservador — nunca mais estoque do que o estritamente necessário.
+ */
+export function aberturaMinima(
+  competencias: string[],
+  movimentos: MovimentoEstoque[],
+): Partial<Record<Grao, EstoqueAbertura>> {
+  const semAbertura = custoMedioMovel(competencias, movimentos)
+  const abertura: Partial<Record<Grao, EstoqueAbertura>> = {}
+
+  for (const grao of new Set(semAbertura.posicoes.map((p) => p.grao))) {
+    const doGrao = semAbertura.posicoes.filter((p) => p.grao === grao)
+    const fundo = Math.min(...doGrao.map((p) => p.sacasFinais))
+    if (fundo >= 0) continue
+
+    // Preço da primeira compra de verdade. Um grão que só aparece vendendo não
+    // tem preço nenhum nas notas, e fica de fora: melhor sem abertura e com o
+    // alerta aceso do que com um número tirado do nada.
+    const primeira = doGrao.find((p) => p.sacasCompradas > 0 && p.valorComprado > 0)
+    if (!primeira) continue
+    const preco = primeira.valorComprado / primeira.sacasCompradas
+
+    const sacas = arred(-fundo)
+    abertura[grao] = { sacas, valor: arred(sacas * preco) }
+  }
+  return abertura
+}
