@@ -1017,3 +1017,42 @@ publicação produz não confere nada. Agora as duas entram pela mesma porta
 Com tudo isso a cadeia de 20 meses roda sem recusa e **agosto/2026 fecha em
 3,24% de margem bruta** — dentro dos 3% a 4% que a diretoria informou, obtido
 por um caminho independente dessa informação.
+
+## §33 — O café era outro CNPJ (2026-09-14, mesma sessão)
+
+§32 ficou com um erro que a diretoria apontou no mesmo dia: o café não devia
+estar ali. Os três estabelecimentos carregados dividem a razão social PARCEIRO
+DO GRAO COMERCIO IMP. E EXP. DE CAFE E CEREAIS LTDA (raiz 30798330), mas têm
+CNPJ próprio — filial MG 0002-16, MATRIZ 0001-35, filial SP 0004-88 — e a
+matriz é a operação de CAFÉ: 97,1% dos R$ 394,7 milhões que movimentou em 20
+meses. As filiais não têm um grão de café sequer.
+
+O efeito de tirá-la: o estoque de abertura que é preciso SUPOR cai de 38.706
+sacas de soja mais 2.866 de café para **1.506 sacas de soja**. A cadeia quase se
+sustenta só com o que a API entrega. Agosto/2026 vai de 3,24% para 4,68% de
+margem bruta.
+
+**A lição vale mais do que a correção.** A recusa de publicar ajuste com estoque
+negativo, que eu tratei como um obstáculo a contornar (foi por isso que fui
+buscar 2025 inteiro, e depois inventei `aberturaMinima`), estava na verdade
+apontando para o erro. O café ficava negativo em janeiro/2025 e o custo médio
+chegava a -R$ 13.759/saca: aquilo não era falta de histórico, era mistura de
+duas empresas. Ir mais para trás no tempo é a resposta certa para "falta
+histórico" e a resposta errada para "os dados são de outra entidade" — e as duas
+se parecem na tela.
+
+Junto veio um erro de classificação: "FILTRO P/CAFE ALIS 103", "XICARA SOFIA
+ALTA CAFE BRANCA - 70ML" e "CAFE BOM DIA TRADICIONAL ALMOFADA 500G" casavam com
+/CAFE/ e entravam no estoque como sacas. A inferência por preço não pega isto, e
+o porquê importa: 500 g a R$ 33 dá R$ 66/kg, que vezes 60 são R$ 3.960/saca,
+dentro da faixa plausível do café. Torrado de varejo e verde a granel custam a
+mesma ordem de grandeza por quilo — só a descrição separa.
+
+### E as contas 4.1.18 e 4.1.19 são minhas
+
+O plano de contas do cliente (`Plano_de_Contas_Grupo_Parceiro.pdf`) vai de
+4.1.01 a 4.1.17. Não existe conta de variação de estoque. Eu criei as duas, e
+isso ficou meses só em comentário de código — agora está na tela de
+divergências, onde o contador possa ver e decidir. A mais próxima que existe,
+4.1.14 "Quebra técnica e perda de estoque", é outra coisa: perda física, não
+diferimento de custo.
