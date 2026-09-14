@@ -1,0 +1,83 @@
+# Portão do OPERA.
+#
+# Este arquivo transforma o método em infraestrutura. Enquanto o portão é um
+# documento, ele depende de alguém lembrar. Como check do GitHub, ele passa a
+# ser algo que a plataforma verifica sozinha.
+#
+# O que ele checa está em .opera/vinculo.json, e é lá que se muda.
+#
+# Enquanto "modo" for "medindo", este job nunca derruba um merge: ele mede e
+# anota. Um portão que reprova pelo motivo errado ensina a equipe a ignorar o
+# portão. Depois da medição, troque "modo" para "obrigatorio" no vínculo e
+# marque "opera / portao" como check obrigatório em Settings › Branches.
+
+name: opera
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  portao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ler o vínculo
+        id: v
+        run: |
+          if [ ! -f .opera/vinculo.json ]; then
+            echo "::error title=Sem vínculo::Este repositório não declara a que processo do OPERA pertence."
+            exit 1
+          fi
+          {
+            echo "venture=$(jq -r .venture .opera/vinculo.json)"
+            echo "processo=$(jq -r .processo .opera/vinculo.json)"
+            echo "modo=$(jq -r '.modo // "medindo"' .opera/vinculo.json)"
+            echo "comando=$(jq -r '.comandoDoPortao // ""' .opera/vinculo.json)"
+          } >> "$GITHUB_OUTPUT"
+          echo "### Portão do OPERA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Processo: \`$(jq -r .processo .opera/vinculo.json)\` · venture \`$(jq -r .venture .opera/vinculo.json)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: portão não declarado
+        if: steps.v.outputs.comando == ''
+        run: |
+          echo "::warning title=Portão não declarado::Este repositório ainda não tem comando de portão. É dívida visível, não erro."
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Portão não declarado.** Nenhum comando prova nada aqui ainda. Declare \`comandoDoPortao\` em .opera/vinculo.json." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci || npm install
+        if: steps.v.outputs.comando != ''
+
+      - name: rodar o portão
+        id: rodar
+        if: steps.v.outputs.comando != ''
+        continue-on-error: true
+        run: ${{ steps.v.outputs.comando }}
+
+      - name: registrar o resultado
+        if: always()
+        run: |
+          if [ -z "${{ steps.v.outputs.comando }}" ]; then
+            estado="nao-declarado"
+          elif [ "${{ steps.rodar.outcome }}" = "success" ]; then
+            estado="aberto"
+          else
+            estado="travado"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Portão: **$estado** · modo **${{ steps.v.outputs.modo }}**" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ steps.v.outputs.modo }}" != "obrigatorio" ]; then
+            echo "Modo medindo: o resultado é anotado e o merge segue." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$estado" != "aberto" ]; then
+            echo "::error title=Portão travado::O merge é recusado por desenho até o portão abrir."
+            exit 1
+          fi
