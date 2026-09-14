@@ -1312,3 +1312,46 @@ alguém quiser esse corte.
 2. **"Deslocamento de 5 dias" era um sintoma modelado como causa.** A planilha
    parecia adiantada porque tinha R$ 5M/mês de 6152 que eu não tinha. Antes de
    modelar um efeito, procurar o que falta.
+
+## §38 — Estudando a planilha até o fim: a O.C. (2026-09-14)
+
+Matheus pediu para continuar estudando a planilha até conseguir gerá-la só
+pela API. Fui atrás da última fonte de data que faltava testar: a **O.C.
+(ordem de carregamento)**, que aparece na descrição dos títulos dos dois lados
+("Fat. NFe saída | Cont: 14714 | O.C.: 16759"; "Fat. NFe entrada | Cont:
+169/26M | O.C.: 16909"). Se o mês da planilha fosse o da O.C., estaria ali.
+
+**Resultado, medido em 20 meses da filial MG:**
+
+- 416 de 417 títulos de venda de agosto trazem O.C.; `documento` = "Nº <NF>".
+  Mas a `dataLancamento` do título é a da emissão da nota em 8.217 de 8.363
+  casos (0 antes, 138 depois). **A data da O.C. não está na API** — o título
+  nasce junto com a nota, não com o carregamento.
+- 1.686 O.C. aparecem nos dois lados. Do lado da compra são grão (soja 21,7M,
+  milho 15,7M) e frete. Só **18% dos títulos de compra de grão** têm O.C. com
+  venda (765 pares, R$ 38,5M); nesses, a razão compra/venda mediana é
+  **0,865**, a defasagem venda−compra é **−1 dia** e só 2% mudam de mês.
+  Ou seja: são vendas diretas (caminhão sai do produtor e entrega no
+  comprador no mesmo dia). Não explicam o resíduo mensal — o resíduo vem dos
+  outros 82%, grão que entra em estoque e sai depois.
+- Bucketar a compra pelo mês da venda da mesma O.C. não muda nada (cobertura
+  0% pelo vínculo de documento, que na compra é só o número da NF, ambíguo
+  entre fornecedores).
+
+**Fontes de data agora testadas e esgotadas:** emissão da NF; lançamento,
+vencimento e quitação do título; corte de mês em outro dia; deslocamento
+uniforme; O.C. Nenhuma reproduz o mês da planilha melhor que a emissão (4,0
+pts). `/Contratos` traz `previsaoEntregaInicio/Fim` e parcelas, mas contrato é
+plurimensal — prior baixa, não testado.
+
+**Conclusão honesta:** a planilha ensina REGRAS, e todas as regras que ela
+tinha para ensinar já estão no código (filial MG, 6152 como venda, 1907 na
+compra, devolução líquida, sem imposto, sem apropriação, estrutura do custo
+total). Ela não ensina DADOS: nem a data de carregamento (que não existe na
+API) nem os R$ 3,4M de despesa que ninguém digitou no ERP. O limite do que a
+API permite é 4 pontos por mês e <1% no acumulado — e esse limite é do dado,
+não do método.
+
+O que a O.C. deu de útil e fica: um vínculo lote-a-lote derivável para as
+vendas diretas (18% do volume), com custo casado a 0,865 da venda. Serve para
+a cadeia de custo médio, não para o mês.
