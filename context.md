@@ -1186,3 +1186,73 @@ digitou, não classificação contábil. "COMPRA DE MILHO" virou "COMPRA MILHO" 
 minha regra, "FRETES - CMV" não casou com /^FRETE\b/, e "ICMS CRÉDITO
 PRESUMIDO" não tinha nada de ICMS. Todas as três vezes o documento vinculado —
 a nota — tinha a resposta certa.
+
+## §36 — O que falta para bater com a planilha, e de quem é cada parte (2026-09-14)
+
+"Ainda tá ficando muito diferente, como eu faço? tem q estar igual."
+
+A resposta só ficou útil quando a diferença foi separada em três naturezas.
+
+### 1. Buraco real de receita: CFOP 5934 = R$ 9,11 milhões
+
+"Remessa **simbólica** de mercadoria depositada em armazém geral". Eu o tinha
+junto com o 5905 em REMESSA, pelo nome. Mas *simbólica* quer dizer o contrário
+do que parece: o grão NÃO se move — quem muda é o dono. É como se vende grão que
+já está armazenado.
+
+Testei dupla contagem antes de mexer: cruzando o `idContrato` das 110 notas 5934
+da filial MG em 20 meses contra TODAS as notas de venda, **zero** compartilham
+contrato. Os destinatários confirmam: ELGRANO, PORTO MINEIRO DE GRÃOS, UNISAFRA,
+R L GRÃOS — cerealistas e tradings. O 5905 continua em REMESSA: ali o grão sai e
+volta e o dono é o mesmo.
+
+Efeito colateral que confirma de outro ângulo: essas vendas equilibraram o
+volume da cadeia de estoque. A apropriação de agosto caiu de -R$ 2,19M para
++R$ 146 mil.
+
+### 2. Imposto nenhum deduz receita de grão
+
+A venda de grão em MG é **ICMS diferido** — a linha IMPOSTOS da planilha é ZERO
+em todos os meses. Eu mandava três centros de custo para 3.2.01 porque tinham
+"ICMS" no nome:
+
+- `ICMS CRÉDITO PRESUMIDO` → era compra de grão mal rotulada (§35);
+- `ICMS - DIFAL` → R$ 11.780,75 de OTTIMA VEÍCULOS, PNEUMASTER PNEUS, HL PNEUS,
+  MAIOLINI AUTOMOTIVAS. Pneu e veículo: custo da compra, não dedução de venda;
+- `PARCELAMENTO ICMS` → a planilha lança em DESPESAS, e está certa.
+
+Zero deduções de imposto em 20 meses agora, igual à planilha.
+
+### 3. As três naturezas da diferença — é isto que responde "como eu faço"
+
+Com as convenções do cliente (sem apropriação, sem deduzir devolução, filial
+MG), 8 meses de 2026:
+
+| linha | API | planilha | Δ |
+|---|---|---|---|
+| RECEITA BRUTA | 217.225.944 | 218.512.208 | **-0,6%** |
+| COMPRA | 195.226.709 | 196.526.907 | **-0,7%** |
+| COMISSÃO | 0 | 791.992 | falta |
+| QUEBRAS | 0 | 124.144 | falta |
+| DESPESA TOTAL | 162.582 | 3.475.952 | falta |
+
+- **ESCOLHA DE MÉTODO** (apropriação, devolução): reversível, é decisão da
+  diretoria. A tela mostra as duas colunas.
+- **DADO QUE NÃO EXISTE** (R$ 4,4M): não há UM título de folha, aluguel,
+  contabilidade, juros, IOF, comissão ou quebra no ERP. Nenhum cálculo cria.
+- **CORTE DE COMPETÊNCIA**: no acumulado fecha em menos de 1%; mês a mês vai de
+  -32% (janeiro) a +22% (julho). A planilha lança compra e venda do mesmo lote
+  no mesmo mês, pelo carregamento; a API só tem data de emissão. Para igualar
+  mês a mês seria preciso o vínculo lote-a-lote na API.
+
+### A lição, que já é padrão
+
+**Pela terceira vez na semana um teste meu protegeu a suposição em vez de
+verificá-la** — e o do DIFAL eu escrevi na MESMA HORA em que corrigia o crédito
+presumido. O mecanismo é sempre o mesmo: escrevo a regra a partir do RÓTULO
+(centro de custo, nome do CFOP) e escrevo o teste a partir da minha regra. Um
+teste derivado da suposição não a testa; ele a congela.
+
+O antídoto que funcionou nas três vezes foi o mesmo: **abrir o documento**. O
+título tinha uma nota vinculada, a nota tinha um destinatário, o destinatário
+dizia se era grão ou pneu.
