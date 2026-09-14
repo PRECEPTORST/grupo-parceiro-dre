@@ -18,8 +18,10 @@ describe('naturezaDeCfop — CFOPs reais da extração de 2026-08-21', () => {
     }
   })
 
-  it('remessa para armazém NÃO é venda (R$ 21,1M reais)', () => {
-    for (const c of ['5905', '5934', '5909', '5927']) {
+  it('remessa FÍSICA para armazém NÃO é venda (R$ 21,1M reais)', () => {
+    // O 5934 saiu desta lista: ele é remessa SIMBÓLICA, e simbólica quer dizer
+    // que o grão não se move — quem muda é o dono. Ver o teste abaixo.
+    for (const c of ['5905', '5909', '5927']) {
       expect(naturezaDeCfop(c, false), c).toBe('remessa')
     }
   })
@@ -54,5 +56,29 @@ describe('naturezaDeCfop — CFOPs reais da extração de 2026-08-21', () => {
     expect(naturezaDeCfop('1102', true)).toBe('compra')
     expect(naturezaDeCfop('2101', true)).toBe('compra')
     expect(naturezaDeCfop('1102', true)).not.toBe('venda')
+  })
+})
+
+describe('remessa simbólica (5934) é venda, remessa física (5905) não é', () => {
+  it('5934 saindo é VENDA', () => {
+    // "Simbólica" quer dizer que o grão não se move: quem muda é o dono. São
+    // R$ 9,11M em 2026 na filial MG, e sem eles a receita de 8 meses fica 4,3%
+    // abaixo da planilha do cliente; com eles, 0,1%.
+    expect(naturezaDeCfop('5934', false)).toBe('venda')
+    expect(naturezaDeCfop('6934', false)).toBe('venda')
+  })
+
+  it('5905 continua remessa — ali o grão sai e volta, e o dono é o mesmo', () => {
+    expect(naturezaDeCfop('5905', false)).toBe('remessa')
+  })
+
+  it('1934 entrando é compra, por simetria', () => {
+    expect(naturezaDeCfop('1934', true)).toBe('compra')
+  })
+
+  it('o retorno de armazém (1907) segue sendo remessa na natureza fiscal', () => {
+    // Ele conta como ENTRADA DE ESTOQUE (ver itensCompra.ts), que é outra
+    // pergunta: volume físico, não natureza do documento.
+    expect(naturezaDeCfop('1907', true)).toBe('remessa')
   })
 })

@@ -174,9 +174,11 @@ describe('notas que não são venda (armadilha #4)', () => {
     expect(ehVenda(nfVenda({ finalidade: 'Complementar' }))).toBe(true)
   })
 
-  it('remessa para armazém e transferência NÃO são venda (item 2.3)', () => {
+  it('remessa FÍSICA e transferência NÃO são venda (item 2.3)', () => {
     expect(ehVenda(nfVenda({ cfop: '5905' }))).toBe(false) // remessa p/ armazém geral
-    expect(ehVenda(nfVenda({ cfop: '5934' }))).toBe(false) // remessa simbólica
+    // 5934 saiu daqui: remessa SIMBÓLICA é venda. Ver 'remessa simbólica' em
+    // cfop.test.ts — R$ 9,11M em 2026 que faltavam na receita.
+    expect(ehVenda(nfVenda({ cfop: '5934' }))).toBe(true)
     expect(ehVenda(nfVenda({ cfop: '6152' }))).toBe(false) // transferência
     const r = normalizarEnokiDre({
       nfs: [nfVenda({ cfop: '5905' }), nfVenda({ idNf: 2, cfop: '6152' })],

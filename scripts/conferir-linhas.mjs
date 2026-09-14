@@ -18,7 +18,17 @@
  *   CUSTO TOTAL  = COMPRA + ARMAZENAGEM + FRETE + COMISSÃO + CLASSIFICAÇÃO + QUEBRAS
  *   LUCRO BRUTO  = RECEITA LÍQUIDA - CUSTO TOTAL
  *
- *   npx tsx scripts/conferir-linhas.mjs [2026-08]
+ * MODO PLANILHA (--modo-planilha)
+ * ------------------------------
+ * Copia as convenções do cliente em vez das nossas, para separar o que é
+ * ESCOLHA de método do que é DADO que falta:
+ *
+ *   • sem apropriação de estoque — a COMPRA vira a nota do mês, como lá;
+ *   • sem deduzir devolução de venda — a linha DEVOLUÇÃO deles é zero.
+ *
+ * O que sobrar de diferença depois disso não é convenção: é dado.
+ *
+ *   npx tsx scripts/conferir-linhas.mjs [--modo-planilha] [2026-08]
  */
 import { existsSync } from 'node:fs'
 import { apurar, arquivoDaCarga, ajustesDeEstoque } from './_apuracao.mjs'
@@ -50,6 +60,7 @@ const LINHAS = [
   { chave: 'despesaTotal', rotulo: 'DESPESA TOTAL', contas: (c) => /^4\.[23]\./.test(c) && c !== '4.2.01' && c !== '4.2.02' },
 ]
 
+const modoPlanilha = process.argv.includes('--modo-planilha')
 const meses = process.argv.slice(2).filter((m) => /^\d{4}-\d{2}$/.test(m))
 const alvos = meses.length ? meses : Object.keys(PLANILHA)
 
@@ -63,12 +74,16 @@ for (let a = 2025; a <= 2026; a++) {
 }
 const { lancamentos: base, rel } = await apurar(TODOS, undefined, EMPRESA_DA_PLANILHA)
 // COM a apropriação de estoque: é o que o site publica. Sem ela a linha COMPRA
-// aparece 9,8% acima da planilha quando na verdade fica 3,3% abaixo.
-const lancamentos = [...base, ...ajustesDeEstoque(base, rel, TODOS)]
+// aparece 9,8% acima da planilha quando na verdade fica 9,3% abaixo.
+const lancamentos = modoPlanilha
+  ? base.filter((l) => l.contaSafragold !== '3.2.06' && l.contaSafragold !== '3.2.07')
+  : [...base, ...ajustesDeEstoque(base, rel, TODOS)]
+if (modoPlanilha) console.log('MODO PLANILHA: sem apropriação de estoque, sem deduzir devolução.\n')
 
 const num = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const delta = (a, b) => (b === 0 ? (a === 0 ? '     —' : '  falta na planilha') : `${((a / b - 1) * 100).toFixed(1)}%`.padStart(8))
 
+const acum = { api: {}, plan: {} }
 for (const mes of alvos) {
   const alvo = PLANILHA[mes]
   if (!alvo) { console.log(`${mes}: sem referência da planilha`); continue }
@@ -93,4 +108,25 @@ for (const mes of alvos) {
   console.log(`  ${'LUCRO BRUTO'.padEnd(22)}${num(liqN - custoN).padStart(15)}${num(liqP - custoP).padStart(16)}`)
   console.log(`  ${'margem bruta'.padEnd(22)}${(liqN ? ((liqN - custoN) / liqN * 100).toFixed(2) + '%' : '—').padStart(15)}${(((liqP - custoP) / liqP * 100).toFixed(2) + '%').padStart(16)}`)
   console.log(`  ${'RESULTADO'.padEnd(22)}${num(liqN - custoN - nosso.despesaTotal).padStart(15)}${num(liqP - custoP - alvo.despesaTotal).padStart(16)}`)
+  for (const l of LINHAS) {
+    acum.api[l.chave] = (acum.api[l.chave] ?? 0) + nosso[l.chave]
+    acum.plan[l.chave] = (acum.plan[l.chave] ?? 0) + alvo[l.chave]
+  }
+}
+
+// O ACUMULADO é o que separa diferença de CORTE de diferença de DADO: uma nota
+// que cai no mês errado some no acumulado; uma que falta, não.
+if (alvos.length > 1) {
+  console.log(`\n═══ ACUMULADO ${alvos[0]} a ${alvos.at(-1)}`)
+  console.log('LINHA                          API         planilha        Δ')
+  for (const l of LINHAS) {
+    console.log(`  ${l.rotulo.padEnd(22)}${num(acum.api[l.chave]).padStart(15)}${num(acum.plan[l.chave]).padStart(16)}${delta(acum.api[l.chave], acum.plan[l.chave])}`)
+  }
+  const liqN = acum.api.receitaBruta - acum.api.impostos - acum.api.devolucao
+  const liqP = acum.plan.receitaBruta - acum.plan.impostos - acum.plan.devolucao
+  const custo = (x) => x.compra + x.armazenagem + x.frete + x.comissao + x.classificacao + x.quebras
+  console.log('  ' + '─'.repeat(59))
+  console.log(`  ${'RECEITA LÍQUIDA'.padEnd(22)}${num(liqN).padStart(15)}${num(liqP).padStart(16)}${delta(liqN, liqP)}`)
+  console.log(`  ${'CUSTO TOTAL'.padEnd(22)}${num(custo(acum.api)).padStart(15)}${num(custo(acum.plan)).padStart(16)}${delta(custo(acum.api), custo(acum.plan))}`)
+  console.log(`  ${'LUCRO BRUTO'.padEnd(22)}${num(liqN - custo(acum.api)).padStart(15)}${num(liqP - custo(acum.plan)).padStart(16)}`)
 }
